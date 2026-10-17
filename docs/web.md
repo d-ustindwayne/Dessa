@@ -41,7 +41,7 @@ to the page.
 Babel's standalone build, it compiles `.ds` files in the browser:
 
 ```html
-<script src="dessa.js"></script>                          <!-- or https://unpkg.com/dessa -->
+<script src="dessa.js"></script>                          <!-- or https://unpkg.com/dessalang -->
 <script type="text/dessa" src="app.ds"></script>
 <script type="text/dessa">
     { document } from $(<webutils>);
@@ -110,14 +110,14 @@ browser. The file functions of `os` work in Node only. Packages with C++ code
 
 ## npm
 
-The `dessa` package on npm has the browser compiler and a Node API:
+The `dessalang` package on npm has the browser compiler and a Node API:
 
 ```
-npm install dessa
+npm install dessalang
 ```
 
 ```js
-const dessa = require("dessa");
+const dessa = require("dessalang");
 const { js, diagnostics } = await dessa.compile('print("hi");');
 await dessa.runFile("app.ds");
 const html = await dessa.buildPage("page.dhtml");

@@ -1,7 +1,7 @@
 // dessa -- the Dessa compiler for JavaScript (Node). It runs the real Dessa
 // compiler, built for WebAssembly, and gives back JavaScript.
 //
-//     const dessa = require("dessa");
+//     const dessa = require("dessalang");
 //     const { js, diagnostics } = await dessa.compile('print("Hello");');
 //     await dessa.runFile("app.ds");
 //     const html = await dessa.buildPage("page.dhtml");

@@ -248,7 +248,8 @@ bool compileCached(const std::string& cpp, const char* argv0, std::string& exe, 
                 const auto ext = entry.path().extension();
                 if (ext == ".hpp" || ext == ".h") key = fnv1a(readFile(entry.path()), key);
                 else key = fnv1a(entry.path().string() + std::to_string(entry.file_size(ec)) +
-                                 std::to_string(entry.last_write_time(ec).time_since_epoch().count()), key);
+                                 // (a 128-bit count on macOS: no to_string for it)
+                                 std::to_string(static_cast<long long>(entry.last_write_time(ec).time_since_epoch().count())), key);
             }
         }
     }

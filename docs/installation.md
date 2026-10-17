@@ -109,7 +109,7 @@ On Windows with MinGW add `-G "MinGW Makefiles"` to the first command.
 ## The browser build and npm
 
 `dessa.js`, the compiler built for WebAssembly, comes with the releases and
-with the npm package (`npm install dessa`). To build it yourself you need the
+with the npm package (`npm install dessalang`). To build it yourself you need the
 [Emscripten SDK](https://emscripten.org):
 
 ```

@@ -1,4 +1,4 @@
-# dessa (npm)
+# dessalang: Dessa for JavaScript
 
 The [Dessa](https://github.com/d-ustindwayne/Dessa) programming language for
 JavaScript. This package holds the real Dessa compiler built for WebAssembly.
@@ -6,13 +6,13 @@ It compiles Dessa to JavaScript in Node or in the browser, without a C++
 compiler.
 
 ```
-npm install dessa
+npm install dessalang
 ```
 
 ## In Node
 
 ```js
-const dessa = require("dessa");
+const dessa = require("dessalang");
 
 // Source to JavaScript
 const { ok, js, diagnostics } = await dessa.compile('print("Hello", 2 ^ 10);');
@@ -33,17 +33,17 @@ and message of each problem.
 ## From the command line
 
 ```
-npx dessa-web run app.ds
-npx dessa-web build app.ds -o app.js          # one self-contained .js file
-npx dessa-web build page.dhtml                # page.html
-npx dessa-web check page.dhtml
-npx dessa-web serve . --port 8080             # .dhtml pages compiled on each request
+npx -p dessalang dessa-web run app.ds       # or install it: npm install -g dessalang, then dessa-web ...
+npx -p dessalang dessa-web build app.ds -o app.js          # one self-contained .js file
+npx -p dessalang dessa-web build page.dhtml                # page.html
+npx -p dessalang dessa-web check page.dhtml
+npx -p dessalang dessa-web serve . --port 8080             # .dhtml pages compiled on each request
 ```
 
 ## In the browser
 
 ```html
-<script src="https://unpkg.com/dessa"></script>
+<script src="https://unpkg.com/dessalang"></script>
 <script type="text/dessa">
     { document } from $(<webutils>);
     document.body.textContent = "Hello from Dessa";

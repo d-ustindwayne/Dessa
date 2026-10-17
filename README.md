@@ -37,7 +37,7 @@ print($"{cart.length()} items, total {total.toFixed(2)}");
 |---|---|
 | Windows | `powershell -ExecutionPolicy Bypass -File install.ps1` |
 | Linux, macOS | `sh install.sh` |
-| JavaScript only | `npm install dessa` |
+| JavaScript only | `npm install dessalang` |
 
 The installer checks for a C++ compiler, installs `dessa` and `riv`, and puts
 them on your PATH. Details for every system: [docs/installation.md](docs/installation.md).

@@ -18,6 +18,7 @@
 #define DESSA_HAS_ODBC 0
 #endif
 
+#include <filesystem>
 #include <memory>
 
 #include "sql.hpp"

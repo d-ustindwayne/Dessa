@@ -33,7 +33,7 @@ to check that everything still works.
 - `.dhtml` pages: `dessa build`, `dessa run`, `dessa serve`
 - `dessa.js`: the compiler in WebAssembly, runs `<script type="text/dessa">` in a page
 - `webutils`: the page's objects, events, dialogs, timers, `fetchText`
-- npm package `dessa` with a Node API and the `dessa-web` command
+- npm package `dessalang` with a Node API and the `dessa-web` command
 
 **Tools**
 - riv: package manager with a simulated peer-to-peer network
