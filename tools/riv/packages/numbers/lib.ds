@@ -1,0 +1,268 @@
+/***
+ * numbers -- number conversions and digit helpers.
+ *
+ *     { toRoman, toWords, excelColumn } from $("numbers");     (after `riv add numbers`)
+ *
+ *     toRoman(2026)                 "MMXXVI"
+ *     fromRoman("XLII")             42
+ *     toWords(78056)                "seventy-eight thousand fifty-six"
+ *     fromWords("thirty three thousand eight hundred forty four")   33844
+ *     excelColumn(28)               "AB"
+ *     excelColumnNumber("XFD")      16384
+ *     sumDigits(1234)               10
+ *     mixedFraction("24/5")         "4 4/5"
+ *     convertTemperature(100, "C", "F")   212
+ */
+
+// ============================================================
+// Roman numerals
+// ============================================================
+
+const[Int<>] _romanValues = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1];
+const[Str<>] _romanSymbols = ["M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"];
+
+// 1 to 3999 in Roman numerals: toRoman(1994) is "MCMXCIV".
+func[Str] toRoman(number[Int]) {
+    if (number < 1 || number > 3999) throw $"toRoman: {number} can't be written in Roman numerals (1 to 3999)";
+    var[Str] out = "";
+    var[Int] left = number;
+    for (var[Int] i = 0; i < _romanValues.length(); i++) {
+        while (left >= _romanValues<i>) {
+            out += _romanSymbols<i>;
+            left -= _romanValues<i>;
+        }
+    }
+    return out;
+}
+
+// "MCMXCIV" -> 1994 (upper or lower case). Error on letters that aren't Roman numerals.
+func[Int] fromRoman(text[Str]) {
+    var[Map[Chr, Int]] value = {'M': 1000, 'D': 500, 'C': 100, 'L': 50, 'X': 10, 'V': 5, 'I': 1};
+    var[Chr<>] letters = text.trim().upper().chars();
+    if (letters.isEmpty()) throw "fromRoman: the text is empty";
+    var[Int] total = 0;
+    var[Int] previous = 0;
+    for (var[Int] i = letters.length() - 1; i >= 0; i--) {
+        var[Chr] c = letters<i>;
+        if (!value.has(c)) throw $"fromRoman: '{c}' is not a Roman numeral";
+        var[Int] v = value<c>;
+        if (v < previous) total -= v;
+        else total += v;
+        previous = v;
+    }
+    // Only numerals written the standard way: "IIII" or "MMMM" are rejected
+    if (total < 1 || total > 3999 || toRoman(total) != text.trim().upper()) throw $"fromRoman: '{text}' is not a valid Roman numeral";
+    return total;
+}
+
+// ============================================================
+// Numbers in words (English)
+// ============================================================
+
+const[Str<>] _ones = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+                      "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+const[Str<>] _tens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+const[Str<>] _scales = ["", "thousand", "million", "billion", "trillion", "quadrillion", "quintillion"];
+
+// 0 to 999
+func[Str] _underThousand(n[Int]) {
+    var[Str<>] parts = [];
+    var[Int] rest = n;
+    if (rest >= 100) {
+        parts.push(_ones<Int(rest / 100)> + " hundred");
+        rest = rest % 100;
+    }
+    if (rest >= 20) {
+        var[Str] tens = _tens<Int(rest / 10)>;
+        parts.push(rest % 10 == 0 ? tens : tens + "-" + _ones<rest % 10>);
+    } else if (rest > 0) {
+        parts.push(_ones<rest>);
+    }
+    return parts.join(" ");
+}
+
+// 78056 -> "seventy-eight thousand fifty-six", -3 -> "minus three"
+func[Str] toWords(number[Int]) {
+    if (number == 0) return "zero";
+    if (number < 0) {
+        if (number == -9223372036854775807 - 1) throw "toWords: the number is too small";
+        return "minus " + toWords(-number);
+    }
+    var[Str<>] groups = [];
+    var[Int] rest = number;
+    var[Int] scale = 0;
+    while (rest > 0) {
+        var[Int] chunk = rest % 1000;
+        if (chunk > 0) {
+            var[Str] words = _underThousand(chunk);
+            groups.insert(0, _scales<scale>.isEmpty() ? words : words + " " + _scales<scale>);
+        }
+        rest = Int(rest / 1000);
+        scale++;
+    }
+    return groups.join(" ");
+}
+
+// "thirty three thousand eight hundred forty four" -> 33844 ("and" and dashes are fine)
+func[Int] fromWords(text[Str]) {
+    var[Map[Str, Int]] small = {:};
+    for (var[Int] i = 0; i < _ones.length(); i++) {
+        var[Str] word = _ones<i>;
+        small<word> = i;
+    }
+    for (var[Int] i = 2; i < _tens.length(); i++) {
+        var[Str] word = _tens<i>;
+        small<word> = i * 10;
+    }
+    var[Map[Str, Int]] big = {"thousand": 1000, "million": 1000000, "billion": 1000000000, "trillion": 1000000000000};
+    var[Int] total = 0;
+    var[Int] current = 0;
+    var[Bul] negative = false;
+    for (var[Str] raw in text.lower().replaceAll("-", " ").split(" ")) {
+        var[Str] word = raw.trim();
+        if (word.isEmpty() || word == "and") continue;
+        if (word == "minus" || word == "negative") {
+            negative = true;
+        } else if (small.has(word)) {
+            current += small<word>;
+        } else if (word == "hundred") {
+            current *= 100;
+        } else if (big.has(word)) {
+            total += current * big<word>;
+            current = 0;
+        } else {
+            throw $"fromWords: '{word}' is not a number word";
+        }
+    }
+    total += current;
+    return negative ? -total : total;
+}
+
+// ============================================================
+// Spreadsheet columns
+// ============================================================
+
+// 1 -> "A", 27 -> "AA", 16384 -> "XFD"
+func[Str] excelColumn(number[Int]) {
+    if (number < 1) throw $"excelColumn: {number} is not a column number (they start at 1)";
+    var[Str] out = "";
+    var[Int] n = number;
+    while (n > 0) {
+        n--;
+        out = Str(Chr(65 + n % 26)) + out;
+        n = Int(n / 26);
+    }
+    return out;
+}
+
+// "A" -> 1, "aa" -> 27, "XFD" -> 16384
+func[Int] excelColumnNumber(column[Str]) {
+    var[Int] total = 0;
+    for (var[Chr] c in column.trim().upper()) {
+        if (c.code() < 65 || c.code() > 90) throw $"excelColumnNumber: '{column}' is not a column label";
+        total = total * 26 + (c.code() - 64);
+    }
+    return total;
+}
+
+// ============================================================
+// Digits
+// ============================================================
+
+func[Int<>] _digits(number[Int]) {
+    var[Int<>] digits = [];
+    for (var[Chr] c in Str(number < 0 ? -number : number)) digits.push(c.code() - 48);
+    return digits;
+}
+
+// 1234 -> 10
+func[Int] sumDigits(number[Int]) {
+    var[Int] total = 0;
+    for (var[Int] d in _digits(number)) total += d;
+    return total;
+}
+
+// Adds the digits again and again until one is left: 9875 -> 29 -> 11 -> 2
+func[Int] digitalRoot(number[Int]) {
+    var[Int] n = sumDigits(number);
+    while (n >= 10) n = sumDigits(n);
+    return n;
+}
+
+// 1234 -> [1, 4, 9, 16]
+func[Int<>] squareDigits(number[Int]) {
+    return _digits(number).map((d[Int]) := d * d);
+}
+
+// 8765 -> 5678, or 1234 -> 4321 with descending: true
+func[Int] sortDigits(number[Int], descending[Bul]=false) {
+    var[Int<>] digits = _digits(number);
+    digits.sort();
+    if (descending) digits.reverse();
+    var[Int] out = Int(digits.join(""));
+    return number < 0 ? -out : out;
+}
+
+// The number closest to zero (the positive one on a tie): [-4, 2, -1, 7] -> -1
+func[Int] nearestToZero(numbers[Int<>]) {
+    if (numbers.isEmpty()) throw "nearestToZero: the list is empty";
+    var[Int] best = numbers<0>;
+    for (var[Int] n in numbers) {
+        var[Int] size = n < 0 ? -n : n;
+        var[Int] bestSize = best < 0 ? -best : best;
+        if (size < bestSize || (size == bestSize && n > best)) best = n;
+    }
+    return best;
+}
+
+// ============================================================
+// Fractions and units
+// ============================================================
+
+func[Int] _gcd(a[Int], b[Int]) {
+    var[Int] x = a < 0 ? -a : a;
+    var[Int] y = b < 0 ? -b : b;
+    while (y != 0) {
+        var[Int] t = x % y;
+        x = y;
+        y = t;
+    }
+    return x;
+}
+
+// "24/5" -> "4 4/5", "-9/3" -> "-3", "2/4" -> "1/2"
+func[Str] mixedFraction(fraction[Str]) {
+    var[Str<>] parts = fraction.trim().split("/");
+    if (parts.length() != 2) throw $"mixedFraction: '{fraction}' is not a fraction like 24/5";
+    var[Int] top = Int(parts<0>.trim());
+    var[Int] bottom = Int(parts<1>.trim());
+    if (bottom == 0) throw "mixedFraction: the denominator can't be zero";
+    var[Str] sign = (top < 0) != (bottom < 0) && top != 0 ? "-" : "";
+    var[Int] t = top < 0 ? -top : top;
+    var[Int] b = bottom < 0 ? -bottom : bottom;
+    var[Int] whole = Int(t / b);
+    var[Int] rest = t % b;
+    if (rest == 0) return sign + Str(whole);
+    var[Int] g = _gcd(rest, b);
+    var[Str] part = $"{Int(rest / g)}/{Int(b / g)}";
+    return whole == 0 ? sign + part : $"{sign}{whole} {part}";
+}
+
+// Between "C" (Celsius), "F" (Fahrenheit) and "K" (Kelvin): convertTemperature(100, "C", "F") is 212.
+func[Dbl] convertTemperature(degrees[Dbl], fromUnit[Str], toUnit[Str]) {
+    var[Str] a = fromUnit.upper();
+    var[Str] b = toUnit.upper();
+    var[Dbl] celsius = 0;
+    switch (a) {
+        case "C" := { celsius = degrees; }
+        case "F" := { celsius = (degrees - 32) * 5 / 9; }
+        case "K" := { celsius = degrees - 273.15; }
+        default := { throw $"convertTemperature: unknown unit '{fromUnit}' (use C, F or K)"; }
+    }
+    switch (b) {
+        case "C" := { return celsius; }
+        case "F" := { return celsius * 9 / 5 + 32; }
+        case "K" := { return celsius + 273.15; }
+        default := { throw $"convertTemperature: unknown unit '{toUnit}' (use C, F or K)"; }
+    }
+}

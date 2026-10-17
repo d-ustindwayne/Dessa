@@ -1,0 +1,15 @@
+// Misusing zip and sort's comparator
+
+class Box {
+    var[Int] size = 0;
+}
+
+var[Int<>] a = [1, 2];
+var[Str<>] b = ["x", "y"];
+print(zip(a));                                        // error: zip takes two lists
+print(zip(a, "no"));                                  // error: zip needs lists, got Str
+print(zip(a, b, (x[Str], y[Str]) := x + y));          // error: zip's function must take (Int, Str)
+var[Box<>] boxes = [new Box()];
+boxes.sort();                                         // error: pass a comparator
+boxes.sort((p[Box], q[Box]) := p.size > q.size);      // error: Cannot convert Bul to Int
+print(typeof());                                      // error: Missing argument(s) for 'typeof'

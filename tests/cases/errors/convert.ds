@@ -1,0 +1,8 @@
+// Misuse of conversions
+
+class Box {}
+var[Int | Nil] maybe = nil;
+print(Int(maybe));              // error: may be nil
+print(Int(new Box()));          // error: Cannot convert Box to Int
+print(Chr(2.5));                // error: Cannot convert Dbl to Chr
+print(Int());                   // error: needs a value to convert

@@ -1,0 +1,41 @@
+// needs: http   (the test runner starts a local server; its address is in DESSA_TEST_HTTP)
+// $(<request>) -- Dessa part in tools/riv/packages/request/request.dm, native part request.hpp
+
+{ get, post, put, delete, postJson, Response, RequestError } from $(<request>);
+{ jsonObject, jsonStr } from $(<json>);
+{ getEnv } from $(<os>);
+
+var[Str] base = getEnv("DESSA_TEST_HTTP") ?? "http://127.0.0.1:1";
+
+var[Response] r = get($"{base}/echo?x=1", headers: {"X-Token": "secret"});
+print(r, r.status, r.ok);
+print(r.json().get("method").asStr(), r.json().get("path").asStr(), r.json().get("token").asStr());
+print(r.header("Content-Type") ?? "none", r.header("x-server") ?? "none", r.header("Missing") ?? "none");
+
+var[Response] sent = post($"{base}/echo", body: "hello there", headers: {"Content-Type": "text/plain"});
+print(sent.json().get("method").asStr(), sent.json().get("body").asStr(), sent.json().get("contentType").asStr());
+
+print(put($"{base}/echo", body: "x").json().get("method").asStr(), delete($"{base}/echo").json().get("method").asStr());
+
+var[Response] asJson = postJson($"{base}/echo", jsonObject().set("name", jsonStr("Ann")));
+print(asJson.json().get("body").asStr(), asJson.json().get("contentType").asStr());
+
+// Redirects are followed
+print(get($"{base}/redirect").json().get("path").asStr());
+
+// HTTP errors don't throw...
+var[Response] missing = get($"{base}/status/404");
+print(missing.status, missing.ok, missing.text);
+// ...unless you ask
+try {
+    missing.raiseForStatus();
+} catch (e[RequestError]) {
+    print(e.message.startsWith("HTTP 404"));
+}
+
+// Connection failures do throw
+try {
+    get("http://127.0.0.1:1/nothing", timeout: 5);
+} catch (e[RequestError]) {
+    print("connection failed:", e.message.startsWith("Request to http://127.0.0.1:1/nothing failed"));
+}

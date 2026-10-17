@@ -1,0 +1,9 @@
+// exit: 1
+// An uncaught error stops the program with exit code 1 (message on stderr)
+// stderr: Error: pop() on an empty list
+// stderr: at tests/cases/run/uncaught.ds:8
+
+print("before");
+var[Int<>] empty = [];
+print(empty.pop());
+print("after");

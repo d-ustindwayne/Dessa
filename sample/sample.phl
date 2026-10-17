@@ -1,0 +1,25 @@
+product: {ID,Name,Category,Price,StockQuantity} [
+    101, "Wireless Mouse", "Electronics", 25.99, 150;
+    102, "Ergonomic Chair", "Furniture", 149.50, 45;
+    103, "Stainless Steel Water Bottle", "Kitchen", 18.75, 200;
+    104, "LED Desk Lamp", "Office", 34.00, 80;
+] // for multiple data
+// product[3].ID = 104; product[2].Price = 18.75;
+
+name: "Dustin Dwayne"
+email: "dustin@gmail.com"
+Services: [Database: [
+    ServerName: "Server",
+    Port: 1341
+], Theme: 
+    [Colors: [
+    TextColor: "red",
+    AccentColor: "brown",
+    BackgroundColor: "cream", // Supports trailing command
+    ], Spacing: [
+        Margin: 2,
+        Padding: 1.2
+    ]]
+]
+
+// no key means syntax error

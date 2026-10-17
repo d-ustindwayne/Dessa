@@ -1,0 +1,151 @@
+/***
+ * codes -- check digits and simple ciphers.
+ *
+ *     { isValidIsbn13, isValidCard, rot13 } from $("codes");   (after `riv add codes`)
+ *
+ * A check digit is the last digit of a code, worked out from the others, so
+ * a typo is noticed. Spaces and dashes in codes are ignored.
+ *
+ *     isValidUpc("036000291452")          true    (barcodes on products, 12 digits)
+ *     isValidIsbn10("0-306-40615-2")      true    (books, the last "digit" may be X)
+ *     isValidIsbn13("978-0-306-40615-7")  true
+ *     isValidCard("4539 1488 0343 6467")  true    (Luhn: credit cards and many IDs)
+ *     isValidUsps("1234567890" + "...")           (US postal money orders, 11 digits)
+ *     rot13("Hello")                      "Uryyb"
+ *     caesar("attack", 3)                 "dwwdfn"   (caesar(text, -3) decodes)
+ */
+
+// The digits of a code, without spaces or dashes; error on anything else.
+func[Int<>] _digitsOf(code[Str], what[Str], allowX[Bul]=false) {
+    var[Int<>] digits = [];
+    var[Chr<>] chars = code.chars();
+    for (var[Int] i = 0; i < chars.length(); i++) {
+        var[Chr] c = chars<i>;
+        if (c == ' ' || c == '-') continue;
+        if (c.isDigit()) digits.push(c.code() - 48);
+        else if (allowX && (c == 'X' || c == 'x')) digits.push(10);
+        else throw $"{what}: '{c}' is not a digit";
+    }
+    return digits;
+}
+
+func[Emp] _needLength(digits[Int<>], count[Int], what[Str]) {
+    if (digits.length() != count) throw $"{what}: needs {count} digits, got {digits.length()}";
+}
+
+// ---- UPC (12-digit product barcodes) ----
+
+// The 12th digit for the first 11: upcCheckDigit("03600029145") is 2.
+func[Int] upcCheckDigit(first11[Str]) {
+    var[Int<>] d = _digitsOf(first11, "upcCheckDigit");
+    _needLength(d, 11, "upcCheckDigit");
+    var[Int] total = 0;
+    for (var[Int] i = 0; i < 11; i++) total += i % 2 == 0 ? 3 * d<i> : d<i>;
+    return (10 - total % 10) % 10;
+}
+
+func[Bul] isValidUpc(code[Str]) {
+    var[Int<>] d = _digitsOf(code, "isValidUpc");
+    if (d.length() != 12) return false;
+    return upcCheckDigit(d.slice(0, 11).join("")) == d<11>;
+}
+
+// ---- ISBN (books) ----
+
+// The 10th character for the first 9: "0"-"9" or "X" (meaning 10).
+func[Str] isbn10CheckDigit(first9[Str]) {
+    var[Int<>] d = _digitsOf(first9, "isbn10CheckDigit");
+    _needLength(d, 9, "isbn10CheckDigit");
+    var[Int] total = 0;
+    for (var[Int] i = 0; i < 9; i++) total += (10 - i) * d<i>;
+    var[Int] check = (11 - total % 11) % 11;
+    return check == 10 ? "X" : Str(check);
+}
+
+func[Bul] isValidIsbn10(code[Str]) {
+    var[Int<>] d = _digitsOf(code, "isValidIsbn10", true);
+    if (d.length() != 10) return false;
+    for (var[Int] i = 0; i < 9; i++) if (d<i> == 10) return false;   // X only at the end
+    var[Str] last = d<9> == 10 ? "X" : Str(d<9>);
+    return isbn10CheckDigit(d.slice(0, 9).join("")) == last;
+}
+
+// The 13th digit for the first 12.
+func[Int] isbn13CheckDigit(first12[Str]) {
+    var[Int<>] d = _digitsOf(first12, "isbn13CheckDigit");
+    _needLength(d, 12, "isbn13CheckDigit");
+    var[Int] total = 0;
+    for (var[Int] i = 0; i < 12; i++) total += i % 2 == 0 ? d<i> : 3 * d<i>;
+    return (10 - total % 10) % 10;
+}
+
+func[Bul] isValidIsbn13(code[Str]) {
+    var[Int<>] d = _digitsOf(code, "isValidIsbn13");
+    if (d.length() != 13) return false;
+    return isbn13CheckDigit(d.slice(0, 12).join("")) == d<12>;
+}
+
+// ---- USPS postal money orders (11 digits) ----
+
+// The 11th digit for the first 10: the sum of the digits, remainder of 9.
+func[Int] uspsCheckDigit(first10[Str]) {
+    var[Int<>] d = _digitsOf(first10, "uspsCheckDigit");
+    _needLength(d, 10, "uspsCheckDigit");
+    var[Int] total = 0;
+    for (var[Int] x in d) total += x;
+    return total % 9;
+}
+
+func[Bul] isValidUsps(code[Str]) {
+    var[Int<>] d = _digitsOf(code, "isValidUsps");
+    if (d.length() != 11) return false;
+    return uspsCheckDigit(d.slice(0, 10).join("")) == d<10>;
+}
+
+// ---- Luhn (credit and debit cards, IMEI numbers, ...) ----
+
+// The digit to add at the end of `digits` so the whole number passes Luhn.
+func[Int] luhnCheckDigit(digits[Str]) {
+    var[Int<>] d = _digitsOf(digits, "luhnCheckDigit");
+    var[Int] total = 0;
+    var[Bul] double = true;   // the digit next to the check digit is doubled
+    for (var[Int] i = d.length() - 1; i >= 0; i--) {
+        var[Int] v = d<i>;
+        if (double) {
+            v *= 2;
+            if (v > 9) v -= 9;
+        }
+        total += v;
+        double = !double;
+    }
+    return (10 - total % 10) % 10;
+}
+
+// A card number (or any Luhn number) with its check digit at the end.
+func[Bul] isValidCard(number[Str]) {
+    var[Int<>] d = _digitsOf(number, "isValidCard");
+    if (d.length() < 2) return false;
+    return luhnCheckDigit(d.slice(0, d.length() - 1).join("")) == d<d.length() - 1>;
+}
+
+// ============================================================
+// Ciphers (fun, not security)
+// ============================================================
+
+// Moves every letter `shift` places along the alphabet (a negative shift goes back).
+func[Str] caesar(text[Str], shift[Int]) {
+    var[Str] out = "";
+    var[Int] s = shift % 26;
+    for (var[Chr] c in text) {
+        var[Int] code = c.code();
+        if (code >= 65 && code <= 90) out += Chr(65 + (code - 65 + s) % 26);
+        else if (code >= 97 && code <= 122) out += Chr(97 + (code - 97 + s) % 26);
+        else out += c;
+    }
+    return out;
+}
+
+// caesar by 13: doing it twice gives the text back.
+func[Str] rot13(text[Str]) {
+    return caesar(text, 13);
+}

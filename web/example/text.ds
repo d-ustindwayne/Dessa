@@ -1,0 +1,6 @@
+// Imported by app.ds with $("text"): the browser fetches it next to app.ds.
+
+// "1 task", "3 tasks"
+func[Str] plural(count[Int], one[Str], many[Str]) {
+    return count == 1 ? one : many;
+}

@@ -1,0 +1,99 @@
+// ============================================================
+// Dessa Test: Operators & Reserved Keywords
+// ============================================================
+
+// --- 1. Keywords & Primitive Declarations ---
+var[Str] s = "Hello Dessa";
+var[Int] i = 42;
+var[Flt] f = 3.14f;
+var[Dbl] d = 99.99d;
+var[Chr] c = 'A';
+var[Bul] b = true;
+var[Nil] n = nil;
+
+// Strict Lowercase Numeric Prefixes
+var[Int[2]] binVal = 0b1010;
+var[Int[8]] octVal = 0o755;
+var[Int[16]] hexVal = 0x1fA9C;
+
+const[Bul] isConstFlag = false;
+
+// --- 2. Arithmetic & Bitwise Operators ---
+var[Int] mathRes = (i + 10 - 5) * 2 / 4;
+var[Int] expRes = 2 ^ 3;
+
+var[Int] bitAnd = 5 & 3;
+var[Int] bitOr  = 5 | 3;
+var[Int] bitXor = 5 ^^ 3;
+var[Int] bitNot = ~5;
+var[Int] shl    = 5 << 1;
+var[Int] shr    = 5 >> 1;
+
+// --- 3. Compound Assignment & Postfix ---
+var[Int] num = 10;
+num++;
+num--;
+num += 5;
+num -= 2;
+num *= 3;
+num /= 2;
+num %= 4;
+num ^= 2;
+
+// --- 4. Logical & Non-Chained Relational Operators ---
+var[Bul] logicRes = (num > 0 && num <= 100) || (!isConstFlag);
+var[Bul] eqRes    = (num == 5) && (num != 10);
+
+// --- 5. Nullish Coalescing & Optional Chaining ---
+var[Int | Nil] nullableVal = nil;
+var[Int] safeVal = nullableVal ?? 0;
+
+class Config {
+    var[Int] timeout;
+    func[Int] getTimeout() {
+        return self.timeout;
+    }
+}
+
+var[Config | Nil] cfg = new Config();
+var[Int | Nil] optCheck = cfg?.timeout;
+
+// --- 6. Collections & Spread ---
+var[Str<>] baseList = ["one", "two"];
+var[Str<>] spreadList = [...baseList, "three"];
+var[Int{}] setVal = {1, 2, 3, 5};
+
+// --- 7. Functions, Lambdas & Control Flow Keywords ---
+func[Emp] testControlFlow(val[Int]) {
+    switch (val) {
+        case 1 := {
+            print("One");
+        }
+        case 2 := {
+            print("Two");
+        }
+        default := {
+            print("Other");
+        }
+    }
+
+    var[Int] counter = 0;
+    while (counter < 3) {
+        counter++;
+        if (counter == 1) continue;
+        if (counter == 2) break;
+    }
+
+    for (var[Int] k = 0; k < 2; k++) {
+        // Classic for
+    }
+
+    for (var[Str] item in baseList) {
+        // For-in loop
+    }
+}
+
+const[Int] doubleLambda = (x[Int]) := x * 2;
+
+// --- 8. Module Reference Keyword ($) ---
+$(<sys>, <math>);

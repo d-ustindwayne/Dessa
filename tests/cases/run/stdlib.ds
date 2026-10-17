@@ -1,0 +1,55 @@
+// Builtin methods and libraries
+
+{ sqrt, floor, round, abs, max, min, clamp, PI } from $(<math>);
+$(<sys>);
+{ fileExists, writeFile, readFile, deleteFile } from $(<os>);
+
+print(sqrt(16), floor(2.7), round(2.5), abs(-3), abs(-2.5), max(3, 9), min(2, 1.5), clamp(15, 0, 10));
+print(round(PI * 100));
+print(platform() != "");
+print(args());
+
+// Strings
+var[Str] s = "  Hello, Dessa  ";
+var[Str] t = s.trim();
+print(t, t.length(), t.upper(), t.lower());
+print(t.includes("Dessa"), t.startsWith("Hello"), t.endsWith("!"), t.indexOf("Dessa"));
+print(t.replace("Dessa", "World"), t.split(", "), t.substr(0, 5), "ab".repeat(3));
+print("42".toInt() + 1, "2.5".toDbl() * 2, 65.toChr(), 'a'.code(), 'x'.upper(), '7'.isDigit());
+print(t<0>, t<t.length() - 1>, t.chars().length());
+
+// Lists
+var[Int<>] xs = [5, 3, 8];
+xs.push(1);
+xs.insert(0, 9);
+print(xs, xs.length(), xs.includes(8), xs.indexOf(3));
+xs.sort();
+print(xs, xs.first(), xs.last());
+xs.reverse();
+print(xs);
+print(xs.pop(), xs.removeAt(0), xs, xs.remove(3), xs);
+print(xs.slice(0, 1), [1, 2, 3, 4].slice(2, 4), xs.isEmpty(), [].length());
+var[Str<>] words = ["b", "a", "c"];
+words.sort();
+print(words.join("-"));
+var[Int<>] more = [...xs, 100, ...[7, 7]];
+print(more);
+
+// Sets
+var[Str{}] tags = {"red", "blue"};
+tags.add("green");
+tags.add("red");
+print(tags, tags.length(), tags.includes("blue"), tags.remove("blue"), tags);
+
+// Conversions
+print(3.7.toInt(), 3.toDbl(), 10.toStr() + "!", true.toStr());
+
+// Files
+const[Str] path = "dessa_stdlib_test.txt";
+writeFile(path, "line one");
+print(fileExists(path), readFile(path));
+print(deleteFile(path), fileExists(path));
+
+// replace vs replaceAll, includes, toFixed
+print("a-b-c".replace("-", "+"), "a-b-c".replaceAll("-", "+"), "hello".includes("ell"), [1, 2].includes(2), {"x"}.includes("y"));
+print(3.14159.toFixed(2), 2.5.toFixed(0), (7 / 3).toFixed(3), 10.0.toFixed(1), "x".length(), [1, 2, 3].length());

@@ -1,0 +1,16 @@
+{"Ann": 30, "Bo": 25} 2
+{"Ann": 31, "Bo": 26, "Cy": 41}
+31 false -1 26 0
+Ann is 31
+Bo is 26
+Cy is 41
+["Ann", "Bo", "Cy"] [31, 26, 41]
+true false {"Ann": 31, "Cy": 41}
+Ann=31; Cy=41; Dee=22; 
+{:} true true
+{"tea": 2.25, "cake": 3.5, "coffee": 2.75}
+Key "Nobody" is not in the map (use .has(key) or .get(key) to check)
+{"math": [90, 85, 100], "art": [70]}
+1 -1
+green {RED: "red", GREEN: "green"}
+{"the": 3, "cat": 1, "and": 2, "hat": 1, "bat": 1}

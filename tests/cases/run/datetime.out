@@ -1,0 +1,26 @@
+2026-10-17T15:45:30.000+08:00
+2026 10 17 15 45 30 6 290 480
+Saturday, 17 October 2026 at 3:45 PM
+Sat 17/10/26 15:45:30.000 +08:00 Asia/Manila
+October 17, 2026 | 17 de octubre de 2026 | 17. Oktober 2026 | 2026年10月17日 | 2026년 10월 17일
+sábado 17 de octubre | samedi 17 octobre | Sabado Oktubre
+2026年10月17日 星期六 下午 3点 | sáb 17 out
+2026-10-17T07:45:30.000Z 2026-10-17T03:45:30.000-04:00 13:15 +05:30
+60 120 11 10
+29 13:00 29 12:00
+2028-02-29 2029-02-28 2027-11-30
+2029-01-31 Wed 2027-02-14
+true false true 29 30
+19 473 -19 true -1 true
+2026-10-17 00:00 1970-01-01T00:00:00.000Z 1969-12-31 Wednesday
+2026-12-25T08:00:00.000+08:00 2026-12-25T00:00:00.000+09:00
+2026-02-03T04:05:06.700Z 2000-01-01T02:59:00.000Z
+sabato, 17 oktobro 2026 12
+true DateTime
+Day 30 doesn't exist in 2026-02 (28 days)
+Month 13 doesn't exist (1 to 12)
+'hello' is not a date like 2026-10-17 or 2026-10-17T15:45:00+08:00
+25:00:00 is not a time of day
+Unknown time zone 'Mars/Olympus_Mons' (use a name like "Asia/Manila", "UTC", "local" or an offset like "+08:00")
+Unknown letter 'q' in a date pattern (put text in quotes: 'at')
+Unknown locale 'tlh' (known: en, es, fr, de, it, pt, nl, fil, ja, zh, ko, eo; add one with addLocale)

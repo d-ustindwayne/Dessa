@@ -1,0 +1,10 @@
+<Response [200]> 200 true
+GET /echo?x=1 secret
+application/json dessa-tests none
+POST hello there text/plain
+PUT DELETE
+{"name":"Ann"} application/json
+/echo
+404 false status 404
+true
+connection failed: true

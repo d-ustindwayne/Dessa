@@ -1,0 +1,55 @@
+// Function calls and returns
+
+func[Flt] add(num1[Flt], num2[Flt]) {
+    return num1 + num2;
+}
+
+add(1, 2);
+add(num1: 2, num2: 12.23);
+add(num2: 1, num1: 2);
+add(1);                        // error: Missing argument(s) for 'add': num2
+add(1, 2, 3);                  // error: takes 2 argument(s), but 3 were given
+add("a", 2);                   // error: Cannot convert Str to Flt
+add(num3: 1, num1: 2);         // error: has no parameter named 'num3'
+add(num1: 1, 2);               // error: Positional arguments cannot follow named arguments
+
+func[Int] noReturn(x[Int]) {   // error: may reach the end without returning Int
+    if (x > 0) {
+        return 1;
+    }
+}
+
+func[Int] allPaths(x[Int]) {
+    if (x > 0) {
+        return 1;
+    } else {
+        return 2;
+    }
+}
+
+func[Int] infinite() {
+    loop {
+        return 1;
+    }
+}
+
+func[Int] stub(x[Int]) {
+    ...
+}
+
+func[Emp] nothing() {
+    return 5;                  // error: has return type Emp and cannot return a value
+}
+
+func[Str] wrongReturn() {
+    return 5;                  // error: Cannot convert Int to Str
+}
+
+var[Int] v = nothing();        // error: has no value (Emp)
+print(nothing);
+5();                           // error: is not callable
+
+const[Int] square = (x[Int]) := x ^ 2;
+var[Int] sq = square(3);
+square("3");                   // error: Cannot convert Str to Int
+const[Str] bad = (x[Int]) := x;  // error: Cannot convert Int to Str

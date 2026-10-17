@@ -1,0 +1,76 @@
+// Variables, datatypes and operators (sample.ds sections 1-4)
+
+var[Str] name = "Dustin";
+var[Int] age = 21;
+var[Bul] male = true;
+var[Flt] money = 9.23;
+var[Flt] money2 = 9.23f;
+var[Dbl] score = 95.6d;
+var[Chr] grade = 'A';
+var[Str<>] students = ["Dustin", "Dwayne", "Diaz"];
+var[Int | Nil] a;
+
+print(name, age, male, money, money2, score, grade);
+print(students);
+print(a);
+print(students<0>);
+print(students<students.length() - 1>);
+
+// Integer bases print in their declared base
+var[Int[2]] baseBinaryVariable = 0b1001;
+var[Int[8]] baseOctalVariable = 0o32;
+var[Int[10]] baseDecimalVariable = 20;
+var[Int[16]] baseHexadecimalVariable = 0xf8;
+print(baseBinaryVariable, baseOctalVariable, baseDecimalVariable, baseHexadecimalVariable);
+print(baseBinaryVariable + 1);
+
+// Arithmetic
+a = 6;
+var[Int] b = 2;
+print(a + b);
+print(a - b);
+print(a * b);
+print(a / b);
+print(a ^ b);
+print(a % b);
+print(7 / 2, 7.0 / 2, -7 / 2, 2 ^ 0.5);
+
+// Logical
+var[Bul] yes = true;
+var[Bul] no = false;
+print(yes || no, yes && no, !no);
+
+// Comparison
+var[Int] num3 = 3;
+print(num3 > 2, num3 >= 2, num3 < 2, num3 <= 2, num3 == 2, num3 != 2);
+print("abc" < "abd", 'a' < 'b');
+
+// Assignment
+var[Int] num4 = 0;
+num4++;
+print(num4);
+num4 += 3;
+print(num4);
+num4--;
+print(num4);
+num4 -= 2;
+print(num4);
+num4 = 10;
+num4 *= 2;
+print(num4);
+num4 /= 2;
+print(num4);
+num4 ^= 2;
+print(num4);
+num4 %= 7;
+print(num4);
+
+// Bitwise
+print(5 & 3, 5 | 3, 5 ^^ 3, 5 << 1, 5 >> 1, ~5);
+
+// Strings
+var[Str] greeting = "Hello" + ", " + name + '!';
+print(greeting);
+print($"{name} is {age} years old and has {money} in the bank; next year {age + 1}");
+print($"escaped \{braces\} and a tab:\tend");
+print("quote \" backslash \\ newline-free");

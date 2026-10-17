@@ -1,0 +1,7 @@
+name = phl
+version = 1.0.0
+entry = phl.dm
+description = Read and write PHL, the readable data format
+
+[dependencies]
+json = 1.0.0

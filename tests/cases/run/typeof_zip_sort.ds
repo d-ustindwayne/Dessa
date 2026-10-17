@@ -1,0 +1,42 @@
+// typeof, zip and sort with a comparator
+
+class Animal {
+    var[Str] name = "";
+    init(name[Str]) {
+        self.name = name;
+    }
+}
+class Dog(Animal) {}
+
+var[Int | Str] either = 5;
+var[Animal | Nil] pet = new Dog("Rex");
+var[Animal | Nil] nobody = nil;
+var[Int[16]] mask = 255;
+print(typeof(42), typeof(2.5), typeof("hi"), typeof('c'), typeof(true), typeof(mask));
+print(typeof(either), typeof([1, 2]), typeof({"a": 1}), typeof(pet), typeof(nobody));
+either = "now text";
+print(typeof(either), typeof((x[Int]) := x * 2));
+
+// zip
+var[Str<>] names = ["Ann", "Bea", "Cy"];
+var[Int<>] ages = [31, 27];
+print(zip(names, ages));
+print(zip([1, 2, 3], [10, 20, 30]));
+print(zip(names, ages, (n[Str], a[Int]) := $"{n} is {a}"));
+for (var[(Str | Int)<>] pair in zip(names, ages)) {
+    var[Str | Int] first = pair<0>;
+    if (first is Str) print(first.upper(), pair<1>);
+}
+
+// sort with a comparator: negative = a first
+var[Int<>] nums = [5, 3, 9, 1];
+nums.sort((a[Int], b[Int]) := b - a);
+print(nums);
+var[Animal<>] animals = [new Animal("Mia"), new Dog("Bo"), new Animal("Ace")];
+animals.sort((a[Animal], b[Animal]) := a.name.compare(b.name));
+print(animals.map((a[Animal]) := a.name));
+var[Str<>] words = ["pear", "fig", "banana", "kiwi"];
+words.sort((a[Str], b[Str]) := a.length() - b.length());   // stable: pear before kiwi
+print(words, "apple".compare("pear"), "b".compare("a"), "x".compare("x"));
+words.sort();
+print(words);

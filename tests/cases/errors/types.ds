@@ -1,0 +1,27 @@
+// Type checking of declarations and assignments
+
+var[Int] a = "hello";          // error: Cannot convert Str to Int
+var[Str] b = 5;                // error: Cannot convert Int to Str
+var[Flt] c = 9.23;
+var[Flt] d = 9.23d;            // error: Cannot convert Dbl to Flt
+var[Dbl] e = 1;
+var[Int] f = 2.5;              // error: Cannot convert Dbl to Int
+var[Int[3]] g = 1;             // error: Integer base must be 2, 8, 10 or 16
+var[Str[2]] h = "x";           // error: integer base can only be applied to Int
+var[Bogus] i = 1;              // error: Unknown type 'Bogus'
+var[Emp] j;                    // error: cannot have type Emp
+var[Int<>] k = [1, 2, "three"];  // error: Cannot convert
+var[Dbl<>] l = [1, 2.5];
+var[Int{}] m = {1, 2, 3};
+var[Int] n = nil;              // error: Cannot convert Nil to Int
+var[Int | Nil] o = nil;
+
+const[Int] p = 1;
+p = 2;                         // error: Cannot assign to constant 'p'
+
+var[Int] q = 1;
+q = "x";                       // error: Cannot convert Str to Int
+q += 1.5;                      // error: cannot be stored in Int
+5 = q;                         // error: Invalid assignment target
+
+var[Int] q = 3;                // error: Duplicate declaration 'q'

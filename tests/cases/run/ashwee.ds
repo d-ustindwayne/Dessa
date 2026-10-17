@@ -1,0 +1,33 @@
+// needs: windows
+// $(<ashwee>) without showing the window: controls keep and return their state
+{ Window, Label, Button, TextBox, CheckBox, ListBox } from $(<ashwee>);
+
+var[Window] win = new Window("Test", 300, 200);
+var[Label] label = win.label("Hello", 10, 10);
+var[TextBox] name = win.input(10, 40, 200, "Ann");
+var[TextBox] notes = win.textArea(10, 70, 200, 60, "line 1\nline 2");
+var[CheckBox] agree = win.checkBox("Agree", 10, 140, 120, true);
+var[ListBox] colors = win.list(220, 10, 70, 100);
+var[Button] ok = win.button("OK", 220, 120, 70).onClick(() := print("clicked"));
+
+print(label.text(), name.text(), agree.checked());
+name.setText("Bea ☕");
+label.setText($"Hi {name.text()}");
+print(label.text(), name.text().length());
+print(notes.text().split("\n"));
+agree.setChecked(false);
+print(agree.checked());
+colors.add("red");
+colors.add("green");
+print(colors.items, colors.selected(), colors.selectedText());
+colors.clear();
+print(colors.items.length());
+ok.setEnabled(false);
+win.setTitle("Done");
+win.close();
+win.close();   // closing twice is fine
+try {
+    label.setText("gone");
+} catch (e[Str]) {
+    print(e);
+}

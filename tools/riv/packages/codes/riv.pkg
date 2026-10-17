@@ -1,0 +1,4 @@
+name = codes
+version = 1.0.0
+entry = lib.ds
+description = Check digits (UPC, ISBN, USPS, Luhn credit cards) and simple ciphers (ROT13, Caesar)

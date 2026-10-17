@@ -1,0 +1,34 @@
+// needs: mssql   (skipped unless a local SQL Server accepts Windows login; uses only a #temp table)
+// $(<sql>) with Microsoft SQL Server through ODBC
+
+{ connectMssql, drivers, Database, SqlError } from $(<sql>);
+{ Json } from $(<json>);
+
+print(drivers().includes("ODBC Driver 17 for SQL Server") || drivers().includes("ODBC Driver 18 for SQL Server"));
+
+var[Database] db = connectMssql("Server=localhost;Database=tempdb;Trusted_Connection=yes;");
+var[Database] csharpStyle = connectMssql("Data Source=localhost;Initial Catalog=tempdb;Integrated Security=true");
+print(csharpStyle.queryOne("SELECT DB_NAME() AS db"));
+csharpStyle.close();
+print(db);
+
+db.execute("CREATE TABLE #people (id INT IDENTITY PRIMARY KEY, name NVARCHAR(100), age INT, salary DECIMAL(10, 2), active BIT, joined DATE)");
+print(db.execute("INSERT INTO #people (name, age, salary, active, joined) VALUES (?, ?, ?, ?, ?)", "Ann", 30, 52000.5, true, "2024-03-01"));
+db.execute("INSERT INTO #people (name, age, salary, active, joined) VALUES (?, ?, ?, ?, ?)", "Bo Ñúñez 😀", 25, 41000, false, nil);
+
+for (var[Json] row in db.query("SELECT * FROM #people ORDER BY id")) {
+    print(row);
+}
+var[Json | Nil] ann = db.queryOne("SELECT name, age FROM #people WHERE age > ?", 28);
+if (ann != nil) {
+    print(ann.get("name").asStr(), ann.get("age").asInt());
+}
+print(db.execute("UPDATE #people SET age = age + 1"));
+print(db.queryOne("SELECT COUNT(*) AS n, AVG(CAST(age AS FLOAT)) AS avgAge FROM #people"));
+
+try {
+    db.query("SELECT * FROM table_that_does_not_exist");
+} catch (e[SqlError]) {
+    print(e.message);
+}
+db.close();

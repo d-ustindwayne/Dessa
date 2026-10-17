@@ -1,0 +1,17 @@
+// Imports: user modules and builtin libraries
+
+{ Circle, area } from $("lib.geo.shapes");
+{ Circle as C2 } from $("lib.geo.shapes");
+{ Square } from $("lib.geo.shapes");          // error: Module does not export 'Square'
+{ thing } from $("lib.geo.missing");          // error: Cannot find module 'lib.geo.missing'
+{ sqrt, PI } from $(<math>);
+{ foo } from $(<nosuchlib>);                  // error: Unknown library '<nosuchlib>'; if it's a riv package
+$("lib.geo.shapes", "lib.geo.other");         // error: exported by more than one imported module
+{ area as area2 } from $("lib.geo.other");
+
+var[Circle] c = new Circle(2.0);
+var[C2] same = c;
+var[Dbl] a = area(c);
+var[Dbl] root = sqrt(PI);
+var[Int] z = area2();
+SIDES = 3;                                    // error: Cannot assign to constant 'SIDES'

@@ -1,0 +1,4 @@
+name = ashwee
+version = 0.1.0
+entry = ashwee.dm
+description = Desktop windows and controls (GUI); Windows for now

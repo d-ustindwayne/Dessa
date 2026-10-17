@@ -1,0 +1,131 @@
+// Classes, inheritance, interfaces, enums
+
+interface Named {
+    name[Str];
+    func[Str] describe();
+}
+
+class[Named] Person {
+    var[Str] name = "anon";
+    var[Int] age = 0;
+    var[Str<>] tags = [];
+
+    init(name[Str], age[Int]) {
+        self.name = name;
+        self.age = age;
+    }
+
+    func[Str] describe() {
+        return $"{self.name} ({self.age})";
+    }
+
+    func[Emp] birthday() {
+        self.age++;
+        tags.push($"turned {age}");     // bare field access works too
+    }
+}
+
+class Student(Person) {
+    var[Str] school = "";
+
+    init(name[Str], age[Int], school[Str]) {
+        super.init(name, age);
+        self.school = school;
+    }
+
+    func[Str] describe() {
+        return $"{super.describe()} studies at {self.school}";
+    }
+}
+
+class Point {
+    var[Int] x = 0;
+    var[Int] y = 0;
+}
+
+class Money {
+    var[Int] cents = 0;
+    init(cents[Int]) {
+        self.cents = cents;
+    }
+    func[Str] toStr() {
+        var[Int] dollars = self.cents / 100;
+        return $"${dollars}.{self.cents % 100}";
+    }
+}
+
+var[Person] ann = new Person("Ann", 30);
+var[Person] bo = new Student("Bo", 20, "MIT");
+var[Named] cy = new Student("Cy", 21, "UP");
+
+print(ann.describe());
+print(bo.describe());              // dynamic dispatch
+print(cy.describe(), cy.name);     // through the interface
+
+ann.birthday();
+ann.birthday();
+print(ann.age, ann.tags);
+
+// Reference semantics: both names point at the same object
+var[Person] alias = ann;
+alias.name = "Annie";
+print(ann.name);
+
+var[Point] p = new Point();
+p.x = 3;
+print(p);
+print(new Money(1250));
+
+var[Person<>] people = [ann, bo];
+for (var[Person] person in people) {
+    print(person.describe());
+}
+
+enum Status {
+    CANCELLED,
+    ONGOING,
+    COMPLETED
+}
+
+enum Code {
+    OK(200),
+    NOT_FOUND(404)
+}
+
+var[Status] s = Status.ONGOING;
+print(s, s == Status.ONGOING, s.name(), s.value());
+print(Code.NOT_FOUND.value());
+
+switch (s) {
+    case Status.CANCELLED := { print("cancelled"); }
+    case Status.ONGOING := { print("ongoing"); }
+    default := { print("done"); }
+}
+
+// Nullable objects and optional chaining
+var[Person | Nil] maybe = nil;
+print(maybe?.name);
+print(maybe?.describe() ?? "nobody");
+maybe = ann;
+print(maybe?.name);
+if (maybe != nil) {
+    print(maybe.age);
+}
+
+// A class without init inherits its parent's init
+class Teacher(Person) {
+    func[Str] describe() {
+        return $"Teacher {self.name}";
+    }
+}
+print(new Teacher("Dee", 45).describe());
+
+// Switching on an enum: values can be written without the enum's name
+func[Str] mood(s[Status]) {
+    switch (s) {
+        case CANCELLED := { return "sad"; }
+        case Status.ONGOING := { return "busy"; }
+        default := { return "happy"; }
+    }
+}
+print(mood(Status.CANCELLED), mood(Status.ONGOING), mood(Status.COMPLETED));

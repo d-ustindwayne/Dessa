@@ -1,0 +1,51 @@
+// Nil, narrowing, ?? and ?.
+
+var[Int | Nil] a;
+print(a, a == nil, a ?? -1);
+a = 5;
+print(a + 1, a == nil);
+a++;
+a += 10;
+print(a);
+
+func[Str] label(x[Int | Nil]) {
+    if (x == nil) {
+        return "none";
+    }
+    return $"value {x * 2}";
+}
+print(label(nil), label(21));
+
+var[Str | Nil] text = nil;
+var[Int] size = text?.length() ?? 0;
+print(size);
+text = "hello";
+print(text?.length(), text.upper());
+
+class Node {
+    var[Int] value = 0;
+    var[Node | Nil] next = nil;
+    init(value[Int]) {
+        self.value = value;
+    }
+}
+
+var[Node] head = new Node(1);
+head.next = new Node(2);
+print(head.next?.value);
+print(head.next?.next?.value);
+print(head.next?.next?.value ?? 0);
+
+// Walking a linked list
+var[Node | Nil] cursor = head;
+var[Int] total = 0;
+while (cursor != nil) {
+    total += cursor.value;
+    cursor = cursor.next;
+}
+print(total);
+
+var[Int | Str] mixed = 5;
+print(mixed);
+mixed = "five";
+print(mixed, mixed == "five");

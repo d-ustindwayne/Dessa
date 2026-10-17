@@ -1,0 +1,29 @@
+Ann 30 true
+85.5 2
+Cebu
+true true true
+say "hi"
+
+["name", "age", "admin", "scores", "address", "nickname", "quote", "pi"]
+{"name":"Ann","age":30,"admin":true,"scores":[90,85.5],"address":{"city":"Cebu"},"nickname":null,"quote":"say \"hi\"\n","pi":3.14}
+{"name":"Bo","age":30,"tags":["admin","dev","ops"],"manager":null}
+{
+  "name": "Bo",
+  "age": 30,
+  "tags": [
+    "admin",
+    "dev",
+    "ops"
+  ],
+  "manager": null
+}
+[] {}
+ops true
+café 😀
+expected a "key" in the object at line 1, column 9
+expected ']' but the text ended at line 1, column 6
+expected ':', found '1' at line 1, column 6
+unexpected character 't' at line 1, column 1
+unexpected text after the JSON value at line 1, column 6
+JsonError: expected a number, found string
+6 6.5

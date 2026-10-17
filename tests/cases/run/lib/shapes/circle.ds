@@ -1,0 +1,26 @@
+// Helper module for run/modules.ds
+
+const[Dbl] TAU = 6.283185307179586;
+var[Int] created = 0;
+
+print("this top-level print must not run on import");
+
+class Circle {
+    var[Dbl] radius = 0.0;
+    init(radius[Dbl]) {
+        self.radius = radius;
+        created++;
+    }
+    func[Dbl] circumference() {
+        return TAU * self.radius;
+    }
+}
+
+func[Str] describe(c[Circle]) {
+    return $"circle r={c.radius}";
+}
+
+enum Kind {
+    ROUND,
+    SQUARE
+}

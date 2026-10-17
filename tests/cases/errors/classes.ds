@@ -1,0 +1,75 @@
+// Classes, interfaces, inheritance
+
+interface Named {
+    name[Str];
+    func[Str] describe();
+}
+
+class[Named] Person {
+    var[Str] name = "anon";
+    var[Int] age = 0;
+
+    init(name[Str], age[Int]) {
+        self.name = name;
+        self.age = age;
+    }
+
+    func[Str] describe() {
+        return $"{self.name} ({self.age})";
+    }
+}
+
+class Student(Person) {
+    var[Str] school = "";
+
+    init(name[Str], age[Int], school[Str]) {
+        super.init(name, age);
+        self.school = school;
+    }
+
+    func[Str] describe() {
+        return $"{super.describe()} at {self.school}";
+    }
+}
+
+class[Named] Broken {          // error: does not implement interface method 'describe'
+    var[Int] name = 0;         // error: has type Int but interface 'Named' requires Str
+}
+
+class NoSuper(Person) {        // fine: inherits init(name, age) from Person
+}
+
+class LateSuper(Person) {
+    init() {                   // error: init must start with super.init(...)
+        print("hi");
+        super.init("x", 1);    // error: super.init(...) must be the first statement of init
+    }
+}
+
+class BadOverride(Person) {
+    init() {
+        super.init("x", 1);
+    }
+    func[Int] describe() {     // error: overrides a parent method with a different signature
+        return 1;
+    }
+}
+
+class OldStyle {
+    func[Emp] OldStyle() {}    // error: Constructors are declared with init(...)
+}
+
+var[Person] p = new Person("Ann", 30);
+var[Person] s = new Student("Bo", 20, "MIT");
+var[Named] n = new Student("Cy", 21, "UP");
+var[Student] wrong = new Person("Dee", 40);   // error: Cannot convert Person to Student
+new Person("Eve");             // error: Missing argument(s) for 'Person': age
+new Named();                   // error: Cannot create an instance of interface 'Named'
+Person("x", 1);                // error: Use 'new Person(...)'
+print(p.missing);              // error: has no member 'missing'
+print(p.describe());
+print(n.name);
+p.describe = 3;                // error: Cannot assign to 'describe'
+
+class Cycle1(Cycle2) {}        // error: inherits from itself
+class Cycle2(Cycle1) {}        // error: inherits from itself

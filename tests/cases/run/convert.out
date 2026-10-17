@@ -1,0 +1,11 @@
+43 7 2 3 -3 1 65
+5 3 1.25 0
+true false true false true
+A z q
+42! 2.5 true c [1, 2] {"a": 1}
+0xff
+1 LOW
+24
+Cannot convert "abc" to Int
+Cannot convert "too long" to Chr: it must be exactly one character
+Cannot convert "maybe" to Bul (use true/false, 1/0 or yes/no)

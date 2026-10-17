@@ -1,0 +1,5 @@
+// colors.styles -- imported as $("colors.styles")
+
+func[Str] bold(text[Str]) {
+    return $"\x1b[1m{text}\x1b[0m";
+}

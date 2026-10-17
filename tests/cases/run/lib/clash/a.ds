@@ -1,0 +1,7 @@
+// Two modules that both declare `Node` and `make`
+class Node {
+    var[Str] label = "a";
+}
+func[Node] make() {
+    return new Node();
+}

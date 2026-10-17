@@ -1,0 +1,5 @@
+// Example user module, imported by sample.ds with $("my.other")
+
+func[Str] shout(text[Str]) {
+    return text.upper() + "!";
+}

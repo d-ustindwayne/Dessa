@@ -1,0 +1,4 @@
+name = json
+version = 1.0.0
+entry = json.dm
+description = Read and write JSON (the Json type)

@@ -1,0 +1,32 @@
+// Name resolution and ordering
+
+print(later);                  // error: used before its declaration
+var[Int] later = 1;
+
+print(missing);                // error: Undefined name 'missing'
+
+// Functions are hoisted and may be called before their declaration
+var[Int] r = twice(2);
+
+func[Int] twice(x[Int]) {
+    return x * 2;
+}
+
+// Functions may use globals declared anywhere in the file
+func[Emp] show() {
+    print(afterFunction);
+}
+var[Int] afterFunction = 3;
+
+func[Emp] outer() {
+    func[Emp] inner() {}       // error: Functions can only be declared at the top level
+}
+
+if (true) {
+    var[Int] scoped = 1;
+}
+print(scoped);                 // error: Undefined name 'scoped'
+
+break;                         // error: 'break' can only be used inside a loop
+return;                        // error: 'return' can only be used inside a function
+print(self);                   // error: 'self' can only be used inside a class

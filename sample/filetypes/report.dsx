@@ -1,0 +1,20 @@
+/***
+ * report.dsx -- an "extended" source file, also imported as a module.
+ *
+ * Compiles exactly like a .ds file for now.
+ */
+
+{ Shape } from $("geometry");
+{ round } from $(<math>);
+
+// Rounds to 2 decimal places for display: 3.14159 -> 3.14
+func[Dbl] twoDecimals(x[Dbl]) {
+    return round(x * 100) / 100.0;
+}
+
+func[Emp] report(title[Str], shapes[Shape<>], sort[Bul]=false) {
+    print($"== {title} ==");
+    for (var[Shape] s in shapes) {
+        print(s.name(), twoDecimals(s.area()), sep: "\t");
+    }
+}

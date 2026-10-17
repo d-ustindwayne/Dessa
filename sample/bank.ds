@@ -1,0 +1,354 @@
+/***
+ * Dessa Bank -- a terminal banking system.
+ *
+ *     dessa run sample/bank.ds
+ *
+ * Money is stored as whole cents (Int) so amounts never suffer from
+ * floating-point rounding: $12.50 is 1250.
+ */
+
+// ============================================================
+// Errors
+// ============================================================
+
+class BankError {
+    var[Str] message = "";
+    init(message[Str]) {
+        self.message = message;
+    }
+}
+
+class InvalidAmount(BankError) {
+    init(text[Str]) {
+        super.init($"'{text}' is not a valid amount (use e.g. 25 or 12.50)");
+    }
+}
+
+class InsufficientFunds(BankError) {
+    init(balance[Int], wanted[Int]) {
+        super.init($"Insufficient funds: balance is {money(balance)}, tried to take {money(wanted)}");
+    }
+}
+
+class AccountNotFound(BankError) {
+    init(number[Int]) {
+        super.init($"No account with number {number}");
+    }
+}
+
+// ============================================================
+// Money helpers
+// ============================================================
+
+// 1250 -> "$12.50"
+func[Str] money(cents[Int]) {
+    var[Str] sign = cents < 0 ? "-" : "";
+    var[Int] value = cents < 0 ? -cents : cents;
+    var[Int] dollars = value / 100;      // stored in an Int: whole dollars
+    var[Int] rest = value % 100;
+    return $"{sign}${dollars}.{rest < 10 ? "0" : ""}{rest}";
+}
+
+// "12.5" -> 1250, "40" -> 4000
+func[Int] parseAmount(text[Str]) {
+    var[Str<>] parts = text.trim().split(".");
+    if (parts.length() > 2 || parts<0>.isEmpty()) {
+        throw new InvalidAmount(text);
+    }
+    var[Int] cents = 0;
+    try {
+        cents = parts<0>.toInt() * 100;
+        if (parts.length() == 2) {
+            var[Str] fraction = parts<1>;
+            if (fraction.length() == 0 || fraction.length() > 2) {
+                throw new InvalidAmount(text);
+            }
+            if (fraction.length() == 1) {
+                fraction = fraction + "0";
+            }
+            cents += fraction.toInt();
+        }
+    } catch (e[Str]) {
+        throw new InvalidAmount(text);
+    }
+    if (cents <= 0) {
+        throw new InvalidAmount(text);
+    }
+    return cents;
+}
+
+// ============================================================
+// Accounts
+// ============================================================
+
+enum TxKind {
+    DEPOSIT,
+    WITHDRAWAL,
+    TRANSFER_IN,
+    TRANSFER_OUT,
+    INTEREST
+}
+
+class Transaction {
+    var[TxKind] kind = TxKind.DEPOSIT;
+    var[Int] amount = 0;
+    var[Int] balanceAfter = 0;
+    var[Str] note = "";
+
+    init(kind[TxKind], amount[Int], balanceAfter[Int], note[Str]) {
+        self.kind = kind;
+        self.amount = amount;
+        self.balanceAfter = balanceAfter;
+        self.note = note;
+    }
+
+    func[Str] toStr() {
+        var[Str] sign = self.kind == TxKind.WITHDRAWAL || self.kind == TxKind.TRANSFER_OUT ? "-" : "+";
+        return $"{self.kind.name()}  {sign}{money(self.amount)}  -> {money(self.balanceAfter)}  ({self.note})";
+    }
+}
+
+interface Describable {
+    func[Str] summary();
+}
+
+class[Describable] Account {
+    var[Int] number = 0;
+    var[Str] owner = "";
+    var[Int] balance = 0;
+    var[Transaction<>] history = [];
+
+    init(owner[Str], bank[Bank]) {
+        self.owner = owner;
+        self.number = bank.nextNumber();
+        bank.register(self);                  // self works inside init
+    }
+
+    func[Str] kindName() {
+        return "Checking";
+    }
+
+    func[Emp] record(kind[TxKind], amount[Int], note[Str]) {
+        self.history.push(new Transaction(kind, amount, self.balance, note));
+    }
+
+    func[Emp] deposit(amount[Int], note[Str]="Deposit", kind[TxKind]=TxKind.DEPOSIT) {
+        self.balance += amount;
+        self.record(kind, amount, note);
+    }
+
+    func[Emp] withdraw(amount[Int], note[Str]="Withdrawal", kind[TxKind]=TxKind.WITHDRAWAL) {
+        if (amount > self.balance) {
+            throw new InsufficientFunds(self.balance, amount);
+        }
+        self.balance -= amount;
+        self.record(kind, amount, note);
+    }
+
+    func[Str] summary() {
+        return $"#{self.number}  {self.owner}  {self.kindName()}  {money(self.balance)}";
+    }
+}
+
+class SavingsAccount(Account) {
+    // Interest in basis points: 250 = 2.50% per payout
+    var[Int] rate = 250;
+    var[Int] withdrawalsLeft = 2;
+
+    init(owner[Str], bank[Bank], rate[Int]=250) {
+        super.init(owner, bank);
+        self.rate = rate;
+    }
+
+    func[Str] kindName() {
+        return "Savings";
+    }
+
+    func[Emp] withdraw(amount[Int], note[Str]="Withdrawal", kind[TxKind]=TxKind.WITHDRAWAL) {
+        if (self.withdrawalsLeft == 0) {
+            throw new BankError("Savings accounts allow only 2 withdrawals per month");
+        }
+        super.withdraw(amount, note, kind);
+        self.withdrawalsLeft--;
+    }
+
+    func[Int] payInterest() {
+        var[Int] interest = self.balance * self.rate / 10000;
+        if (interest > 0) {
+            self.deposit(interest, $"Interest {self.rate / 100}%", TxKind.INTEREST);
+        }
+        return interest;
+    }
+}
+
+// ============================================================
+// Bank
+// ============================================================
+
+class Bank {
+    var[Str] name = "";
+    var[Account<>] accounts = [];
+    var[Int] lastNumber = 1000;
+
+    init(name[Str]) {
+        self.name = name;
+    }
+
+    func[Int] nextNumber() {
+        self.lastNumber++;
+        return self.lastNumber;
+    }
+
+    func[Emp] register(account[Account]) {
+        self.accounts.push(account);
+    }
+
+    func[Account] find(number[Int]) {
+        for (var[Account] account in self.accounts) {
+            if (account.number == number) {
+                return account;
+            }
+        }
+        throw new AccountNotFound(number);
+    }
+
+    func[Emp] transfer(fromNumber[Int], toNumber[Int], amount[Int]) {
+        var[Account] source = self.find(fromNumber);
+        var[Account] target = self.find(toNumber);
+        if (source == target) {
+            throw new BankError("Cannot transfer to the same account");
+        }
+        source.withdraw(amount, $"To #{toNumber}", TxKind.TRANSFER_OUT);
+        target.deposit(amount, $"From #{fromNumber}", TxKind.TRANSFER_IN);
+    }
+
+    func[Int] total() {
+        var[Int] sum = 0;
+        for (var[Account] account in self.accounts) {
+            sum += account.balance;
+        }
+        return sum;
+    }
+
+    // Accounts matching any condition you pass in
+    func[Account<>] where(matches[Func[Bul, [Account]]]) {
+        return self.accounts.filter(matches);
+    }
+}
+
+// ============================================================
+// Terminal interface
+// ============================================================
+
+func[Emp] heading(lines[Str*]) {
+    print("=".repeat(44));
+    for (var[Str] line in lines) {
+        print(line);
+    }
+    print("=".repeat(44));
+}
+
+func[Str] ask(prompt[Str]) {
+    return input($"{prompt}: ").trim();
+}
+
+func[Int] askNumber(prompt[Str]) {
+    var[Str] text = ask(prompt);
+    try {
+        return text.toInt();
+    } catch (e[Str]) {
+        throw new BankError($"'{text}' is not a number");
+    }
+}
+
+func[Emp] showMenu() {
+    print();
+    print("1) Open checking   2) Open savings   3) Deposit");
+    print("4) Withdraw        5) Transfer       6) Statement");
+    print("7) All accounts    8) Pay interest   9) Rich list");
+    print("0) Quit");
+}
+
+var[Bank] bank = new Bank("Dessa Bank");
+heading($"Welcome to {bank.name}", "All amounts are in dollars, e.g. 25 or 12.50");
+
+var[Bul] running = true;
+while (running) {
+    showMenu();
+    var[Str] choice = ask("Choose");
+
+    try {
+        switch (choice) {
+            case "1" := {
+                var[Account] account = new Account(ask("Owner name"), bank);
+                print($"Opened checking account #{account.number}");
+            }
+            case "2" := {
+                var[SavingsAccount] account = new SavingsAccount(ask("Owner name"), bank);
+                print($"Opened savings account #{account.number} at 2.50%");
+            }
+            case "3" := {
+                var[Account] account = bank.find(askNumber("Account number"));
+                account.deposit(parseAmount(ask("Amount")));
+                print("Deposited. New balance:", money(account.balance));
+            }
+            case "4" := {
+                var[Account] account = bank.find(askNumber("Account number"));
+                account.withdraw(parseAmount(ask("Amount")));
+                print("Withdrawn. New balance:", money(account.balance));
+            }
+            case "5" := {
+                var[Int] fromNumber = askNumber("From account");
+                var[Int] toNumber = askNumber("To account");
+                bank.transfer(fromNumber, toNumber, parseAmount(ask("Amount")));
+                print("Transfer complete.");
+            }
+            case "6" := {
+                var[Account] account = bank.find(askNumber("Account number"));
+                heading(account.summary());
+                if (account.history.isEmpty()) {
+                    print("(no transactions)");
+                }
+                for (var[Transaction] tx in account.history) {
+                    print(tx);
+                }
+            }
+            case "7" := {
+                heading($"{bank.accounts.length()} account(s), total {money(bank.total())}");
+                for (var[Describable] account in bank.accounts) {
+                    print(account.summary());
+                }
+            }
+            case "8" := {
+                var[Int] paid = 0;
+                for (var[Account] account in bank.accounts) {
+                    if (account is SavingsAccount) {
+                        paid += account.payInterest();     // account is a SavingsAccount here
+                    }
+                }
+                print("Interest paid:", money(paid));
+            }
+            case "9" := {
+                var[Int] limit = parseAmount(ask("Minimum balance"));
+                var[Account<>] rich = bank.where((a[Account]) := a.balance >= limit);
+                print($"{rich.length()} account(s) with at least {money(limit)}:");
+                print(rich.map((a[Account]) := a.owner).join(", "));
+            }
+            case "0" := {
+                running = false;
+            }
+            case "" := {
+                running = false;     // end of input
+            }
+            default := {
+                print($"Unknown option '{choice}'");
+            }
+        }
+    } catch (e[InsufficientFunds]) {
+        print("Declined.", e.message);
+    } catch (e[BankError]) {
+        print("Error:", e.message);
+    }
+}
+
+heading("Goodbye!", $"Final total held: {money(bank.total())}");

@@ -1,0 +1,54 @@
+// A to-do list running in the browser: index.html loads ../dessa.js, which
+// compiles this file to JavaScript and runs it.
+{ document, Element, Event, log } from $(<webutils>);
+{ plural } from $("text");          // text.ds, next to this file
+
+// The element with this id; an error if the page doesn't have it.
+func[Element] need(id[Str]) {
+    var[Element | Nil] element = document.getElementById(id);
+    if (element == nil) throw $"The page has no element with id '{id}'";
+    return element;
+}
+
+var[Element] list = need("list");
+var[Element] input = need("task");
+var[Element] status = need("status");
+
+func[Emp] refresh() {
+    var[Int] left = list.querySelectorAll("li:not(.done)").length();
+    status.textContent = $"{left} {plural(left, "task", "tasks")} left";
+}
+
+func[Emp] addTask(text[Str]) {
+    var[Element] item = document.createElement("li");
+    item.textContent = text;
+    item.addEventListener("click", (e[Event]) := {
+        item.classList.toggle("done");
+        refresh();
+    });
+    list.appendChild(item);
+    refresh();
+}
+
+for (var[Str] task in ["Learn Dessa", "Build something"]) addTask(task);
+
+need("todo-form").addEventListener("submit", (e[Event]) := {
+    e.preventDefault();
+    var[Str] text = input.value.trim();
+    if (text.isEmpty()) return;
+    addTask(text);
+    input.value = "";
+    log("added:", text);
+});
+
+func[Emp] changeColor(color[Str]) {
+    document.body.style.backgroundColor = color;
+    log("changed background color to", color);
+}
+
+var[Element | Nil] colorButton = document.getElementById("changeColor");
+if (colorButton != nil) colorButton.addEventListener("click", (e[Event]) := {
+    changeColor("lightblue");
+});
+
+print($"Dessa is running: {list.children.length()} tasks on the page");

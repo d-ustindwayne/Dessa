@@ -1,0 +1,25 @@
+// Test error handling and control flow
+
+func[Emp] validateAge(age[Int]) {
+    try {
+        if (age < 18) {
+            throw "Age restriction: Must be 18 or older";
+        }
+        print($"Access granted for age: {age}");
+    } catch (err[Str]) {
+        print($"Caught error: {err}");
+    }
+}
+
+// Test loops & breaks
+var[Int] count = 0;
+loop {
+    count++;
+    if (count == 3) {
+        break;
+    }
+}
+
+// Execute function
+validateAge(16);
+validateAge(21);

@@ -1,0 +1,339 @@
+/***
+ * Methods on Dessa's built-in types -- always available.
+ *
+ *     "hello".upper()        [3, 1, 2].length()        'a'.isAlpha()
+ *
+ * Declaration file: documentation only. Each `...Methods` class below lists
+ * the methods you can call on values of one type; the classes themselves
+ * don't exist in your programs. The real implementation is C++ in
+ * runtime/dessa_runtime.hpp (functions named m_<method>).
+ *
+ * Placeholders used in the signatures:
+ *   T   the element type of the list or set (Int for an Int<>)
+ *   U   any type the function you pass returns
+ *   K   a map's key type, V its value type (Map[K, V])
+ */
+
+class T {}
+class U {}
+class K {}
+class V {}
+
+// ============================================================
+// Str
+// ============================================================
+
+class StrMethods {
+    // Number of characters in the text: "hello".length() is 5, "héllo".length() is 5 too.
+    func[Int] length() { ... }
+
+    // true if the text is "".
+    func[Bul] isEmpty() { ... }
+
+    // A copy in UPPER CASE.
+    func[Str] upper() { ... }
+
+    // A copy in lower case.
+    func[Str] lower() { ... }
+
+    // A copy without spaces, tabs or newlines at either end.
+    func[Str] trim() { ... }
+
+    // true if `text` appears anywhere in this Str.
+    func[Bul] includes(text[Str]) { ... }
+
+    // true if this Str begins with `text`.
+    func[Bul] startsWith(text[Str]) { ... }
+
+    // true if this Str ends with `text`.
+    func[Bul] endsWith(text[Str]) { ... }
+
+    // Position of the first `text`, or -1 if it isn't there.
+    func[Int] indexOf(text[Str]) { ... }
+
+    // Compares by character codes: -1 if this comes first, 1 if `other` does,
+    // 0 if they're equal. "apple".compare("pear") is -1. Handy in sort().
+    func[Int] compare(other[Str]) { ... }
+
+    // A copy with the first `target` replaced by `replacement`:
+    // "a-b-c".replace("-", "+") is "a+b-c".
+    func[Str] replace(target[Str], replacement[Str]) { ... }
+
+    // A copy with every `target` replaced: "a-b-c".replaceAll("-", "+") is "a+b+c".
+    func[Str] replaceAll(target[Str], replacement[Str]) { ... }
+
+    // Splits at every `separator`: "a,b".split(",") is ["a", "b"].
+    // An empty separator splits into single characters.
+    func[Str<>] split(separator[Str]) { ... }
+
+    // `length` characters starting at `start` (0-based).
+    // Error if start is outside the text or length is negative.
+    func[Str] substr(start[Int], length[Int]) { ... }
+
+    // The text repeated `count` times: "ab".repeat(3) is "ababab".
+    func[Str] repeat(count[Int]) { ... }
+
+    // The characters as a list: "hi".chars() is ['h', 'i'].
+    func[Chr<>] chars() { ... }
+
+    // Parses a whole number: "42".toInt() is 42. Error if it isn't one.
+    func[Int] toInt() { ... }
+
+    // Parses a decimal number: "2.5".toDbl() is 2.5. Error if it isn't one.
+    func[Dbl] toDbl() { ... }
+
+    // Like toDbl, but returns a Flt.
+    func[Flt] toFlt() { ... }
+
+    // The text itself.
+    func[Str] toStr() { ... }
+}
+
+// ============================================================
+// Chr
+// ============================================================
+
+class ChrMethods {
+    // '0' to '9'
+    func[Bul] isDigit() { ... }
+
+    // 'a'-'z' or 'A'-'Z'
+    func[Bul] isAlpha() { ... }
+
+    // Space, tab or newline.
+    func[Bul] isSpace() { ... }
+
+    // 'A'-'Z'
+    func[Bul] isUpper() { ... }
+
+    // 'a'-'z'
+    func[Bul] isLower() { ... }
+
+    // The upper-case letter: 'a'.upper() is 'A'.
+    func[Chr] upper() { ... }
+
+    // The lower-case letter: 'A'.lower() is 'a'.
+    func[Chr] lower() { ... }
+
+    // The character code: 'A'.code() is 65.
+    func[Int] code() { ... }
+
+    // A one-character Str.
+    func[Str] toStr() { ... }
+}
+
+// ============================================================
+// Int, Flt, Dbl
+// ============================================================
+
+class NumberMethods {
+    // The number as text: 42.toStr() is "42", 2.5.toStr() is "2.5".
+    func[Str] toStr() { ... }
+
+    // Converts to Int, dropping any fraction: 3.7.toInt() is 3.
+    func[Int] toInt() { ... }
+
+    // Converts to Dbl.
+    func[Dbl] toDbl() { ... }
+
+    // Converts to Flt.
+    func[Flt] toFlt() { ... }
+
+    // Int only: the character with this code: 65.toChr() is 'A'.
+    func[Chr] toChr() { ... }
+
+    // Flt / Dbl only: text with exactly `digits` decimals, rounded:
+    // 3.14159.toFixed(2) is "3.14", 2.5.toFixed(0) is "3".
+    func[Str] toFixed(digits[Int]) { ... }
+}
+
+// ============================================================
+// Bul
+// ============================================================
+
+class BulMethods {
+    // "true" or "false".
+    func[Str] toStr() { ... }
+}
+
+// ============================================================
+// Enum values   (Status.ONGOING.name())
+// ============================================================
+
+class EnumMethods {
+    // The value's name: Status.ONGOING.name() is "ONGOING".
+    func[Str] name() { ... }
+
+    // Same as name().
+    func[Str] toStr() { ... }
+
+    // The value's number: its position from 0, or the number given in
+    // the enum declaration, e.g. OK(200).
+    func[Int] value() { ... }
+}
+
+// ============================================================
+// Lists   T<>
+// ============================================================
+
+class ListMethods {
+    // Number of items.
+    func[Int] length() { ... }
+
+    // true if the list has no items.
+    func[Bul] isEmpty() { ... }
+
+    // true if `value` is in the list.
+    func[Bul] includes(value[T]) { ... }
+
+    // Position of the first `value`, or -1 if it isn't there.
+    func[Int] indexOf(value[T]) { ... }
+
+    // Adds `value` at the end.
+    func[Emp] push(value[T]) { ... }
+
+    // Removes and returns the last item. Error if the list is empty.
+    func[T] pop() { ... }
+
+    // The first item. Error if the list is empty.
+    func[T] first() { ... }
+
+    // The last item. Error if the list is empty.
+    func[T] last() { ... }
+
+    // Inserts `value` before position `index` (0 to len()).
+    func[Emp] insert(index[Int], value[T]) { ... }
+
+    // Removes and returns the item at `index`. Error if it's out of range.
+    func[T] removeAt(index[Int]) { ... }
+
+    // Removes the first `value`. Returns false if it wasn't there.
+    func[Bul] remove(value[T]) { ... }
+
+    // Removes every item.
+    func[Emp] clear() { ... }
+
+    // Reverses the order of the items in place.
+    func[Emp] reverse() { ... }
+
+    // Sorts the items in place, smallest first. For lists of numbers,
+    // Str or Chr.
+    //
+    // Or with a comparator, for any list: it gets two items and returns a
+    // negative number if `a` comes first, a positive one if `b` does, 0 to
+    // keep their order (the sort is stable):
+    //     nums.sort((a[Int], b[Int]) := b - a);                       // biggest first
+    //     people.sort((a[Person], b[Person]) := a.name.compare(b.name));
+    func[Emp] sort() { ... }
+
+    // Items from `start` up to (not including) `end`:
+    // [10, 20, 30].slice(1, 3) is [20, 30]. Negative values are errors.
+    func[T<>] slice(start[Int], end[Int]) { ... }
+
+    // A separate copy of the list.
+    func[T<>] copy() { ... }
+
+    // The items as text joined by `separator`: [1, 2].join("-") is "1-2".
+    func[Str] join(separator[Str]) { ... }
+
+    // A list of each item passed through `transform`.
+    // transform: (item[T]) := U
+    //     [1, 2].map((n[Int]) := n * 10) is [10, 20]
+    func[U<>] map(transform[Func[U, [T]]]) { ... }
+
+    // The items for which `keep` returns true.
+    // keep: (item[T]) := Bul
+    func[T<>] filter(keep[Func[Bul, [T]]]) { ... }
+
+    // Calls `action` with each item, in order.
+    // action: (item[T]) := Emp
+    func[Emp] forEach(action[Func[Emp, [T]]]) { ... }
+
+    // The list itself (as a copy).
+    func[T<>] toList() { ... }
+}
+
+// ============================================================
+// Sets   T{}
+// ============================================================
+
+class SetMethods {
+    // Number of items.
+    func[Int] length() { ... }
+
+    // true if the set has no items.
+    func[Bul] isEmpty() { ... }
+
+    // true if `value` is in the set.
+    func[Bul] includes(value[T]) { ... }
+
+    // Adds `value` (nothing happens if it's already there).
+    func[Emp] add(value[T]) { ... }
+
+    // Removes `value`. Returns false if it wasn't there.
+    func[Bul] remove(value[T]) { ... }
+
+    // Removes every item.
+    func[Emp] clear() { ... }
+
+    // The items for which `keep` returns true, as a set.
+    // keep: (item[T]) := Bul
+    func[T{}] filter(keep[Func[Bul, [T]]]) { ... }
+
+    // A list of each item passed through `transform`.
+    // transform: (item[T]) := U
+    func[U<>] map(transform[Func[U, [T]]]) { ... }
+
+    // Calls `action` with each item, smallest first.
+    // action: (item[T]) := Emp
+    func[Emp] forEach(action[Func[Emp, [T]]]) { ... }
+
+    // The items as a list, smallest first.
+    func[T<>] toList() { ... }
+
+    // The items as text joined by `separator`.
+    func[Str] join(separator[Str]) { ... }
+}
+
+// ============================================================
+// Maps   Map[K, V]   ({"Ann": 30}, ages<"Ann">, ages<"Bo"> = 25)
+// ============================================================
+
+class MapMethods {
+    // Number of entries.
+    func[Int] length() { ... }
+
+    // true if the map has no entries.
+    func[Bul] isEmpty() { ... }
+
+    // true if `key` is in the map.
+    func[Bul] has(key[K]) { ... }
+
+    // The value for `key`, or nil if it isn't there.
+    //     var[Int] age = ages.get("Zed") ?? 0;
+    func[V | Nil] get(key[K]) { ... }
+
+    // The value for `key`, or `fallback` if it isn't there.
+    func[V] getOr(key[K], fallback[V]) { ... }
+
+    // Adds or replaces an entry (same as map<key> = value).
+    func[Emp] set(key[K], value[V]) { ... }
+
+    // Removes `key`. Returns false if it wasn't there.
+    func[Bul] remove(key[K]) { ... }
+
+    // The keys, in insertion order.
+    func[K<>] keys() { ... }
+
+    // The values, in insertion order.
+    func[V<>] values() { ... }
+
+    // Removes every entry.
+    func[Emp] clear() { ... }
+
+    // A separate copy of the map.
+    func[Map[K, V]] copy() { ... }
+
+    // Calls `action` with each key and value, in insertion order.
+    func[Emp] forEach(action[Func[Emp, [K, V]]]) { ... }
+}

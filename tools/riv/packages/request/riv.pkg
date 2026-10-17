@@ -1,0 +1,7 @@
+name = request
+version = 1.0.0
+entry = request.dm
+description = HTTP requests (get, post, ...) through curl
+
+[dependencies]
+json = 1.0.0

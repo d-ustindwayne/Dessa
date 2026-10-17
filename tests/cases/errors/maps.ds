@@ -1,0 +1,13 @@
+// Misuse of maps
+
+var[Map[Str, Int]] ages = {"Ann": 30};
+var[Map] bad = {:};                         // error: Map needs its key and value types
+var[Map[Int<>, Str]] listKeys = {:};        // error: Map keys must be
+print(ages<1>);                             // error: Cannot convert Int to Str
+ages<"Bo"> = "old";                         // error: Cannot convert Str to Int
+var[Map[Str, Int]] wrong = {"a": "b"};      // error: Cannot convert
+var[Int] age = ages.get("Ann");             // error: Cannot convert Int | Nil to Int
+var[Map[Str, Int]] mixed = {"a": 1, 2: 3};  // error: All keys of a map literal must have the same type
+print(ages.push(1));                        // error: has no member 'push'
+for (var[Int] k in ages) {                  // error: cannot hold elements of type Str
+}

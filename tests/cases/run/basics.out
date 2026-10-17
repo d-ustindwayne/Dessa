@@ -1,0 +1,30 @@
+Dustin 21 true 9.23 9.23 95.6 A
+["Dustin", "Dwayne", "Diaz"]
+Nil
+Dustin
+Diaz
+0b1001 0o32 20 0xf8
+10
+8
+4
+12
+3
+36
+0
+3.5 3.5 -3.5 1.4142135623730951
+true false true
+true true false false false true
+true true
+1
+4
+3
+1
+20
+10
+100
+2
+1 7 6 10 2 -6
+Hello, Dustin!
+Dustin is 21 years old and has 9.23 in the bank; next year 22
+escaped {braces} and a tab:	end
+quote " backslash \ newline-free

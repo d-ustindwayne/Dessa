@@ -1,0 +1,86 @@
+// try / catch / throw and runtime errors
+
+func[Emp] validateAge(age[Int]) {
+    try {
+        if (age < 18) {
+            throw "Age restriction: Must be 18 or older";
+        }
+        print($"Access granted for age: {age}");
+    } catch (err[Str]) {
+        print($"Caught error: {err}");
+    }
+}
+validateAge(16);
+validateAge(21);
+
+class NotFound {
+    var[Str] what = "";
+    init(what[Str]) {
+        self.what = what;
+    }
+}
+
+class FileNotFound(NotFound) {
+    init(path[Str]) {
+        super.init($"file {path}");
+    }
+}
+
+func[Str] find(key[Str]) {
+    if (key == "missing") {
+        throw new FileNotFound("data.txt");
+    }
+    return $"found {key}";
+}
+
+try {
+    print(find("a"));
+    print(find("missing"));
+    print("not reached");
+} catch (e[NotFound]) {
+    print($"not found: {e.what}");
+}
+
+// Runtime errors can be caught as Str
+var[Int<>] list = [1, 2, 3];
+try {
+    print(list<10>);
+} catch (e[Str]) {
+    print(e);
+}
+
+try {
+    var[Int] zero = 0;
+    print(10 / zero);
+} catch (e[Str]) {
+    print(e);
+}
+
+try {
+    print("12x".toInt());
+} catch (e[Str]) {
+    print(e);
+}
+
+try {
+    throw "anything";
+} catch {
+    print("caught without a name");
+}
+
+func[Int] unfinished() {
+    ...
+}
+try {
+    unfinished();
+} catch (e[Str]) {
+    print(e);
+}
+
+// Negative indexes computed at runtime are errors too
+var[Int] back = -1;
+try {
+    print(list<back>);
+} catch (e[Str]) {
+    print(e);
+}

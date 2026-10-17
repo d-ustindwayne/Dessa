@@ -1,0 +1,10 @@
+// Second helper module, imported by modules.ds and by nothing else
+{ Circle } from $("lib.shapes.circle");
+
+func[Circle] unit() {
+    return new Circle(1.0);
+}
+
+func[Str] shout(text[Str]) {
+    return text.upper() + "!";
+}

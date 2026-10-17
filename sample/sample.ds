@@ -1,0 +1,333 @@
+/***
+ *
+ * Syntax rules and sample code of Dessa
+ * @author d-ustindwayne;
+ *
+ */
+
+// ============================================================
+// Printing
+// ============================================================
+
+print("Hello Dessa!");
+print("a", "b", "c", sep: ", ");   // a, b, c
+print("Loading", end: "");         // no newline
+print("... done");                 // Loading... done
+
+// ============================================================
+// Variables and Datatypes
+// ============================================================
+
+var[Str] name = "Dustin";
+var[Int] age = 21;
+var[Bul] male = true;
+
+var[Flt] money = 9.23;
+var[Flt] money2 = 9.23f;
+var[Dbl] score = 95.6d;
+
+var[Chr] grade = 'A';
+
+var[Str<>] students = ["Dustin", "Dwayne", "Diaz"];
+var[Int | Nil] a;
+
+// Integer bases
+var[Int[2]] baseBinaryVariable = 0b1001;
+var[Int[8]] baseOctalVariable = 0o32;
+var[Int[10]] baseDecimalVariable = 20;
+var[Int[16]] baseHexadecimalVariable = 0xf8;
+
+print(a);              // Nil
+print(students<0>);    // "Dustin"
+
+// ============================================================
+// Operators
+// ============================================================
+
+// ------------------------------------------------------------
+// Arithmetic
+// ------------------------------------------------------------
+
+a = 6;
+var[Int] b = 2;
+
+print(a + b); // 8
+print(a - b); // 4
+print(a * b); // 12
+print(a / b); // 3
+print(a ^ b); // 36
+print(a % b); // 0
+
+// ------------------------------------------------------------
+// Logical
+// ------------------------------------------------------------
+
+var[Bul] yes = true;
+var[Bul] no = false;
+
+print(yes || no); // true
+print(yes && no); // false
+print(!no);       // true
+
+// ------------------------------------------------------------
+// Comparison
+// ------------------------------------------------------------
+
+var[Int] num3 = 3;
+
+print(num3 > 2);  // true
+print(num3 >= 2); // true
+print(num3 < 2);  // false
+print(num3 <= 2); // false
+print(num3 == 2); // false
+print(num3 != 2); // true
+
+// ------------------------------------------------------------
+// Assignment
+// ------------------------------------------------------------
+
+var[Int] num4 = 0;
+
+num4++;
+print(num4); // 1
+
+num4 += 3;
+print(num4); // 4
+
+num4--;
+print(num4); // 3
+
+num4 -= 2;
+print(num4); // 1
+
+num4 = 10;
+
+num4 *= 2;
+print(num4); // 20
+
+num4 /= 2;
+print(num4); // 10
+
+// ------------------------------------------------------------
+// Bitwise
+// ------------------------------------------------------------
+
+print(5 & 3);
+print(5 | 3);
+print(5 ^^ 3);         // ^ is exponent, ^^ is XOR
+print(5 << 1);
+print(5 >> 1);
+print(~5);
+
+// ============================================================
+// Conditions
+// ============================================================
+
+var[Bul] condition = true;
+var[Bul] condition2 = false;
+
+if (condition) {
+    print("Condition 1");
+}
+else if (condition2) {
+    print("Condition 2");
+}
+else {
+    print("Else block");
+}
+
+// ============================================================
+// Switch
+// ============================================================
+
+var[Chr] switchVal = 'A';
+
+switch (switchVal) {
+    case 'A' := {
+        print("A");
+    }
+    case 'B' := {
+        print("B");
+    }
+    case 'C' := {
+        print("C");
+    }
+    default := {
+        print("Default");
+    }
+}
+
+// ============================================================
+// Loops
+// ============================================================
+
+// Classic for loop
+for (var[Int] i = 0; i < 5; i++) {
+    print(i);
+}
+
+// For-in loop
+for (var[Str] p in students) {
+    print(p);
+}
+
+// While loop
+var[Int] w = 0;
+while (w < 5) {
+    w++;
+}
+
+// Infinite loop
+var[Int] l = 1;
+loop {
+    l++;
+    if (l == 100) break;
+}
+
+// ============================================================
+// Collections
+// ============================================================
+
+var[Str<>] names = ["ABC", "DEF", "GHI"];
+var[Int{}] numbers = {1, 5, 2, 7};
+
+// ============================================================
+// Functions
+// ============================================================
+
+func[Flt] add(num1[Flt], num2[Flt]) {
+    const[Flt] result = num1 + num2;
+    return result;
+}
+
+// Default values
+func[Str] greet(name[Str]="John") {
+    return $"Hello, {name}";
+}
+print(greet());           // Hello, John
+print(greet("Dustin"));   // Hello, Dustin
+
+// Variadic: any number of arguments, received as a list
+func[Int] total(numbers[Int*]) {
+    var[Int] sum = 0;
+    for (var[Int] n in numbers) sum += n;
+    return sum;
+}
+print(total(1, 2, 3));    // 6
+
+// Functions as values: Func[ReturnType, [ParameterTypes]]
+func[Int] applyTwice(f[Func[Int, [Int]]], x[Int]) {
+    return f(f(x));
+}
+print(applyTwice((n[Int]) := n * 3, 2));   // 18
+
+// ============================================================
+// Lambda Functions
+// ============================================================
+
+const[Int] square = (x[Int]) := x ^ 2;
+
+// ============================================================
+// Classes
+// ============================================================
+
+class Person {
+    var[Str] personName;
+    var[Int] personAge;
+
+    func[Str] getName() {
+        return self.personName;
+    }
+
+    func[Int] getAge() {
+        return self.personAge;
+    }
+
+    func[Emp] greeting() {
+        print($"Hello, I am {self.personName}. nice to meet you.");
+    }
+}
+
+class SecondClass {
+    func[Int] function2() {
+        return 3;
+    }
+}
+
+class[IClass] MyClass(SecondClass) {
+    var[Bul] variable3;
+    var[Int] variable4;
+
+    // Constructor
+    init(v3[Bul], v4[Int]) {
+        self.variable3 = v3;
+        self.variable4 = v4;
+    }
+
+    // Implementing interface method with empty body
+    func[Emp] function1() {}
+}
+
+// ============================================================
+// Enum
+// ============================================================
+
+enum Status {
+    CANCELLED,
+    ONGOING,
+    COMPLETED
+}
+
+// ============================================================
+// Interface
+// ============================================================
+
+interface IClass {
+    variable3[Bul];
+    variable4[Int];
+    func[Emp] function1();
+}
+
+// ============================================================
+// Imports
+// ============================================================
+
+$(<math>, <time>);                              // builtin libraries, everything
+$("my.other");                                  // my/other.ds, everything
+{ Greeter } from $("my.other.directory");       // my/other/directory.ds, by name
+{ Greeter as G } from $("my.other.directory");  // ... with an alias
+
+// ============================================================
+// Error Handling
+// ============================================================
+
+class NotFound {
+    var[Str] what = "";
+    init(what[Str]) {
+        self.what = what;
+    }
+}
+
+try {
+    throw new NotFound("config");
+} catch (e[NotFound]) {          // class instances, matched in order
+    print($"missing {e.what}");
+} catch (e[Str]) {               // thrown text and runtime errors
+    print(e);
+} catch {                        // anything else (must be last)
+    print("unknown error");
+}
+
+// ============================================================
+// Advanced Features
+// ============================================================
+
+var[Int | Nil] nullableVal = nil;
+var[Int] doesExist = nullableVal ?? 0;
+
+var[Str] allowedToDrink =
+    age >= 18 ? "Allowed" : "Show some ID";
+
+func[Int] addSevenToNum(param[Int]) {
+    ...
+}

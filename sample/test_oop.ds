@@ -1,0 +1,26 @@
+// Test interface, inheritance, and class methods
+
+interface Describable {
+    name[Str];
+}
+
+class[Describable] Product {
+    var[Str] name;
+    var[Flt] price;
+
+    func[Str] getDetails() {
+        return $"{self.name} costs ${self.price}";
+    }
+}
+
+// Derived class
+class DigitalProduct(Product) {
+    var[Flt] fileSizeMB;
+
+    func[Emp] displayInfo() {
+        print(self.getDetails());
+    }
+}
+
+var[DigitalProduct] ebook = new DigitalProduct();
+ebook.displayInfo();

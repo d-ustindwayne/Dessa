@@ -1,0 +1,89 @@
+# Builds Dessa and runs the test suite on Windows, Linux and macOS.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows (MinGW g++)
+            os: windows-latest
+          - name: Linux (g++)
+            os: ubuntu-24.04
+          - name: macOS (clang)
+            os: macos-latest
+
+    defaults:
+      run:
+        shell: ${{ matrix.os == 'windows-latest' && 'msys2 {0}' || 'bash' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MinGW (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          path-type: inherit          # keeps Windows tools such as curl (the request tests use it)
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-python
+
+      - name: Build dessa
+        run: |
+          cmake -S . -B build ${{ matrix.os == 'windows-latest' && '-G Ninja' || '' }} -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j 4
+
+      - name: Build riv
+        run: cmake --build build --target riv
+
+      - name: Test
+        run: python3 tests/test.py
+
+      - name: Test the JavaScript backend (same tests, run with Node)
+        run: python3 tests/test.py --js
+
+      - name: Show the compiler logs if something failed
+        if: failure()
+        run: |
+          python3 - <<'EOF' || true
+          import glob, os, tempfile
+          for log in glob.glob(os.path.join(tempfile.gettempdir(), "dessa", "**", "*.log"), recursive=True)[:5]:
+              print("=====", log)
+              print(open(log, errors="replace").read()[-4000:])
+          EOF
+
+  web:
+    name: Browser build (WebAssembly)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v14
+      - name: Build web/dessa.js
+        run: |
+          emcmake cmake -S . -B build-wasm -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-wasm -j 4
+      - name: Smoke test
+        run: node tests/web/node_smoke.js
+      - name: Test the npm package
+        run: |
+          cd npm
+          npm run build
+          npm test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dessa-web
+          path: web/dessa.js

@@ -1,0 +1,81 @@
+// `is` type checks and narrowing
+
+class Animal {
+    var[Str] name = "";
+    init(name[Str]) {
+        self.name = name;
+    }
+    func[Str] sound() {
+        return "...";
+    }
+}
+class Dog(Animal) {
+    func[Str] sound() {
+        return "Woof";
+    }
+    func[Str] fetch() {
+        return $"{self.name} fetches the ball";
+    }
+}
+class Cat(Animal) {
+    var[Int] lives = 9;
+}
+interface Pet {
+    func[Str] owner();
+}
+class[Pet] Hamster(Animal) {
+    func[Str] owner() {
+        return "Ann";
+    }
+}
+
+var[Animal<>] zoo = [new Dog("Rex"), new Cat("Tom"), new Animal("Generic"), new Hamster("Ham")];
+for (var[Animal] a in zoo) {
+    print(a.name, a is Dog, a is Cat, a is Animal, a is Pet);
+    if (a is Dog) {
+        print("  ", a.fetch());          // a is a Dog here
+    } else if (a is Cat) {
+        print("  lives:", a.lives);      // a is a Cat here
+    }
+    if (a is Pet) {
+        print("  owner:", a.owner());
+    }
+}
+
+// Negated check and early exit narrowing
+func[Str] describe(a[Animal]) {
+    if (!(a is Dog)) {
+        return "not a dog";
+    }
+    return a.fetch();
+}
+print(describe(zoo<0>), describe(zoo<1>));
+
+// && keeps the narrowing
+var[Animal] first = zoo<0>;
+print(first is Dog && first.fetch().length() > 0);
+
+// Unions of value types
+func[Str] show(value[Int | Str | Bul]) {
+    if (value is Int) {
+        return $"Int {value + 1}";
+    } else if (value is Str) {
+        return $"Str of length {value.length()}";
+    }
+    return $"Bul {value}";
+}
+print(show(41), show("hello"), show(true));
+
+// Nil is never any class
+var[Animal | Nil] nobody = nil;
+print(nobody is Animal);
+nobody = new Cat("Kit");
+print(nobody is Cat, nobody is Dog);
+
+// Reassigning ends the narrowing
+var[Animal] pet = new Dog("Max");
+if (pet is Dog) {
+    print(pet.fetch());
+    pet = new Cat("Mia");
+    print(pet.name, pet is Dog);
+}

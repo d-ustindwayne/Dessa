@@ -1,0 +1,49 @@
+// The helpers from the extras: math statistics and the numbers, codes, colors, textfx packages
+{ mean, median, mode, stdev, sum } from $(<math>);
+$("numbers");
+$("codes");
+{ textColor, background, stripColors, rgbToHex, hexToRgb, clearLines } from $("colors");
+{ isPalindrome, isAnagram, isPangram, splitCamel, countVowels, countConsonants, likes, padLeft } from $("textfx");
+
+print(sum([1, 2, 3]), mean([2, 4, 9]), median([5, 1, 3, 2]), median([3, 1, 2]), mode([1, 2, 2, 3]), stdev([2, 4, 4, 4, 5, 5, 7, 9]));
+
+print(toRoman(1994), toRoman(2026), fromRoman("xlii"), fromRoman(toRoman(3999)));
+print(toWords(78056), "|", toWords(0), "|", toWords(-1005), "|", toWords(1000000), "|", toWords(9223372036854775807).length());
+print(fromWords("thirty three thousand eight hundred forty four"), fromWords("two million and five"), fromWords(toWords(123456789)));
+print(excelColumn(1), excelColumn(27), excelColumn(54), excelColumn(16384), excelColumnNumber("xfd"), excelColumnNumber("AA"));
+print(sumDigits(1234), digitalRoot(9875), squareDigits(1234), sortDigits(8765), sortDigits(1234, descending: true), sortDigits(-31));
+print(nearestToZero([-4, 2, -1, 7]), nearestToZero([-2, 2, 5]), nearestToZero([0, 3]));
+print(mixedFraction("24/5"), mixedFraction("-9/3"), mixedFraction("2/4"), mixedFraction("7/-2"), mixedFraction("0/5"));
+print(convertTemperature(100, "C", "F"), convertTemperature(32, "f", "c"), convertTemperature(0, "K", "C"), convertTemperature(25, "C", "K"));
+
+print(upcCheckDigit("03600029145"), isValidUpc("036000291452"), isValidUpc("036000291453"));
+print(isbn10CheckDigit("030640615"), isValidIsbn10("0-306-40615-2"), isValidIsbn10("0-8044-2957-X"), isValidIsbn10("0-306-40615-3"));
+print(isbn13CheckDigit("978030640615"), isValidIsbn13("978-0-306-40615-7"), isValidIsbn13("978-0-306-40615-8"));
+print(uspsCheckDigit("1234567890"), isValidUsps("12345678900"), luhnCheckDigit("411111111111111"), isValidCard("4111 1111 1111 1111"), isValidCard("4111-1111-1111-1112"));
+print(rot13("Hello, World!"), rot13(rot13("Dessa")), caesar("attack at dawn", 3), caesar(caesar("attack at dawn", 3), -3), caesar("clerk", 13));
+
+print(rgbToHex(123, 45, 167), rgbToHex(300, -5, 16), hexToRgb("#A1B2C3"), hexToRgb("abc"));
+print(stripColors(textColor("ok", "green")), stripColors(background("warn", "yellow", bright: false)), stripColors("plain"), clearLines(2).length());
+
+print(isPalindrome("Never odd or even"), isPalindrome("Dessa"), isAnagram("North", "Thorn"), isAnagram("ab", "abc"));
+print(isPangram("The quick brown fox jumps over the lazy dog"), isPangram("Hello"), splitCamel("userNameField"), splitCamel("HTMLParser"));
+print(countVowels("Mister Tallyman"), countConsonants("Mister Tallyman"), padLeft("7", 3, "0"));
+print(likes([]), "|", likes(["Ann"]), "|", likes(["Ann", "Bea"]), "|", likes(["Ann", "Bea", "Cy"]), "|", likes(["Ann", "Bea", "Cy", "Di", "Ed"]));
+
+for (var[Str] bad in ["ABC", "MMMM"]) {
+    try {
+        print(fromRoman(bad));
+    } catch (e[Str]) {
+        print(e);
+    }
+}
+try {
+    toRoman(4000);
+} catch (e[Str]) {
+    print(e);
+}
+try {
+    print(mean([]));
+} catch (e[Str]) {
+    print(e);
+}

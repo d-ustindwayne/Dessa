@@ -1,0 +1,65 @@
+// Functions and lambdas
+
+print(add(2, 12.5));                       // hoisted: called before declaration
+print(add(num2: 1.5, num1: 10));
+
+func[Flt] add(num1[Flt], num2[Flt]) {
+    const[Flt] result = num1 + num2;
+    return result;
+}
+
+func[Int] factorial(n[Int]) {
+    if (n <= 1) {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+print(factorial(10));
+
+func[Emp] greet(who[Str]) {
+    print($"Hello, {who}!");
+}
+greet("Dessa");
+
+const[Int] square = (x[Int]) := x ^ 2;
+print(square(7));
+
+const[Str] describe = (n[Int], unit[Str]) := {
+    if (n == 1) {
+        return $"1 {unit}";
+    }
+    return $"{n} {unit}s";
+};
+print(describe(1, "apple"), describe(3, "apple"));
+
+// Lambdas see globals live, but capture a function's locals by value
+var[Int] base = 10;
+const[Int] addBase = (x[Int]) := x + base;
+base = 100;
+print(addBase(1));
+
+func[Int] captureLocal() {
+    var[Int] local = 10;
+    const[Int] addLocal = (x[Int]) := x + local;
+    local = 100;
+    return addLocal(1);
+}
+print(captureLocal());
+
+// Functions using globals see their latest value
+var[Int] counter = 0;
+func[Emp] bump() {
+    counter++;
+}
+bump();
+bump();
+print(counter);
+
+// Higher-order list helpers
+var[Int<>] nums = [1, 2, 3, 4, 5, 6];
+print(nums.map((n[Int]) := n * n));
+print(nums.filter((n[Int]) := n % 2 == 0));
+var[Int] sum = 0;
+nums.forEach((n[Int]) := print($"item {n}"));
+print(nums.map((n[Int]) := $"#{n}").join(", "));
+

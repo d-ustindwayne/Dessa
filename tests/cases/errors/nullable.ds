@@ -1,0 +1,50 @@
+// Nil safety and narrowing
+
+var[Int | Nil] a;
+print(a + 1);                  // error: may be nil
+
+a = 6;
+print(a + 1);                  // narrowed by the assignment
+
+a = nil;
+print(a * 2);                  // error: may be nil
+
+if (a != nil) {
+    print(a * 2);              // narrowed by the condition
+}
+
+if (a == nil) {
+    print("no value");
+} else {
+    print(a - 1);
+}
+
+var[Bul] big = a != nil && a > 3;
+var[Int] safe = a ?? 0;
+
+func[Int] orZero(x[Int | Nil]) {
+    if (x == nil) {
+        return 0;
+    }
+    return x + 1;              // narrowed: the nil case returned
+}
+
+class Box {
+    var[Int] size = 1;
+    func[Int] getSize() {
+        return self.size;
+    }
+}
+
+var[Box | Nil] box = nil;
+print(box.size);               // error: may be nil
+print(box?.size);
+var[Int] s = box?.size;        // error: Cannot convert Int | Nil to Int
+var[Int] s2 = box?.size ?? 0;
+var[Int] s3 = box?.getSize() ?? 0;
+
+var[Box] notNil = new Box();
+print(notNil?.size);           // warning: is unnecessary
+var[Int] plain = 3;
+var[Int] same = plain ?? 1;    // warning: can never be nil
+var[Box] mustInit;             // error: must be initialised

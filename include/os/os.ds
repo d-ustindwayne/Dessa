@@ -1,0 +1,73 @@
+/***
+ * $(<os>) -- files, folders, environment and shell commands.
+ *
+ *     { readFile, writeFile } from $(<os>);
+ *
+ * Declaration file: documentation only. Bodies are `...`; the real
+ * implementation is C++ in runtime/lib/os.hpp.
+ *
+ * Relative paths are relative to the folder the program is run from.
+ */
+
+// The whole contents of a file. Error if it can't be read.
+func[Str] readFile(path[Str]) {
+    ...
+}
+
+// Creates or overwrites a file with `content`. Error if it can't be written.
+func[Emp] writeFile(path[Str], content[Str]) {
+    ...
+}
+
+// Adds `content` to the end of a file (creating it if needed).
+func[Emp] appendFile(path[Str], content[Str]) {
+    ...
+}
+
+// true if a file or folder exists at `path`.
+func[Bul] fileExists(path[Str]) {
+    ...
+}
+
+// true if `path` is a folder.
+func[Bul] isDir(path[Str]) {
+    ...
+}
+
+// Deletes a file or a whole folder with everything inside it.
+// Returns how many files and folders were removed (0 if nothing was there).
+func[Int] deleteAll(path[Str]) {
+    ...
+}
+
+// Deletes a file (or empty folder). Returns false if nothing was deleted.
+func[Bul] deleteFile(path[Str]) {
+    ...
+}
+
+// Names of the entries in a folder, sorted. Error if it can't be read.
+func[Str<>] listDir(path[Str]) {
+    ...
+}
+
+// Creates a folder (and any missing parent folders).
+// Returns false if it already existed.
+func[Bul] makeDir(path[Str]) {
+    ...
+}
+
+// The current working folder.
+func[Str] cwd() {
+    ...
+}
+
+// The value of an environment variable, or nil if it isn't set.
+//     var[Str] home = getEnv("HOME") ?? "unknown";
+func[Str | Nil] getEnv(name[Str]) {
+    ...
+}
+
+// Runs a shell command and returns its exit code (0 usually means success).
+func[Int] run(command[Str]) {
+    ...
+}

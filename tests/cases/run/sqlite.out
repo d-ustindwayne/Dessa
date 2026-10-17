@@ -1,0 +1,13 @@
+<Database sqlite>
+1
+{"id":1,"name":"Mouse","price":25.99,"stock":150,"active":1}
+{"id":2,"name":"Chair","price":149.5,"stock":45,"active":1}
+{"id":3,"name":"Café ☕ mug","price":8,"stock":null,"active":0}
+["Mouse", "Chair"]
+Café ☕ mug true
+true
+2
+{"n":3,"total":217.48}
+{"n":4}
+SQL error: no such table: missing_table
+SQL error: this database connection is closed

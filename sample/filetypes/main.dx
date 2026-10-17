@@ -1,0 +1,19 @@
+/***
+ * main.dx -- a source file using a .dm module and a .dsx file.
+ *
+ *     dessa run sample/filetypes/main.dx
+ *
+ * Imports find .ds, .dm, .dx, .dz, .dsx, .dxx and .dzx files.
+ */
+
+{ Circle, Rectangle, Shape, totalArea } from $("geometry");     // geometry.dm
+{ report, twoDecimals } from $("report");                       // report.dsx
+
+var[Shape<>] shapes = [new Circle(1.0), new Rectangle(2.0, 3.0), new Rectangle(4.0)];
+report("Shapes", shapes);
+
+var[Dbl] total = totalArea(new Circle(2.0), new Rectangle(5.0));
+print("Total area:", twoDecimals(total));
+
+var[Func[Bul, [Shape]]] isBig = (s[Shape]) := s.area() > 5.0;
+print("Big shapes:", shapes.filter(isBig).map((s[Shape]) := s.name()));

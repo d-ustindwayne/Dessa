@@ -1,0 +1,4 @@
+// Also exports `area`, to test ambiguity
+func[Int] area() {
+    return 0;
+}

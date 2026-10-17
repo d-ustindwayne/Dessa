@@ -1,0 +1,57 @@
+// $(<json>) -- written in Dessa (tools/riv/packages/json/json.dm)
+
+$(<json>);
+
+var[Str] text = "{\"name\": \"Ann\", \"age\": 30, \"admin\": true, \"scores\": [90, 85.5], \"address\": {\"city\": \"Cebu\"}, \"nickname\": null, \"quote\": \"say \\\"hi\\\"\\n\", \"pi\": 3.14e0}";
+var[Json] data = parseJson(text);
+
+print(data.get("name").asStr(), data.get("age").asInt(), data.get("admin").asBul());
+print(data.get("scores").at(1).asDbl(), data.get("scores").length());
+print(data.get("address").get("city").asStr());
+print(data.get("nickname").isNull(), data.get("missing").isNull(), data.get("missing").get("deeper").isNull());
+print(data.get("quote").asStr());
+print(data.keys());
+print(data);
+
+// Building JSON
+var[Json] user = jsonObject()
+    .set("name", jsonStr("Bo"))
+    .set("age", jsonNum(30))
+    .set("tags", jsonArray(jsonStr("admin"), jsonStr("dev")))
+    .set("manager", jsonNull());
+user.get("tags").push(jsonStr("ops"));
+print(user);
+print(user.pretty());
+print(stringify(jsonArray(), 2), stringify(jsonObject()));
+
+// Round trip, unicode escapes
+var[Json] again = parseJson(user.toStr());
+print(again.get("tags").at(2).asStr(), again.toStr() == user.toStr());
+print(parseJson("\"caf\\u00e9 \\ud83d\\ude00\"").asStr());
+
+// Errors
+func[Emp] tryParse(source[Str]) {
+    try {
+        parseJson(source);
+        print("ok:", source);
+    } catch (e[JsonError]) {
+        print(e.message);
+    }
+}
+tryParse("{\"a\": 1,}");
+tryParse("[1, 2");
+tryParse("{\"a\" 1}");
+tryParse("tru");
+tryParse("[1]  x");
+
+try {
+    print(data.get("name").asInt());
+} catch (e[JsonError]) {
+    print(e);
+}
+
+// Integer maths stored in an Int is truncated
+var[Int] lo = 3;
+var[Int] hi = 10;
+var[Int] mid = lo + (hi - lo) / 2;
+print(mid, lo + (hi - lo) / 2);

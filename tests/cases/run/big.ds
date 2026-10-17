@@ -1,0 +1,44 @@
+// Int overflow is an error, never a silent wrap-around; Big from $(<math>) holds any whole number
+
+{ Big } from $(<math>);
+
+var[Big] f = new Big(1);
+for (var[Int] i = 1; i <= 30; i++) {
+    f = f.mul(i);
+}
+print(f, f.sci(), f.sci(5), f.length());
+
+var[Big] huge = new Big("123456789012345678901234567890");
+print(huge.add(1), huge.mul(2), huge.sub(huge), huge.negate());
+print(huge.div(1000), huge.mod(1000), new Big(2).pow(100));
+print(huge.compare(f), new Big(5).equals(5), new Big(-7).mod(3), new Big("  42 ").add(1));
+print(new Big(7).sci(), new Big(0).sci(), new Big(999).sci(1), new Big(-123456).sci());
+print(new Big(-5).abs(), new Big(-5).isNegative(), new Big().isZero(), new Big(-12345).length());
+
+var[Big] counter = new Big(9223372036854775807);   // the largest Int
+counter = counter.add(1);
+print(counter, $"has {counter.length()} digits");
+print(new Big(42).toInt() + 1, new Big(10).toDbl() / 4);
+
+var[Int] safe = 9223372036854775807;
+try {
+    safe = safe + 1;
+} catch (e[Str]) {
+    print(e);
+}
+try {
+    print(2 ^ 64);
+} catch (e[Str]) {
+    print(e);
+}
+try {
+    print(huge.toInt());
+} catch (e[Str]) {
+    print(e);
+}
+var[Int] big = 3037000500;
+try {
+    big *= big;
+} catch (e[Str]) {
+    print("caught:", e.startsWith("Int overflow"));
+}

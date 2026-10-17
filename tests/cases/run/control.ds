@@ -1,0 +1,87 @@
+// Conditions, switch and loops (sample.ds sections 5-7)
+
+var[Bul] condition = false;
+var[Bul] condition2 = true;
+
+if (condition) {
+    print("Condition 1");
+}
+else if (condition2) {
+    print("Condition 2");
+}
+else {
+    print("Else block");
+}
+
+func[Str] grade(c[Chr]) {
+    switch (c) {
+        case 'A' := {
+            return "excellent";
+        }
+        case 'B' := {
+            return "good";
+        }
+        default := {
+            return "other";
+        }
+    }
+}
+print(grade('A'), grade('B'), grade('Z'));
+
+var[Str] command = "stop";
+switch (command) {
+    case "go" := { print("going"); }
+    case "stop" := { print("stopping"); }
+}
+
+for (var[Int] i = 0; i < 5; i++) {
+    if (i == 1) continue;
+    if (i == 4) break;
+    print(i);
+}
+
+var[Str<>] students = ["Dustin", "Dwayne", "Diaz"];
+for (var[Str] p in students) {
+    print(p);
+}
+
+for (var[Chr] ch in "hey") {
+    print(ch);
+}
+
+var[Int{}] numbers = {5, 1, 5, 2, 7};
+print(numbers);
+var[Int] total = 0;
+for (var[Int] n in numbers) {
+    total += n;
+}
+print(total);
+
+var[Int] w = 0;
+while (w < 5) {
+    w++;
+}
+print(w);
+
+var[Int] l = 1;
+loop {
+    l++;
+    if (l == 100) break;
+}
+print(l);
+
+// Appending inside a for-in over a list is safe
+var[Int<>] grow = [1, 2, 3];
+for (var[Int] g in grow) {
+    if (g < 3) grow.push(g * 10);
+}
+print(grow);
+
+// Nested loops with break/continue
+for (var[Int] i = 0; i < 3; i++) {
+    for (var[Int] j = 0; j < 3; j++) {
+        if (j == i) continue;
+        if (j > 1) break;
+        print($"{i},{j}");
+    }
+}

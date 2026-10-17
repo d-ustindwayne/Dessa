@@ -1,0 +1,88 @@
+// Control flow, operators, collections
+
+if (1) {                       // error: If condition must be Bul, got Int
+}
+while ("yes") {                // error: While-loop condition must be Bul
+}
+
+var[Str] s = "a" + 1;          // error: Operator '+' cannot be used with Str and Int
+var[Str] t = "a" + 'b';
+var[Int] x = 5 & 2.0;          // error: Bitwise operator '&' requires Int operands
+var[Bul] y = "a" < 1;          // error: cannot order Str and Int
+var[Int] z = 7 % 2;
+var[Dbl] w = 2 ^ 0.5;
+var[Bul] nb = !5;              // error: Operator '!' requires a Bul operand
+
+var[Int<>] list = [1, 2, 3];
+var[Int] first = list<0>;
+var[Str] wrongElement = list<0>;   // error: Cannot convert Int to Str
+var[Int{}] set = {1, 2};
+print(set<0>);                 // error: cannot be indexed
+print(list<"a">);              // error: Index must be Int
+
+for (var[Str] item in list) {  // error: cannot hold elements of type Int
+}
+for (var[Int] item in 5) {     // error: is not iterable
+}
+for (var[Chr] ch in "abc") {
+    print(ch);
+}
+
+switch (first) {
+    case "one" := {            // error: doesn't match switch type Int
+    }
+    default := {}
+}
+
+var[Int] counter = 0;
+const[Int] addOne = () := {
+    counter = counter + 1;
+    return counter;
+};
+
+func[Emp] local() {
+    var[Int] n = 0;
+    const[Int] bump = () := {
+        n = n + 1;             // error: cannot modify 'n' from the enclosing function
+        return n;
+    };
+}
+
+throw 5;                       // error: Only Str messages and class instances can be thrown
+
+try {
+    throw "bad";
+} catch (e[Int]) {             // error: can only catch Str errors or class instances
+}
+
+list.push("x");                // error: Cannot convert Str to Int
+var[Int] len = list.length();
+var[Str<>] strs = list.map((v[Int]) := $"{v}");
+var[Int<>] evens = list.filter((v[Int]) := v % 2 == 0);
+list.nope();                   // error: has no member 'nope'
+
+func[Emp] mutateCaptured() {
+    var[Int<>] items = [];
+    const[Emp] add = (i[Int]) := {
+        items.push(i);         // error: cannot modify 'items' from the enclosing function
+    };
+}
+
+class Base {}
+class Derived(Base) {}
+try {
+    print(1);
+} catch (e[Base]) {
+} catch (e[Derived]) {         // error: is already caught by the earlier catch for Base
+} catch (e[Str]) {
+} catch (s[Str]) {             // error: Str errors are already caught
+} catch {
+} catch (e[Base]) {            // error: never reached
+}
+
+print("x", sep: 5);            // error: Cannot convert Int to Str
+print("x", color: "red");      // error: has no option named 'color'
+print("x", end: "", end: "");  // error: 'end' is given more than once
+
+print(list<-1>);               // error: Negative indexes are not allowed
+list<-2> = 5;                  // error: Negative indexes are not allowed

@@ -1,0 +1,121 @@
+// More feature combinations for the code generator
+
+{ Node as ANode, make as makeA } from $("lib.clash.a");
+{ Node as BNode, make as makeB } from $("lib.clash.b");
+
+// Same class name in two modules
+var[ANode] a = makeA();
+var[BNode] b = makeB();
+print(a.label, b.weight, a, b);
+
+// Inheritance with defaults, inherited init with defaults, super calls with defaults
+class Shape {
+    var[Str] name = "";
+    var[Int] sides = 0;
+    init(name[Str]="shape", sides[Int]=0) {
+        self.name = name;
+        self.sides = sides;
+    }
+    func[Str] describe(prefix[Str]="A") {
+        return $"{prefix} {self.name} with {self.sides} sides";
+    }
+}
+class Square(Shape) {
+    func[Str] describe(prefix[Str]="A") {
+        return super.describe("The") + " (square)";
+    }
+}
+class Triangle(Shape) {
+    init() {
+        super.init("triangle", 3);
+    }
+}
+print(new Shape().describe(), new Square("sq", 4).describe(), new Triangle().describe("One"));
+
+// Lambdas that throw, caught outside; try inside a lambda
+const[Int] checked = (x[Int]) := {
+    if (x < 0) {
+        throw "negative!";
+    }
+    return x * 2;
+};
+try {
+    print(checked(2), checked(-1));
+} catch (e[Str]) {
+    print("caught", e);
+}
+const[Str] safe = (text[Str]) := {
+    try {
+        return Str(Int(text) + 1);
+    } catch (e[Str]) {
+        return "bad";
+    }
+};
+print(safe("41"), safe("x"));
+
+// Closures stored in fields that use self
+class Counter {
+    var[Int] count = 0;
+    var[Func[Emp]] bump = () := print("not set yet");
+    init() {
+        self.bump = () := {
+            self.count++;
+        };
+    }
+}
+var[Counter] c = new Counter();
+c.bump();
+c.bump();
+print(c.count);
+
+// Variadic functions taking functions
+func[Int] pipeline(start[Int], steps[Func[Int, Int]*]) {
+    var[Int] value = start;
+    for (var[Func[Int, Int]] step in steps) {
+        value = step(value);
+    }
+    return value;
+}
+func[Int] inc(x[Int]) {
+    return x + 1;
+}
+print(pipeline(1, inc, (x[Int]) := x * 10, inc));
+
+// Switch on strings inside loops with break / continue
+var[Str<>] words = ["skip", "keep", "stop", "never"];
+for (var[Str] word in words) {
+    switch (word) {
+        case "skip" := { continue; }
+        case "stop" := { break; }
+        default := { print("word:", word); }
+    }
+}
+
+// Enums inside lambdas and maps of enums to lambdas
+enum Op {
+    ADD,
+    SUB
+}
+var[Map[Op, Func[Int, [Int, Int]]]] table = {Op.ADD: (x[Int], y[Int]) := x + y, Op.SUB: (x[Int], y[Int]) := x - y};
+print(table<Op.SUB>(10, 3), [Op.ADD, Op.SUB].map((o[Op]) := o.name()));
+
+// Deep optional chains through maps and objects
+class Tree {
+    var[Map[Str, Tree]] children = {:};
+    var[Int] value = 0;
+    init(value[Int]) {
+        self.value = value;
+    }
+}
+var[Tree] root = new Tree(1);
+root.children<"left"> = new Tree(2);
+print(root.children.get("left")?.value ?? -1, root.children.get("right")?.value ?? -1);
+print(root.children.get("left")?.children.get("x")?.value ?? -1);
+
+// Division rules in many places
+func[Int] average(values[Int*]) {
+    var[Int] total = 0;
+    for (var[Int] v in values) total += v;
+    return total / values.length();
+}
+print(average(1, 2, 4), 7 / 2, Int(7 / 2), (7 / 2).toFixed(1));

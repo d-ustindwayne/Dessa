@@ -1,0 +1,92 @@
+// Func types, variadic parameters, default values
+
+// ---- Func[Ret, [Params]] ----
+func[Int] apply(f[Func[Int, [Int]]], x[Int]) {
+    return f(x);
+}
+func[Int] twice(x[Int]) {
+    return x * 2;
+}
+print(apply(twice, 5));                       // a named function
+print(apply((n[Int]) := n + 100, 5));        // a lambda
+
+func[Func[Int, Int]] adder(amount[Int]) {    // returns a function
+    return (x[Int]) := x + amount;
+}
+var[Func[Int, Int]] addTen = adder(10);
+print(addTen(1), adder(3)(4));
+
+var[Func[Emp]] hello = () := print("hello from Func[Emp]");
+hello();
+
+var[Func[Bul, [Str, Int]]] longerThan = (s[Str], n[Int]) := s.length() > n;
+print(longerThan("dessa", 3), longerThan("hi", 3));
+
+var[Func[Int, [Int, Int]]<>] ops = [
+    (a[Int], b[Int]) := a + b,
+    (a[Int], b[Int]) := a * b
+];
+for (var[Func[Int, [Int, Int]]] op in ops) {
+    print(op(6, 7));
+}
+
+var[Func[Int, Int] | Nil] maybeFn = nil;
+print(maybeFn == nil);
+
+// ---- Variadic: name[Type*] ----
+func[Int] sum(numbers[Int*]) {
+    var[Int] total = 0;
+    for (var[Int] n in numbers) {
+        total += n;
+    }
+    return total;
+}
+print(sum(), sum(1), sum(1, 2, 3, 4));
+var[Int<>] more = [10, 20];
+print(sum(...more), sum(1, ...more, 2));
+
+func[Str] greetAll(greeting[Str], names[Str*]) {
+    return $"{greeting} {names.join(" and ")}";
+}
+print(greetAll("Hi", "Ann", "Bo", "Cy"));
+
+// ---- Defaults: name[Type]=value ----
+func[Str] greet(name[Str]="John", punctuation[Str]="!") {
+    return $"Hello, {name}{punctuation}";
+}
+print(greet());
+print(greet("Ann"));
+print(greet("Bo", "?"));
+print(greet(punctuation: "..."));
+
+enum Level {
+    LOW,
+    HIGH
+}
+func[Str] describe(value[Int], level[Level]=Level.LOW, tags[Str<>]=[], note[Str | Nil]=nil) {
+    return $"{value} {level} {tags} {note ?? "no note"}";
+}
+print(describe(1));
+print(describe(2, Level.HIGH, ["x"], "noted"));
+print(describe(3, note: "only a note"));
+
+class Box {
+    var[Int] width = 0;
+    var[Int] height = 0;
+    init(width[Int]=1, height[Int]=1) {
+        self.width = width;
+        self.height = height;
+    }
+    func[Int] area(scale[Int]=1) {
+        return self.width * self.height * scale;
+    }
+}
+print(new Box().area(), new Box(3).area(), new Box(2, 5).area(10));
+
+// Defaults can use top-level constants (even ones declared further down)
+func[Str] page(number[Int], size[Int]=PAGE_SIZE, label[Str]=TITLE) {
+    return $"{label}: page {number}, {size} per page";
+}
+const[Int] PAGE_SIZE = 20;
+const[Str] TITLE = "Results";
+print(page(1), page(2, 50), page(3, label: "Users"));

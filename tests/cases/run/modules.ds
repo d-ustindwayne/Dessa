@@ -1,0 +1,11 @@
+// User modules: { names } from $("dotted.path") and bare $("path")
+
+{ Circle, describe as describeCircle, TAU, created, Kind } from $("lib.shapes.circle");
+$("lib.util");
+
+var[Circle] c = new Circle(2.0);
+print(describeCircle(c), c.circumference() > 12.5, TAU > 6);
+print(describeCircle(unit()));
+print(shout("modules work"));
+print(created);
+print(Kind.SQUARE);

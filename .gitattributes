@@ -1,0 +1,4 @@
+# Shell scripts must keep LF line endings, even when checked out on Windows
+*.sh text eol=lf
+# The vendored SQLite source is huge; never diff it
+tools/riv/packages/sql/sqlite/* -diff linguist-vendored

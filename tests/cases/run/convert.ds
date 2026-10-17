@@ -1,0 +1,36 @@
+// Type conversions: TypeName(value)
+
+print(Int("42") + 1, Int(" 7 "), Int("2.9"), Int(3.99), Int(-3.99), Int(true), Int('A'));
+print(Dbl("2.5") * 2, Dbl(3), Flt("1.25"), Dbl(false));
+print(Bul(1), Bul(0), Bul("true"), Bul("No"), Bul(2.5));
+print(Chr(65), Chr("z"), Chr('q'));
+print(Str(42) + "!", Str(2.5), Str(true), Str('c'), Str([1, 2]), Str({"a": 1}));
+
+var[Int[16]] mask = 255;
+print(Str(mask));
+
+enum Level {
+    LOW,
+    HIGH
+}
+print(Int(Level.HIGH), Str(Level.LOW));
+
+var[Str] input = "12";
+var[Int] doubled = Int(input) * 2;
+print(doubled);
+
+try {
+    print(Int("abc"));
+} catch (e[Str]) {
+    print(e);
+}
+try {
+    print(Chr("too long"));
+} catch (e[Str]) {
+    print(e);
+}
+try {
+    print(Bul("maybe"));
+} catch (e[Str]) {
+    print(e);
+}

@@ -1,0 +1,28 @@
+// Recursive lambdas
+
+const[Int] fact = (n[Int]) := n <= 1 ? 1 : n * fact(n - 1);
+print(fact(10));
+
+var[Func[Int, Int]] fib = (n[Int]) := n < 2 ? n : fib(n - 1) + fib(n - 2);
+print(fib(15));
+
+func[Func[Int, Int]] makeCountdown() {
+    // a local recursive lambda, returned and used after the function ended
+    const[Int] countdown = (n[Int]) := {
+        if (n == 0) {
+            return 0;
+        }
+        print(n, end: " ");
+        return countdown(n - 1);
+    };
+    return countdown;
+}
+var[Func[Int, Int]] down = makeCountdown();
+down(5);
+print("liftoff");
+
+func[Int] sumDigits(n[Int]) {
+    const[Int] go = (x[Int]) := x < 10 ? x : x % 10 + go(x / 10);
+    return go(n);
+}
+print(sumDigits(98765));

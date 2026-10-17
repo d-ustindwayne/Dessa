@@ -1,0 +1,89 @@
+// Corner cases for the code generator
+
+var[Int<>] empty = [];
+var[Dbl<>] doubles = [1, 2.5];
+var[Flt<>] floats = [1.5, 2];
+var[Str{}] words = {"a", ...{"b", "c"}};
+var[Int | Nil] maybe = empty.length() > 0 ? 1 : nil;
+var[Int<> | Nil] maybeList = nil;
+print(empty, doubles, floats, words, maybe, maybeList);
+maybeList = [3, 4];
+print(maybeList);
+
+// Lambdas inside methods can use self
+class Counter {
+    var[Int] count = 0;
+    func[Int<>] stepsTo(n[Int]) {
+        var[Int<>] out = [];
+        const[Int] step = (i[Int]) := {
+            self.count++;
+            return i * 10;
+        };
+        for (var[Int] i = 0; i < n; i++) out.push(step(i));
+        return out;
+    }
+}
+var[Counter] counter = new Counter();
+print(counter.stepsTo(3), counter.count);
+
+// Function values
+func[Int] twice(x[Int]) {
+    return x * 2;
+}
+var[Int<>] doubled = [1, 2, 3].map(twice);
+print(doubled);
+
+// Interfaces in collections
+interface Shape {
+    func[Dbl] area();
+}
+class[Shape] Square {
+    var[Dbl] side = 1.0;
+    init(side[Dbl]) {
+        self.side = side;
+    }
+    func[Dbl] area() {
+        return self.side ^ 2;
+    }
+}
+class[Shape] Circle {
+    var[Dbl] r = 1.0;
+    init(r[Dbl]) {
+        self.r = r;
+    }
+    func[Dbl] area() {
+        return 3.0 * self.r * self.r;
+    }
+}
+var[Shape<>] shapes = [new Square(2.0), new Circle(1.0)];
+var[Dbl] total = 0.0;
+for (var[Shape] s in shapes) {
+    total += s.area();
+}
+print(total);
+
+// Mixed unions and equality
+var[Int | Str | Nil] u = nil;
+print(u == nil);
+u = 3;
+print(u, u == 3);
+
+// Keywords of C++ are fine as Dessa names
+var[Int] int = 1;
+var[Str] delete = "ok";
+func[Int] max(a[Int], b[Int]) {
+    return a > b ? a : b;
+}
+print(int + 1, delete, max(3, 7));
+
+// Strings with special characters
+print("tab\tnew\nline", 'q', '\'', "? ??!");
+print($"{1 + 1}{"nested"}{'c'}");
+
+// Integer edge cases
+print(-7 % 3, 2 ^ 62, 0xff + 0b11 + 0o17);
+var[Int[16]] mask = 255;
+print(mask, $"{mask}");
+
+// Hex escapes
+print("\x41\x42", $"\x43{1}");

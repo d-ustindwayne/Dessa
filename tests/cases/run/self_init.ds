@@ -1,0 +1,22 @@
+// self can be used as a value inside init (objects exist before init runs)
+class Registry {
+    var[Node<>] all = [];
+}
+class Node {
+    var[Str] name = "";
+    init(name[Str], registry[Registry]) {
+        self.name = name;
+        registry.all.push(self);
+    }
+}
+class Child(Node) {
+    var[Int] extra = 7;
+    init(registry[Registry]) {
+        super.init("child", registry);
+        print($"child sees extra={self.extra}");
+    }
+}
+var[Registry] r = new Registry();
+new Node("a", r);
+new Child(r);
+print(r.all.length(), r.all<0>.name, r.all<1>.name);

@@ -1,0 +1,133 @@
+{
+  "Variable": {
+    "prefix": "var",
+    "body": "var[${1:Int}] ${2:name} = ${3:value};",
+    "description": "Variable declaration"
+  },
+  "Constant": {
+    "prefix": "const",
+    "body": "const[${1:Int}] ${2:NAME} = ${3:value};",
+    "description": "Constant declaration"
+  },
+  "Function": {
+    "prefix": "func",
+    "body": ["func[${1:Emp}] ${2:name}(${3:param[Int]}) {", "\t$0", "}"],
+    "description": "Function declaration"
+  },
+  "Lambda": {
+    "prefix": "lambda",
+    "body": "const[${1:Int}] ${2:name} = (${3:x[Int]}) := ${4:x};",
+    "description": "Lambda bound to a constant; [Type] is the return type"
+  },
+  "Class": {
+    "prefix": "class",
+    "body": [
+      "class ${1:Name} {",
+      "\tvar[${2:Str}] ${3:field};",
+      "",
+      "\tinit(${3:field}[${2:Str}]) {",
+      "\t\tself.${3:field} = ${3:field};",
+      "\t}",
+      "",
+      "\t$0",
+      "}"
+    ],
+    "description": "Class with a field and init"
+  },
+  "Subclass": {
+    "prefix": "subclass",
+    "body": [
+      "class ${1:Child}(${2:Parent}) {",
+      "\tinit(${3}) {",
+      "\t\tsuper.init(${4});",
+      "\t\t$0",
+      "\t}",
+      "}"
+    ],
+    "description": "Class inheriting from a parent class"
+  },
+  "Constructor": {
+    "prefix": "init",
+    "body": ["init(${1:value[Int]}) {", "\t$0", "}"],
+    "description": "Class constructor"
+  },
+  "Interface": {
+    "prefix": "interface",
+    "body": ["interface ${1:IName} {", "\t${2:field}[${3:Str}];", "\tfunc[${4:Emp}] ${5:method}();", "}"],
+    "description": "Interface declaration"
+  },
+  "Enum": {
+    "prefix": "enum",
+    "body": ["enum ${1:Name} {", "\t${2:FIRST},", "\t${3:SECOND}", "}"],
+    "description": "Enum declaration"
+  },
+  "If": {
+    "prefix": "if",
+    "body": ["if (${1:condition}) {", "\t$0", "}"],
+    "description": "If statement"
+  },
+  "If / else": {
+    "prefix": "ifelse",
+    "body": ["if (${1:condition}) {", "\t$2", "} else {", "\t$0", "}"],
+    "description": "If / else statement"
+  },
+  "Switch": {
+    "prefix": "switch",
+    "body": [
+      "switch (${1:value}) {",
+      "\tcase ${2:1} := {",
+      "\t\t$3",
+      "\t}",
+      "\tdefault := {",
+      "\t\t$0",
+      "\t}",
+      "}"
+    ],
+    "description": "Switch statement (no fall-through)"
+  },
+  "For": {
+    "prefix": "for",
+    "body": ["for (var[Int] ${1:i} = 0; ${1:i} < ${2:count}; ${1:i}++) {", "\t$0", "}"],
+    "description": "Classic for loop"
+  },
+  "For-in": {
+    "prefix": "forin",
+    "body": ["for (var[${1:Str}] ${2:item} in ${3:items}) {", "\t$0", "}"],
+    "description": "For-in loop"
+  },
+  "While": {
+    "prefix": "while",
+    "body": ["while (${1:condition}) {", "\t$0", "}"],
+    "description": "While loop"
+  },
+  "Loop": {
+    "prefix": "loop",
+    "body": ["loop {", "\t$0", "\tif (${1:done}) break;", "}"],
+    "description": "Infinite loop"
+  },
+  "Try / catch": {
+    "prefix": "try",
+    "body": ["try {", "\t$1", "} catch (${2:e}[${3:Str}]) {", "\t$0", "}"],
+    "description": "Try / catch"
+  },
+  "Import names": {
+    "prefix": "from",
+    "body": "{ ${1:Name} } from \\$(\"${2:folder.file}\");",
+    "description": "Import names from a .ds file"
+  },
+  "Import builtin": {
+    "prefix": "import",
+    "body": "\\$(<${1|math,os,sys,time|}>);",
+    "description": "Import a builtin library"
+  },
+  "Print": {
+    "prefix": "print",
+    "body": "print(${1:value});",
+    "description": "Print values"
+  },
+  "Template string": {
+    "prefix": "tpl",
+    "body": "\\$\"${1:text} {${2:value}}\"",
+    "description": "Template string with interpolation"
+  }
+}

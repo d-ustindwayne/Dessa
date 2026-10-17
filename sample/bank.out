@@ -1,0 +1,119 @@
+============================================
+Welcome to Dessa Bank
+All amounts are in dollars, e.g. 25 or 12.50
+============================================
+
+1) Open checking   2) Open savings   3) Deposit
+4) Withdraw        5) Transfer       6) Statement
+7) All accounts    8) Pay interest   9) Rich list
+0) Quit
+Choose: Owner name: Opened checking account #1001
+
+1) Open checking   2) Open savings   3) Deposit
+4) Withdraw        5) Transfer       6) Statement
+7) All accounts    8) Pay interest   9) Rich list
+0) Quit
+Choose: Owner name: Opened savings account #1002 at 2.50%
+
+1) Open checking   2) Open savings   3) Deposit
+4) Withdraw        5) Transfer       6) Statement
+7) All accounts    8) Pay interest   9) Rich list
+0) Quit
+Choose: Account number: Amount: Deposited. New balance: $100.50
+
+1) Open checking   2) Open savings   3) Deposit
+4) Withdraw        5) Transfer       6) Statement
+7) All accounts    8) Pay interest   9) Rich list
+0) Quit
+Choose: Account number: Amount: Deposited. New balance: $1000.00
+
+1) Open checking   2) Open savings   3) Deposit
+4) Withdraw        5) Transfer       6) Statement
+7) All accounts    8) Pay interest   9) Rich list
+0) Quit
+Choose: Account number: Amount: Declined. Insufficient funds: balance is $100.50, tried to take $500.00
+
+1) Open checking   2) Open savings   3) Deposit
+4) Withdraw        5) Transfer       6) Statement
+7) All accounts    8) Pay interest   9) Rich list
+0) Quit
+Choose: Account number: Amount: Withdrawn. New balance: $80.25
+
+1) Open checking   2) Open savings   3) Deposit
+4) Withdraw        5) Transfer       6) Statement
+7) All accounts    8) Pay interest   9) Rich list
+0) Quit
+Choose: From account: To account: Amount: Transfer complete.
+
+1) Open checking   2) Open savings   3) Deposit
+4) Withdraw        5) Transfer       6) Statement
+7) All accounts    8) Pay interest   9) Rich list
+0) Quit
+Choose: Account number: Amount: Error: 'abc' is not a valid amount (use e.g. 25 or 12.50)
+
+1) Open checking   2) Open savings   3) Deposit
+4) Withdraw        5) Transfer       6) Statement
+7) All accounts    8) Pay interest   9) Rich list
+0) Quit
+Choose: Account number: Error: No account with number 9999
+
+1) Open checking   2) Open savings   3) Deposit
+4) Withdraw        5) Transfer       6) Statement
+7) All accounts    8) Pay interest   9) Rich list
+0) Quit
+Choose: Account number: ============================================
+#1001  Ann Lee  Checking  $130.25
+============================================
+DEPOSIT  +$100.50  -> $100.50  (Deposit)
+WITHDRAWAL  -$20.25  -> $80.25  (Withdrawal)
+TRANSFER_IN  +$50.00  -> $130.25  (From #1002)
+
+1) Open checking   2) Open savings   3) Deposit
+4) Withdraw        5) Transfer       6) Statement
+7) All accounts    8) Pay interest   9) Rich list
+0) Quit
+Choose: ============================================
+2 account(s), total $1080.25
+============================================
+#1001  Ann Lee  Checking  $130.25
+#1002  Bo Cruz  Savings  $950.00
+
+1) Open checking   2) Open savings   3) Deposit
+4) Withdraw        5) Transfer       6) Statement
+7) All accounts    8) Pay interest   9) Rich list
+0) Quit
+Choose: Interest paid: $23.75
+
+1) Open checking   2) Open savings   3) Deposit
+4) Withdraw        5) Transfer       6) Statement
+7) All accounts    8) Pay interest   9) Rich list
+0) Quit
+Choose: Minimum balance: 2 account(s) with at least $100.00:
+Ann Lee, Bo Cruz
+
+1) Open checking   2) Open savings   3) Deposit
+4) Withdraw        5) Transfer       6) Statement
+7) All accounts    8) Pay interest   9) Rich list
+0) Quit
+Choose: Account number: Amount: Withdrawn. New balance: $972.75
+
+1) Open checking   2) Open savings   3) Deposit
+4) Withdraw        5) Transfer       6) Statement
+7) All accounts    8) Pay interest   9) Rich list
+0) Quit
+Choose: Account number: Amount: Error: Savings accounts allow only 2 withdrawals per month
+
+1) Open checking   2) Open savings   3) Deposit
+4) Withdraw        5) Transfer       6) Statement
+7) All accounts    8) Pay interest   9) Rich list
+0) Quit
+Choose: Unknown option 'x'
+
+1) Open checking   2) Open savings   3) Deposit
+4) Withdraw        5) Transfer       6) Statement
+7) All accounts    8) Pay interest   9) Rich list
+0) Quit
+Choose: ============================================
+Goodbye!
+Final total held: $1103.00
+============================================

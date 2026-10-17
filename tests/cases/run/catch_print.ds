@@ -1,0 +1,68 @@
+// Multiple catch arms and print(sep:, end:)
+
+class AppError {
+    var[Str] message = "";
+    init(message[Str]) {
+        self.message = message;
+    }
+}
+class NotFound(AppError) {
+    init(what[Str]) {
+        super.init($"{what} not found");
+    }
+}
+class Timeout(AppError) {
+    init() {
+        super.init("timed out");
+    }
+}
+class Other {}
+
+func[Emp] attempt(kind[Int]) {
+    try {
+        switch (kind) {
+            case 1 := { throw new NotFound("user"); }
+            case 2 := { throw new Timeout(); }
+            case 3 := { throw "plain text error"; }
+            case 4 := { throw new Other(); }
+            case 5 := { var[Int<>] xs = []; print(xs<0>); }
+            default := { print("no error"); }
+        }
+    } catch (e[NotFound]) {
+        print($"NotFound arm: {e.message}");
+    } catch (e[AppError]) {
+        print($"AppError arm: {e.message}");
+    } catch (e[Str]) {
+        print($"Str arm: {e}");
+    } catch {
+        print("catch-all arm");
+    }
+}
+
+for (var[Int] i = 0; i <= 5; i++) {
+    attempt(i);
+}
+
+// Only class arms: a Str error passes through to the outer try
+try {
+    try {
+        throw "inner";
+    } catch (e[AppError]) {
+        print("wrong arm");
+    }
+} catch (e[Str]) {
+    print($"outer caught: {e}");
+}
+
+// print options
+print("a", "b", "c", sep: ", ");
+print("no newline", end: "");
+print(" ... continued");
+print(1, 2, 3, sep: "-", end: "!\n");
+print(end: "", sep: "|", "x", "y");
+print();
+print("Loading", end: "");
+for (var[Int] i = 0; i < 3; i++) {
+    print(".", end: "");
+}
+print(" done");

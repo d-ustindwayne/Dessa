@@ -1,0 +1,6 @@
+Dessa
+Copyright 2026 d-ustindwayne
+
+This product includes SQLite (include/sql/sqlite), which is in the public domain.
+
+The VS Code extension bundles vscode-html-languageservice (MIT License, Microsoft) in tools/vscode-dessa/lib/htmlservice.js.

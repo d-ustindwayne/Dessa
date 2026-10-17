@@ -1,0 +1,28 @@
+// Triple-quoted strings span lines; the closing """ sets the indentation to remove
+
+var[Str] sql = """
+    SELECT name, price
+    FROM products
+    WHERE price > ?
+    """;
+print(sql);
+print(sql.split("\n").length());
+
+func[Str] card(name[Str], age[Int]) {
+    return $"""
+        Name: {name}
+          Age: {age}
+        Quote: "{name.upper()}" said \{hi\}
+        """;
+}
+print(card("Ann", 30));
+
+var[Str] oneLine = """She said "hi" and left""";
+print(oneLine);
+var[Str] escapes = """tab:\there, hex:\x41""";
+print(escapes);
+print("""
+    keeps
+      relative
+        indentation
+    """);

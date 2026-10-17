@@ -1,0 +1,101 @@
+// Feature combinations that are easy to get wrong in code generation
+
+enum Color {
+    RED,
+    GREEN
+}
+
+interface Named {
+    name[Str];
+    func[Str] describe();
+}
+
+class[Named] Item {
+    var[Str] name = "";
+    var[Map[Str, Int]] counts = {:};
+    var[Func[Int, Int]] scale = (x[Int]) := x;
+    init(name[Str]) {
+        self.name = name;
+    }
+    func[Str] describe() {
+        return $"{self.name}: {self.counts}";
+    }
+}
+
+// Nested collections
+var[Int<><>] grid = [[1, 2], [3, 4]];
+grid<1>.push(5);
+print(grid, grid<1><2>, grid.length());
+var[Map[Str, Int<>]<>] listOfMaps = [{"a": [1]}, {:}];
+print(listOfMaps);
+
+// Optional collections and chains
+var[Int<> | Nil] maybeList = nil;
+maybeList?.push(1);
+print(maybeList?.length() ?? -1);
+maybeList = [1, 2];
+maybeList?.push(3);
+print(maybeList);
+
+var[Map[Str, Int] | Nil] maybeMap = {"x": 1};
+print(maybeMap?.get("x") ?? 0, (maybeMap?.length() ?? 0) + 1);
+
+// Function-typed fields, maps of functions
+var[Item] item = new Item("box");
+item.counts<"apples"> = 3;
+item.scale = (x[Int]) := x * 10;
+print(item.scale(4), item.describe());
+var[Map[Str, Func[Int, [Int, Int]]]] ops = {"add": (a[Int], b[Int]) := a + b, "mul": (a[Int], b[Int]) := a * b};
+print(ops<"add">(2, 3), ops<"mul">(2, 3));
+for (var[Str] name in ops) {
+    print(name, ops<name>(4, 5));
+}
+
+// Enums in sets and maps, unions in lists
+var[Color{}] colors = {Color.GREEN, Color.RED};
+var[Map[Color, Int]] votes = {Color.RED: 2};
+votes<Color.GREEN> = 5;
+print(colors, votes, colors.includes(Color.RED));
+var[(Int | Str)<>] mixed = [1, "two", 3];
+print(mixed);
+
+// Interfaces, is, variadic objects
+func[Str] names(items[Named*]) {
+    return items.map((n[Named]) := n.name).join(",");
+}
+print(names(item, new Item("cup")));
+var[Named] n = item;
+if (n is Item) {
+    print(n.counts.length());
+}
+
+// Strings in interpolations, maps in templates
+print($"{item.counts<"apples">} apples, {"nested \"quotes\""}");
+
+// Ternary producing lambdas, immediately called
+var[Bul] double = true;
+var[Func[Int, Int]] f = double ? (x[Int]) := x * 2 : (x[Int]) := x;
+print(f(21));
+
+// Nil printing and comparisons
+var[Nil] nothing = nil;
+print(nothing, nil, item == nil, maybeList == nil);
+
+// Arithmetic with radix ints and divisions
+var[Int[2]] bits = 0b1010;
+var[Int] half = bits / 4;
+print(bits, half, bits / 4, bits % 3);
+
+// Sets of objects
+var[Item{}] items = {item};
+print(items.length());
+
+// Recursion with maps and defaults
+func[Int] fib(n[Int], memo[Map[Int, Int]]={}) {
+    if (n < 2) return n;
+    if (memo.has(n)) return memo<n>;
+    var[Int] value = fib(n - 1, memo) + fib(n - 2, memo);
+    memo<n> = value;
+    return value;
+}
+print(fib(20));

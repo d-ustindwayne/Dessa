@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Counter (Dessa page)</title>
+    <link rel="icon" href="data:,">
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 480px; margin: 40px auto; padding: 0 16px; }
+        #count { font-size: 3rem; margin: 16px 0; }
+        button { padding: 8px 16px; font-size: 1rem; margin-right: 8px; }
+    </style>
+</head>
+<body>
+    <h1>Counter</h1>
+    <div id="count">0</div>
+    <button id="minus">-1</button>
+    <button id="plus">+1</button>
+    <button id="reset">Reset</button>
+    <p id="note"></p>
+
+    <!-- In a .dhtml page a plain <script> is Dessa. Build it with:
+             dessa build counter.dhtml      (writes counter.html)
+         or try it with:
+             dessa run counter.dhtml        (opens it in the browser) -->
+    <script>
+        { document, Element, Event, window } from $(<webutils>);
+
+        func[Element] need(id[Str]) {
+            var[Element | Nil] element = document.getElementById(id);
+            if (element == nil) throw $"The page has no element with id '{id}'";
+            return element;
+        }
+
+        var[Int] count = Int(window.localStorage.getItem("count") ?? "0");
+
+        func[Emp] show() {
+            need("count").textContent = Str(count);
+            need("note").textContent = count < 0 ? "Below zero" : count >= 10 ? "That is a lot" : "";
+            window.localStorage.setItem("count", Str(count));
+        }
+
+        need("plus").addEventListener("click", (e[Event]) := {
+            count++;
+            show();
+        });
+        need("minus").addEventListener("click", (e[Event]) := {
+            count--;
+            show();
+        });
+        need("reset").addEventListener("click", (e[Event]) := {
+            count = 0;
+            show();
+        });
+        show();
+    </script>
+
+    <!-- Ordinary JavaScript still works: give the script a type -->
+    <script type="text/javascript">
+        console.log("plain JavaScript ran too");
+    </script>
+</body>
+</html>

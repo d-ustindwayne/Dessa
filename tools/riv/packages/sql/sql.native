@@ -1,0 +1,14 @@
+// Native part of $(<sql>); the API (Database, connect, openSqlite, ...) is in sql.dm
+header sql.hpp
+source sqlite/sqlite3.c
+source sql.cpp
+link.windows -lodbc32
+link.unix -ldl
+link.unix -lpthread
+
+func[Str<>] _odbcDrivers()
+func[Int] _odbcOpen(connection[Str])
+func[Int] _sqliteOpen(path[Str])
+func[Str<>] _query(handle[Int], sql[Str], params[Str<>])
+func[Int] _execute(handle[Int], sql[Str], params[Str<>])
+func[Emp] _close(handle[Int])

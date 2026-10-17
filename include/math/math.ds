@@ -1,0 +1,115 @@
+/***
+ * $(<math>) -- numbers and randomness.
+ *
+ *     $(<math>);                       // import everything
+ *     { sqrt, PI } from $(<math>);     // or just some names
+ *
+ * Declaration file: documentation only. Bodies are `...`; the real
+ * implementation is C++ in runtime/lib/math.hpp.
+ *
+ * abs, min, max and clamp accept any number type (Int, Flt or Dbl) and
+ * return the same type; they are declared with Dbl below for readability.
+ *
+ * class Big (whole numbers of any size) is written in Dessa: see math.dm.
+ */
+
+// 3.14159265358979...
+const[Dbl] PI = 3.141592653589793;
+
+// 2.71828182845904...
+const[Dbl] E = 2.718281828459045;
+
+// Square root. Error if x is negative.
+func[Dbl] sqrt(x[Dbl]) {
+    ...
+}
+
+// Cube root (works for negative numbers too).
+func[Dbl] cbrt(x[Dbl]) {
+    ...
+}
+
+// base raised to exponent, always as a Dbl. (The ^ operator does this too.)
+func[Dbl] pow(base[Dbl], exponent[Dbl]) {
+    ...
+}
+
+// Absolute value. abs(-3) is 3 (Int), abs(-2.5) is 2.5 (Dbl).
+func[Dbl] abs(x[Dbl]) {
+    ...
+}
+
+// The smaller of two numbers.
+func[Dbl] min(a[Dbl], b[Dbl]) {
+    ...
+}
+
+// The larger of two numbers.
+func[Dbl] max(a[Dbl], b[Dbl]) {
+    ...
+}
+
+// x limited to the range [low, high]. Error if high < low.
+func[Dbl] clamp(x[Dbl], low[Dbl], high[Dbl]) {
+    ...
+}
+
+// Rounds down to an Int: floor(2.7) is 2, floor(-2.1) is -3.
+func[Int] floor(x[Dbl]) {
+    ...
+}
+
+// Rounds up to an Int: ceil(2.1) is 3.
+func[Int] ceil(x[Dbl]) {
+    ...
+}
+
+// Rounds to the nearest Int; halves round away from zero: round(2.5) is 3.
+func[Int] round(x[Dbl]) {
+    ...
+}
+
+// Sine of an angle in radians.
+func[Dbl] sin(x[Dbl]) {
+    ...
+}
+
+// Cosine of an angle in radians.
+func[Dbl] cos(x[Dbl]) {
+    ...
+}
+
+// Tangent of an angle in radians.
+func[Dbl] tan(x[Dbl]) {
+    ...
+}
+
+// Angle in radians of the point (x, y), between -PI and PI.
+func[Dbl] atan2(y[Dbl], x[Dbl]) {
+    ...
+}
+
+// Natural logarithm. Error if x <= 0.
+func[Dbl] log(x[Dbl]) {
+    ...
+}
+
+// Base-10 logarithm. Error if x <= 0.
+func[Dbl] log10(x[Dbl]) {
+    ...
+}
+
+// E raised to x.
+func[Dbl] exp(x[Dbl]) {
+    ...
+}
+
+// A random Dbl from 0 (included) to 1 (not included).
+func[Dbl] random() {
+    ...
+}
+
+// A random Int from low to high, both included. Error if high < low.
+func[Int] randomInt(low[Int], high[Int]) {
+    ...
+}

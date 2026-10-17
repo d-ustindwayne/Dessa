@@ -1,0 +1,19 @@
+// Misuse of `is`
+
+class Animal {}
+class Dog(Animal) {}
+class Car {}
+
+var[Animal] a = new Dog();
+var[Car] c = new Car();
+print(c is Animal);            // error: can never be Animal
+print(a is Int);               // error: can never be Int
+print(a is Animal);            // warning: always true
+var[Int | Str] v = 1;
+print(v is Bul);               // error: can never be Bul
+print(v is Int | Str);         // error: checks one type at a time
+print(a is Nil);               // error: Use x == nil
+print(a.missing);              // error: has no member 'missing'
+if (a is Dog) {
+    print("dog");
+}

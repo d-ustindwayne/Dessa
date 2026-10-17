@@ -1,0 +1,28 @@
+// Fixture for the editor test in tests/test.py (dessa complete / hover).
+// //PROBE is replaced by a half-typed line; the cursor goes at its end.
+{ Big } from $(<math>);
+
+enum Color { RED, GREEN }
+
+class Animal {
+    var[Str] name = "";
+    func[Str] speak() { return "..."; }
+}
+
+class Dog(Animal) {
+    var[Int] age = 0;
+    func[Str] fetch(item[Str]) { return item; }
+}
+
+func[Emp] main(count[Int]) {
+    var[Dog | Nil] maybe = nil;
+    var[Str<>] names = ["a"];
+    var[Dog] rex = new Dog();
+    var[Big] b = new Big(5);
+    var[Int] local = 3;
+    //PROBE
+    print(rex.fetch("ball").length(), b.sci(), maybe);
+    if (maybe != nil) {
+        print(maybe.name);
+    }
+}

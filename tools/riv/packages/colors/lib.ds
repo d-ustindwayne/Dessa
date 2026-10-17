@@ -1,0 +1,123 @@
+/***
+ * colors -- colours in the terminal, and colour codes.
+ *
+ *     { textColor, background, red, rgbToHex } from $("colors");   (after `riv add colors`)
+ *
+ *     print(textColor("Done", "green"));
+ *     print(background(" WARNING ", "yellow", bright: false));
+ *     print(red("error"), stripColors(red("plain again")));
+ *     rgbToHex(123, 45, 167)      "#7B2DA7"
+ *     hexToRgb("#A1B2C3")         [161, 178, 195]
+ *
+ * Colour names: black, red, green, yellow, blue, magenta, cyan, white.
+ * Most terminals show these; Windows Terminal and VS Code do.
+ */
+
+{ box } from $("textfx");
+
+const[Str] ESC = "\x1b";
+
+func[Int] _colorCode(name[Str]) {
+    switch (name.lower()) {
+        case "black" := { return 0; }
+        case "red" := { return 1; }
+        case "green" := { return 2; }
+        case "yellow" := { return 3; }
+        case "blue" := { return 4; }
+        case "magenta" := { return 5; }
+        case "cyan" := { return 6; }
+        case "white" := { return 7; }
+        default := { throw $"Unknown colour '{name}' (black, red, green, yellow, blue, magenta, cyan, white)"; }
+    }
+}
+
+// Wraps text in a terminal code: paint("hi", 31) is red.
+func[Str] paint(text[Str], code[Int]) {
+    return $"{ESC}[{code}m{text}{ESC}[0m";
+}
+
+// Coloured text. bright: bold and vivid (the default), or the plain colour.
+func[Str] textColor(text[Str], color[Str], bright[Bul]=true) {
+    var[Int] code = 30 + _colorCode(color);
+    return bright ? $"{ESC}[1;{code}m{text}{ESC}[0m" : paint(text, code);
+}
+
+// Text on a coloured background.
+func[Str] background(text[Str], color[Str], bright[Bul]=true) {
+    return paint(text, (bright ? 100 : 40) + _colorCode(color));
+}
+
+func[Str] red(text[Str]) { return paint(text, 31); }
+func[Str] green(text[Str]) { return paint(text, 32); }
+func[Str] yellow(text[Str]) { return paint(text, 33); }
+func[Str] blue(text[Str]) { return paint(text, 34); }
+func[Str] magenta(text[Str]) { return paint(text, 35); }
+func[Str] cyan(text[Str]) { return paint(text, 36); }
+
+func[Str] banner(title[Str]) {
+    return box(title.upper());
+}
+
+// The text without any terminal colour codes.
+func[Str] stripColors(text[Str]) {
+    var[Str] out = "";
+    var[Chr<>] chars = text.chars();
+    var[Int] i = 0;
+    while (i < chars.length()) {
+        if (chars<i> == '\x1b' && i + 1 < chars.length() && chars<i + 1> == '[') {
+            i += 2;
+            while (i < chars.length() && !chars<i>.isAlpha()) i++;
+            i++;   // the letter that ends the code
+            continue;
+        }
+        out += chars<i>;
+        i++;
+    }
+    return out;
+}
+
+// Printing this moves the cursor up and clears `count` lines (for redrawing a progress display).
+func[Str] clearLines(count[Int]=1) {
+    return $"{ESC}[1A{ESC}[2K".repeat(count);
+}
+
+// ============================================================
+// Colour codes
+// ============================================================
+
+func[Int] _clamp(value[Int]) {
+    return value < 0 ? 0 : value > 255 ? 255 : value;
+}
+
+func[Str] _hex2(value[Int]) {
+    var[Str] digits = "0123456789ABCDEF";
+    var[Int] v = _clamp(value);
+    return Str(digits<Int(v / 16)>) + Str(digits<v % 16>);
+}
+
+// 0 to 255 each (values outside are clamped): rgbToHex(255, 136, 0) is "#FF8800".
+func[Str] rgbToHex(red[Int], green[Int], blue[Int]) {
+    return "#" + _hex2(red) + _hex2(green) + _hex2(blue);
+}
+
+// "#A1B2C3" or "#ABC" (with or without #) -> [red, green, blue]
+func[Int<>] hexToRgb(hex[Str]) {
+    var[Str] h = hex.trim().upper();
+    if (h.startsWith("#")) h = h.substr(1, h.length() - 1);
+    if (h.length() == 3) {
+        var[Chr<>] c = h.chars();
+        h = Str(c<0>) + Str(c<0>) + Str(c<1>) + Str(c<1>) + Str(c<2>) + Str(c<2>);
+    }
+    if (h.length() != 6) throw $"hexToRgb: '{hex}' is not a colour like #A1B2C3";
+    var[Int<>] rgb = [];
+    for (var[Int] i = 0; i < 6; i += 2) {
+        var[Int] value = 0;
+        for (var[Chr] c in h.substr(i, 2)) {
+            var[Int] digit = "0123456789ABCDEF".indexOf(Str(c));
+            if (digit < 0) throw $"hexToRgb: '{hex}' is not a colour like #A1B2C3";
+            value = value * 16 + digit;
+        }
+        rgb.push(value);
+    }
+    return rgb;
+}

@@ -1,0 +1,45 @@
+/***
+ * Dessa builtins -- always available, no import needed.
+ *
+ * Declaration file: documentation only. Bodies are `...`; the real
+ * implementation is C++ in runtime/dessa_runtime.hpp.
+ */
+
+// Prints values, separated by `sep` and followed by `end`.
+// Accepts any number of values of any type:
+//     print("a", 1, true);                // a 1 true
+//     print("a", "b", sep: ", ");         // a, b
+//     print("Loading", end: "");          // no newline (shown immediately)
+// Collections print as [1, 2] / {1, 2}, missing values as Nil, objects as
+// ClassName(field: value, ...) unless the class defines toStr().
+func[Emp] print(values[Str], sep[Str], end[Str]) {
+    ...
+}
+
+// Shows `prompt`, then reads one line typed by the user (without the newline).
+// Returns "" when there is no more input.
+//     var[Str] name = input("Name: ");
+//     var[Int] age = input("Age: ").toInt();
+func[Str] input(prompt[Str]) {
+    ...
+}
+
+// The name of a value's type, as Dessa writes it:
+//     typeof(42) is "Int", typeof([1, 2]) is "Int<>", typeof({"a": 1}) is "Map[Str, Int]".
+// For a union, a nullable or an object it's the type the value has right now:
+//     var[Int | Str] x = "hi";      typeof(x) is "Str"
+//     var[Animal] a = new Dog();    typeof(a) is "Dog"
+//     var[Str | Nil] n = nil;       typeof(n) is "Nil"
+func[Str] typeof(value[Str]) {
+    ...
+}
+
+// Pairs up two lists, item by item, stopping at the shorter one:
+//     zip(["Ann", "Bea"], [31, 27])   is [["Ann", 31], ["Bea", 27]]   (a (Str | Int)<><>)
+//     zip([1, 2], [10, 20])           is [[1, 10], [2, 20]]           (an Int<><>)
+// With a function, each pair is combined into one value instead:
+//     zip(names, ages, (n[Str], a[Int]) := $"{n} is {a}")   is ["Ann is 31", "Bea is 27"]
+// (Declared with Str<> for readability; any two lists work.)
+func[Str<><>] zip(a[Str<>], b[Str<>]) {
+    ...
+}

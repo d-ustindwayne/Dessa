@@ -1,0 +1,49 @@
+// A small to-do list made with $(<ashwee>).
+//   riv add ashwee     (in your project), then:  dessa run todo.ds
+{ Window, Label, Button, TextBox, CheckBox, ListBox, message } from $(<ashwee>);
+
+var[Window] win = new Window("To do", 420, 300);
+win.label("New task:", 16, 18, 80);
+var[TextBox] task = win.input(96, 14, 210);
+var[Button] add = win.button("Add", 316, 12, 88);
+var[ListBox] tasks = win.list(16, 52, 290, 190);
+var[Button] done = win.button("Done", 316, 52, 88);
+var[CheckBox] confirm = win.checkBox("Ask before closing", 16, 256, 200, true);
+var[Label] status = win.label("Nothing to do.", 230, 258, 180);
+
+add.setEnabled(false);
+done.setEnabled(false);
+
+func[Emp] refresh() {
+    var[Int] count = tasks.items.length();
+    status.setText(count == 0 ? "Nothing to do." : $"{count} task(s) left");
+    done.setEnabled(tasks.selected() >= 0);
+}
+
+task.onChange(() := add.setEnabled(!task.text().trim().isEmpty()));
+
+add.onClick(() := {
+    tasks.add(task.text().trim());
+    task.setText("");
+    refresh();
+});
+
+tasks.onSelect(() := refresh());
+
+done.onClick(() := {
+    var[Str | Nil] picked = tasks.selectedText();
+    if (picked == nil) return;
+    var[Str<>] left = tasks.items.filter((t[Str]) := t != picked);
+    tasks.clear();
+    for (var[Str] t in left) tasks.add(t);
+    refresh();
+});
+
+win.onClose(() := {
+    if (confirm.checked() && !tasks.items.isEmpty()) {
+        message($"You still have {tasks.items.length()} task(s). See you later!", "To do");
+    }
+});
+
+win.run();
+print("bye");

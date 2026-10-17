@@ -1,0 +1,10 @@
+Caught error: Age restriction: Must be 18 or older
+Access granted for age: 21
+found a
+not found: file data.txt
+Index 10 is out of range for list of length 3
+Division by zero
+Cannot convert "12x" to Int
+caught without a name
+Not implemented yet (line 72)
+Negative index -1 is not allowed (indexes start at 0)

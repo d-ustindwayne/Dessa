@@ -1,0 +1,118 @@
+/***
+ * textfx -- small text helpers.
+ *
+ *     { box, isPalindrome, splitCamel, likes } from $("textfx");   (after `riv add textfx`)
+ *
+ *     print(box("Hello", "Dessa"));          a framed block of lines
+ *     isPalindrome("Never odd or even")      true
+ *     isAnagram("North", "Thorn")            true
+ *     isPangram("The quick brown fox jumps over the lazy dog")   true
+ *     splitCamel("userNameField")            "user Name Field"  ("HTMLParser": "HTML Parser")
+ *     countVowels("Mister Tallyman")         5
+ *     likes(["Ann", "Bea", "Cy", "Di"])      "Ann, Bea and 2 others like this"
+ */
+
+func[Str] padRight(text[Str], width[Int], fill[Str]=" ") {
+    var[Str] out = text;
+    while (out.length() < width) out += fill;
+    return out;
+}
+
+func[Str] padLeft(text[Str], width[Int], fill[Str]=" ") {
+    var[Str] out = text;
+    while (out.length() < width) out = fill + out;
+    return out;
+}
+
+func[Str] box(lines[Str*]) {
+    var[Int] width = 0;
+    for (var[Str] line in lines) {
+        if (line.length() > width) width = line.length();
+    }
+    var[Str] border = "+" + "-".repeat(width + 2) + "+";
+    var[Str] out = border + "\n";
+    for (var[Str] line in lines) {
+        out += $"| {padRight(line, width)} |\n";
+    }
+    return out + border;
+}
+
+// Just the letters, lower case: "No, it's!" -> "noits"
+func[Str] _letters(text[Str]) {
+    var[Str] out = "";
+    for (var[Chr] c in text.lower()) if (c.isAlpha() || c.isDigit()) out += c;
+    return out;
+}
+
+// Reads the same backwards, ignoring case, spaces and punctuation: "Never odd or even"
+func[Bul] isPalindrome(text[Str]) {
+    var[Chr<>] c = _letters(text).chars();
+    for (var[Int] i = 0; i < Int(c.length() / 2); i++) {
+        if (c<i> != c<c.length() - 1 - i>) return false;
+    }
+    return true;
+}
+
+// The same letters in a different order: "North" / "Thorn" (case, spaces and punctuation ignored)
+func[Bul] isAnagram(first[Str], second[Str]) {
+    var[Chr<>] a = _letters(first).chars();
+    var[Chr<>] b = _letters(second).chars();
+    a.sort();
+    b.sort();
+    return a == b;
+}
+
+// Uses every letter from a to z at least once.
+func[Bul] isPangram(text[Str]) {
+    var[Chr{}] seen = {};
+    for (var[Chr] c in text.lower()) if (c.code() >= 97 && c.code() <= 122) seen.add(c);
+    return seen.length() == 26;
+}
+
+// "userNameField" -> "user Name Field"
+func[Str] splitCamel(text[Str]) {
+    var[Str] out = "";
+    var[Chr<>] c = text.chars();
+    for (var[Int] i = 0; i < c.length(); i++) {
+        // a new word starts at a capital after a small letter, or at the last capital of a run ("HTMLParser")
+        var[Bul] afterSmall = i > 0 && !c<i - 1>.isUpper();
+        var[Bul] endsRun = i > 0 && c<i - 1>.isUpper() && i + 1 < c.length() && c<i + 1>.isLower();
+        if (c<i>.isUpper() && (afterSmall || endsRun)) out += " ";
+        out += c<i>;
+    }
+    return out;
+}
+
+func[Bul] _isVowel(c[Chr]) {
+    return "aeiou".includes(Str(c.lower()));
+}
+
+// a, e, i, o, u, and y when it isn't the first letter of a word
+func[Int] countVowels(text[Str]) {
+    var[Int] count = 0;
+    var[Chr<>] c = text.chars();
+    for (var[Int] i = 0; i < c.length(); i++) {
+        var[Chr] letter = c<i>.lower();
+        var[Bul] wordStart = i == 0 || !c<i - 1>.isAlpha();
+        if (_isVowel(letter) || (letter == 'y' && !wordStart)) count++;
+    }
+    return count;
+}
+
+// The other letters a to z
+func[Int] countConsonants(text[Str]) {
+    var[Int] letters = 0;
+    for (var[Chr] c in text.lower()) if (c.code() >= 97 && c.code() <= 122) letters++;
+    return letters - countVowels(text);
+}
+
+// The "who liked this" line of a post.
+func[Str] likes(names[Str<>]) {
+    switch (names.length()) {
+        case 0 := { return "No one likes this"; }
+        case 1 := { return $"{names<0>} likes this"; }
+        case 2 := { return $"{names<0>} and {names<1>} like this"; }
+        case 3 := { return $"{names<0>}, {names<1>} and {names<2>} like this"; }
+        default := { return $"{names<0>}, {names<1>} and {names.length() - 2} others like this"; }
+    }
+}

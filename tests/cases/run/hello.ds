@@ -1,0 +1,3 @@
+print("Hello Dessa!");
+var[Int] x = 2;
+print(x ^ 10, x / 3, 7 % 4, 2.5 * x);

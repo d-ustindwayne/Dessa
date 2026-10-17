@@ -1,0 +1,9 @@
+// Big is a class from $(<math>), not a built-in type
+
+{ Big } from $(<math>);
+
+var[Big] b = new Big(10);
+var[Int] tooBig = 99999999999999999999;   // error: too large for Int
+print(b + 2);                   // error: Operator '+'
+print(b.add(2.5));              // error: Cannot convert Dbl
+var[Int] i = b;                 // error: Cannot convert

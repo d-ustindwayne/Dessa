@@ -1,0 +1,24 @@
+/***
+ * $(<sys>) -- the running program.
+ *
+ *     $(<sys>);
+ *
+ * Declaration file: documentation only. Bodies are `...`; the real
+ * implementation is C++ in runtime/lib/sys.hpp.
+ */
+
+// Command-line arguments given to the program (not including its name).
+//     dessa run app.ds -- hello 42   ->  args() is ["hello", "42"]
+func[Str<>] args() {
+    ...
+}
+
+// Stops the program immediately with an exit code (0 = success).
+func[Emp] exit(code[Int]) {
+    ...
+}
+
+// "windows", "macos", "linux" or "unknown".
+func[Str] platform() {
+    ...
+}

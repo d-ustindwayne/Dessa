@@ -1,0 +1,71 @@
+// Map[K, V] -- hash maps that keep insertion order
+
+var[Map[Str, Int]] ages = {"Ann": 30, "Bo": 25};
+print(ages, ages.length());
+
+ages<"Cy"> = 41;              // add
+ages<"Ann"> = 31;             // replace (keeps its position)
+ages<"Bo"> += 1;              // update in place
+print(ages);
+print(ages<"Ann">, ages.has("Zed"), ages.get("Zed") ?? -1, ages.get("Bo") ?? -1, ages.getOr("Zed", 0));
+
+for (var[Str] name in ages) {
+    print(name, "is", ages<name>);
+}
+print(ages.keys(), ages.values());
+
+print(ages.remove("Bo"), ages.remove("Bo"), ages);
+ages.set("Dee", 22);
+ages.forEach((name[Str], age[Int]) := print($"{name}={age}", end: "; "));
+print();
+
+// Empty maps
+var[Map[Int, Str]] empty = {};
+var[Map[Int, Str]] alsoEmpty = {:};
+print(empty, alsoEmpty.isEmpty(), empty == alsoEmpty);
+
+// Spread and literal conversion
+var[Map[Str, Dbl]] prices = {"tea": 2, "cake": 3.5};
+var[Map[Str, Dbl]] menu = {...prices, "coffee": 2.75, "tea": 2.25};
+print(menu);
+
+// Missing keys are errors you can catch
+try {
+    print(ages<"Nobody">);
+} catch (e[Str]) {
+    print(e);
+}
+
+// Maps of lists, maps of objects, enum keys
+var[Map[Str, Int<>]] scores = {"math": [90, 85], "art": []};
+scores<"art">.push(70);
+scores<"math">.push(100);
+print(scores);
+
+class Point {
+    var[Int] x = 0;
+    var[Int] y = 0;
+    init(x[Int], y[Int]) {
+        self.x = x;
+        self.y = y;
+    }
+}
+var[Map[Str, Point]] places = {"home": new Point(1, 2)};
+print(places<"home">.x, places.get("work")?.x ?? -1);
+
+enum Color {
+    RED,
+    GREEN
+}
+var[Map[Color, Str]] names = {Color.RED: "red", Color.GREEN: "green"};
+print(names<Color.GREEN>, names);
+
+// Counting words
+func[Map[Str, Int]] countWords(text[Str]) {
+    var[Map[Str, Int]] counts = {:};
+    for (var[Str] word in text.split(" ")) {
+        counts<word> = counts.getOr(word, 0) + 1;
+    }
+    return counts;
+}
+print(countWords("the cat and the hat and the bat"));

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dessa in the browser</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; color: #1f2933; }
+        h1 { font-size: 1.6rem; }
+        #todo-form { display: flex; gap: 8px; }
+        #todo-form input { flex: 1; padding: 8px; font-size: 1rem; }
+        button { padding: 8px 14px; font-size: 1rem; cursor: pointer; }
+        li { padding: 6px 0; cursor: pointer; }
+        li.done { text-decoration: line-through; color: #9aa5b1; }
+        #dessa-output { margin-top: 24px; padding: 12px; background: #f5f7fa; font-family: monospace; white-space: pre-wrap; }
+    </style>
+    <!-- The Dessa compiler and loader (one file) -->
+    <script src="../dessa.js"></script>
+</head>
+<body>
+    <h1>To do, written in Dessa</h1>
+    <form id="todo-form">
+        <input id="task" placeholder="Something to do" autocomplete="off">
+        <button type="submit">Add</button>
+    </form>
+    <ul id="list"></ul>
+    <p id="status"></p>
+
+    <!-- print() output shows up here too -->
+    <div id="dessa-output"></div>
+
+    <!-- A Dessa program, compiled to JavaScript right here in the browser -->
+    <script type="text/dessa" src="app.ds"></script>
+    <script type="text/dessa">
+        { document, Element, Event, log } from $(<webutils>);
+        func[Emp] changeColor(color[Str]) {
+            document.body.style.backgroundColor = color;
+            log("changed background color to", color);
+        }
+
+        var[Element | Nil] colorButton = document.getElementById("changeColor");
+        if (colorButton != nil) colorButton.addEventListener("click", (e[Event]) := {
+            changeColor("lightblue");
+        });
+    </script>
+</body>
+</html>

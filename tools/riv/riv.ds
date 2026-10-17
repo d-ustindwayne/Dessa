@@ -1,0 +1,630 @@
+/***
+ * riv -- the Dessa package manager (prototype), written in Dessa.
+ *
+ * Build it once:   cmake --build build --target riv      (-> build/riv.exe)
+ *
+ * A package is a folder with a riv.pkg file:
+ *
+ *     name = colors
+ *     version = 1.0.0
+ *     entry = lib.ds
+ *     description = Terminal colours
+ *
+ *     [dependencies]
+ *     textfx = 0.2.0
+ *
+ * `riv install` puts the packages a project needs into
+ * <project>/riv_modules/<name>/, where imports find them:
+ *
+ *     $(<sql>);                           // riv_modules/sql/sql.dm (+ its native part)
+ *     { red } from $("colors");           // riv_modules/colors/lib.ds
+ *
+ * ---- The network (simulated) ----
+ * riv is meant to share packages peer to peer, like a torrent, instead of
+ * from one central server. Until that exists, the network is simulated in a
+ * SQLite database ($RIV_NETWORK, or ~/.riv/network.db):
+ *
+ *   - `riv publish` cuts every file into pieces of PIECE_SIZE characters,
+ *     hashes each piece and hands copies to REPLICAS random peers.
+ *   - `riv install` asks the online peers for each piece, checks it against
+ *     its hash (a peer may send bad data) and asks another peer if it's wrong,
+ *     then checks the whole file before writing it.
+ *   - `riv network` shows the peers; `riv network churn` takes random peers
+ *     offline, `riv network heal` brings them all back.
+ */
+
+$(<os>, <sys>, <math>);
+{ Database, openSqlite } from $(<sql>);
+{ Json } from $(<json>);
+
+const[Str] MANIFEST = "riv.pkg";
+const[Str] MODULES = "riv_modules";
+const[Int] PIECE_SIZE = 65536;    // characters per piece
+const[Int] REPLICAS = 4;          // peers that get a copy of each piece
+
+// ============================================================
+// Errors
+// ============================================================
+
+class RivError {
+    var[Str] message = "";
+    init(message[Str]) {
+        self.message = message;
+    }
+}
+
+// ============================================================
+// riv.pkg
+// ============================================================
+
+class Manifest {
+    var[Str] name = "";
+    var[Str] version = "0.1.0";
+    var[Str] entry = "main.ds";
+    var[Str] description = "";
+    var[Map[Str, Str]] dependencies = {:};
+
+    func[Str] toText() {
+        var[Str] text = $"name = {self.name}\nversion = {self.version}\nentry = {self.entry}\n";
+        if (!self.description.isEmpty()) {
+            text += $"description = {self.description}\n";
+        }
+        text += "\n[dependencies]\n";
+        for (var[Str] dep in self.dependencies) {
+            text += $"{dep} = {self.dependencies<dep>}\n";
+        }
+        return text;
+    }
+
+    func[Emp] save(path[Str]="riv.pkg") {
+        writeFile(path, self.toText());
+    }
+}
+
+func[Manifest] parseManifest(text[Str], path[Str]) {
+    var[Manifest] manifest = new Manifest();
+    var[Str] section = "";
+    var[Int] number = 0;
+    for (var[Str] raw in text.split("\n")) {
+        number++;
+        var[Str] line = raw.trim();
+        if (line.isEmpty() || line.startsWith("#") || line.startsWith("//")) continue;
+        if (line.startsWith("[")) {
+            section = line;
+            continue;
+        }
+        var[Int] equals = line.indexOf("=");
+        if (equals < 0) {
+            throw new RivError($"{path}:{number}: expected `key = value`, got `{line}`");
+        }
+        var[Str] key = line.substr(0, equals).trim();
+        var[Str] value = line.substr(equals + 1, line.length() - equals - 1).trim();
+        if (section == "[dependencies]") {
+            manifest.dependencies<key> = value;
+        } else if (key == "name") {
+            manifest.name = value;
+        } else if (key == "version") {
+            manifest.version = value;
+        } else if (key == "entry") {
+            manifest.entry = value;
+        } else if (key == "description") {
+            manifest.description = value;
+        }
+    }
+    if (manifest.name.isEmpty()) {
+        throw new RivError($"{path} has no `name = ...`");
+    }
+    return manifest;
+}
+
+func[Manifest] readManifest(path[Str]="riv.pkg") {
+    if (!fileExists(path)) {
+        throw new RivError($"No {path} here. Run `riv init` to create one.");
+    }
+    return parseManifest(readFile(path), path);
+}
+
+// ============================================================
+// Versions:  1.2.10 > 1.2.9
+// ============================================================
+
+func[Int<>] versionParts(version[Str]) {
+    var[Int<>] parts = [];
+    try {
+        for (var[Str] part in version.split(".")) {
+            parts.push(part.toInt());
+        }
+    } catch (e[Str]) {
+        throw new RivError($"'{version}' is not a version like 1.0.0");
+    }
+    return parts;
+}
+
+// true if version a is newer than version b
+func[Bul] newer(a[Str], b[Str]) {
+    var[Int<>] x = versionParts(a);
+    var[Int<>] y = versionParts(b);
+    for (var[Int] i = 0; i < x.length() && i < y.length(); i++) {
+        if (x<i> != y<i>) return x<i> > y<i>;
+    }
+    return x.length() > y.length();
+}
+
+func[Str<>] sortVersions(versions[Str<>]) {
+    var[Str<>] sorted = [];
+    for (var[Str] v in versions) {
+        var[Int] at = 0;
+        while (at < sorted.length() && newer(v, sorted<at>)) at++;
+        sorted.insert(at, v);
+    }
+    return sorted;
+}
+
+// ============================================================
+// Files and hashes
+// ============================================================
+
+// The files of a package folder (relative paths), skipping riv_modules and hidden files.
+func[Str<>] packageFiles(root[Str], prefix[Str]="") {
+    var[Str<>] files = [];
+    var[Str] folder = prefix.isEmpty() ? root : $"{root}/{prefix}";
+    for (var[Str] name in listDir(folder)) {
+        if (name == MODULES || name.startsWith(".")) continue;
+        var[Str] relative = prefix.isEmpty() ? name : $"{prefix}/{name}";
+        if (isDir($"{root}/{relative}")) {
+            for (var[Str] inner in packageFiles(root, relative)) files.push(inner);
+        } else {
+            files.push(relative);
+        }
+    }
+    return files;
+}
+
+// The last part of a path: C:\work\bank -> bank
+func[Str] baseName(path[Str]) {
+    var[Str<>] parts = path.replaceAll("\\", "/").split("/");
+    return parts<parts.length() - 1>;
+}
+
+// The folder part of a relative path: sqlite/sqlite3.c -> sqlite ("" if none)
+func[Str] folderOf(path[Str]) {
+    var[Str<>] parts = path.split("/");
+    if (parts.length() < 2) return "";
+    return parts.slice(0, parts.length() - 1).join("/");
+}
+
+func[Str] hex8(value[Int]) {
+    var[Int[16]] h = value;
+    var[Str] text = Str(h);
+    text = text.substr(2, text.length() - 2);   // drop 0x
+    return "0".repeat(8 - text.length()) + text;
+}
+
+// Two 32-bit FNV-1a hashes (different seeds) of characters start..end: 16 hex digits.
+func[Str] hashChars(chars[Chr<>], start[Int], end[Int]) {
+    var[Int] a = 2166136261;
+    var[Int] b = 3141592653;
+    for (var[Int] i = start; i < end; i++) {
+        var[Int] c = chars<i>.code();
+        a = ((a ^^ c) * 16777619) % 4294967296;
+        b = ((b ^^ c) * 16777619) % 4294967296;
+    }
+    return hex8(a) + hex8(b);
+}
+
+func[Str] hashText(text[Str]) {
+    var[Chr<>] chars = text.chars();
+    return hashChars(chars, 0, chars.length());
+}
+
+// ============================================================
+// The network (simulated in SQLite)
+// ============================================================
+
+func[Str] networkPath() {
+    var[Str | Nil] custom = getEnv("RIV_NETWORK");
+    if (custom != nil) return custom;
+    var[Str] home = getEnv("USERPROFILE") ?? getEnv("HOME") ?? ".";
+    makeDir($"{home}/.riv");
+    return $"{home}/.riv/network.db";
+}
+
+func[Database] openNetwork() {
+    var[Database] db = openSqlite(networkPath());
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS packages (
+            name TEXT, version TEXT, description TEXT, entry TEXT, manifest TEXT,
+            PRIMARY KEY (name, version));
+        CREATE TABLE IF NOT EXISTS files (
+            name TEXT, version TEXT, path TEXT, hash TEXT, pieces INTEGER,
+            PRIMARY KEY (name, version, path));
+        CREATE TABLE IF NOT EXISTS file_pieces (
+            name TEXT, version TEXT, path TEXT, piece INTEGER, hash TEXT,
+            PRIMARY KEY (name, version, path, piece));
+        CREATE TABLE IF NOT EXISTS peers (
+            id INTEGER PRIMARY KEY, name TEXT, online INTEGER, reliability REAL);
+        CREATE TABLE IF NOT EXISTS peer_pieces (
+            peer INTEGER, hash TEXT, data TEXT,
+            PRIMARY KEY (peer, hash));
+        """);
+    var[Json | Nil] count = db.queryOne("SELECT COUNT(*) AS n FROM peers");
+    if (count != nil && count.get("n").asInt() == 0) {
+        // A small made-up swarm. Reliability < 1: sometimes sends a damaged piece.
+        db.execute("""
+            INSERT INTO peers (name, online, reliability) VALUES
+                ('manila', 1, 1.0), ('tokyo', 1, 0.97), ('berlin', 1, 1.0), ('sao-paulo', 1, 1.0),
+                ('toronto', 1, 0.9), ('nairobi', 1, 1.0), ('sydney', 1, 1.0), ('oslo', 1, 0.98);
+            """);
+    }
+    return db;
+}
+
+func[Str<>] publishedVersions(db[Database], name[Str]) {
+    var[Str<>] versions = [];
+    for (var[Json] row in db.query("SELECT version FROM packages WHERE name = ?", name)) {
+        versions.push(row.get("version").asStr());
+    }
+    return sortVersions(versions);
+}
+
+func[Str] latestVersion(db[Database], name[Str]) {
+    var[Str<>] versions = publishedVersions(db, name);
+    if (versions.isEmpty()) {
+        throw new RivError($"Package '{name}' is not on the network. Try `riv search`.");
+    }
+    return versions.last();
+}
+
+// Asks the online peers for a piece until one sends data matching its hash.
+class PieceFetcher {
+    var[Database] db;
+    var[Int] bad = 0;                   // damaged pieces that were fetched again
+    var[Map[Str, Int]] fromPeer = {:};  // peer -> pieces received
+
+    init(db[Database]) {
+        self.db = db;
+    }
+
+    func[Str] fetch(hash[Str], label[Str]) {
+        var[Json<>] holders = self.db.query("""
+            SELECT p.name AS peer, p.reliability AS reliability, pp.data AS data
+            FROM peer_pieces pp JOIN peers p ON p.id = pp.peer
+            WHERE pp.hash = ? AND p.online = 1
+            ORDER BY RANDOM()
+            """, hash);
+        if (holders.isEmpty()) {
+            throw new RivError($"no online peer has {label}; try again later (or `riv network heal`)");
+        }
+        // Up to 3 rounds over the peers that have it: damage is usually a one-off
+        for (var[Int] round = 0; round < 3; round++) {
+            for (var[Json] holder in holders) {
+                var[Str] peer = holder.get("peer").asStr();
+                var[Str] data = holder.get("data").asStr();
+                // An unreliable peer sometimes sends damaged data
+                if (random() > holder.get("reliability").asDbl()) {
+                    data = data + "?";
+                }
+                if (hashText(data) == hash) {
+                    self.fromPeer<peer> = self.fromPeer.getOr(peer, 0) + 1;
+                    return data;
+                }
+                self.bad++;   // failed the hash check: ask the next peer
+            }
+        }
+        throw new RivError($"every peer kept sending a damaged copy of {label}");
+    }
+}
+
+// Publishes the package in `folder` to the network.
+func[Emp] publish(db[Database], folder[Str]) {
+    var[Manifest] manifest = readManifest($"{folder}/{MANIFEST}");
+    versionParts(manifest.version); // must be a valid version
+    if (db.queryOne("SELECT 1 AS x FROM packages WHERE name = ? AND version = ?", manifest.name, manifest.version) != nil) {
+        throw new RivError($"{manifest.name}@{manifest.version} is already published; raise the version in {MANIFEST}");
+    }
+    var[Int<>] peers = db.query("SELECT id FROM peers").map((row[Json]) := row.get("id").asInt());
+    var[Int] totalPieces = 0;
+    var[Str<>] files = packageFiles(folder);
+    db.execute("BEGIN");
+    for (var[Str] path in files) {
+        var[Str] text = readFile($"{folder}/{path}");
+        var[Chr<>] chars = text.chars();
+        var[Int] count = Int((chars.length() + PIECE_SIZE - 1) / PIECE_SIZE);
+        if (count == 0) count = 1;   // an empty file is one empty piece
+        for (var[Int] piece = 0; piece < count; piece++) {
+            var[Int] start = piece * PIECE_SIZE;
+            var[Int] end = start + PIECE_SIZE < chars.length() ? start + PIECE_SIZE : chars.length();
+            var[Str] hash = hashChars(chars, start, end);
+            var[Str] data = chars.slice(start, end).join("");
+            db.execute("INSERT INTO file_pieces VALUES (?, ?, ?, ?, ?)", manifest.name, manifest.version, path, piece, hash);
+            // Seed REPLICAS different random peers
+            var[Int<>] pool = peers.copy();
+            for (var[Int] r = 0; r < REPLICAS && !pool.isEmpty(); r++) {
+                var[Int] peer = pool.removeAt(randomInt(0, pool.length() - 1));
+                db.execute("INSERT OR IGNORE INTO peer_pieces VALUES (?, ?, ?)", peer, hash, data);
+            }
+        }
+        db.execute("INSERT INTO files VALUES (?, ?, ?, ?, ?)", manifest.name, manifest.version, path, hashText(text), count);
+        totalPieces += count;
+    }
+    db.execute("INSERT INTO packages VALUES (?, ?, ?, ?, ?)", manifest.name, manifest.version, manifest.description,
+               manifest.entry, manifest.toText());
+    db.execute("COMMIT");
+    print($"Published {manifest.name}@{manifest.version}: {files.length()} file(s), {totalPieces} piece(s), {REPLICAS} copies each");
+}
+
+// ============================================================
+// Installing
+// ============================================================
+
+// Installs packages and everything they depend on into riv_modules/.
+class Installer {
+    var[Database] db;
+    var[Map[Str, Str]] installed = {:};   // name -> version
+
+    init(db[Database]) {
+        self.db = db;
+    }
+
+    func[Emp] install(name[Str], version[Str]) {
+        if (self.installed.has(name)) {
+            if (self.installed<name> != version) {
+                print($"  ! {name}@{version} also wanted; keeping {name}@{self.installed<name>}");
+            }
+            return;
+        }
+        // Already there (same version): nothing to download
+        var[Str] target = $"{MODULES}/{name}";
+        if (fileExists($"{target}/{MANIFEST}")) {
+            var[Manifest] here = readManifest($"{target}/{MANIFEST}");
+            if (here.version == version) {
+                self.installed<name> = version;
+                print($"  = {name}@{version} (already installed)");
+                for (var[Str] dep in here.dependencies) {
+                    self.install(dep, here.dependencies<dep>);
+                }
+                return;
+            }
+        }
+        var[Json | Nil] package = self.db.queryOne("SELECT manifest FROM packages WHERE name = ? AND version = ?", name, version);
+        if (package == nil) {
+            var[Str<>] available = publishedVersions(self.db, name);
+            var[Str] hint = available.isEmpty() ? "it is not on the network" : $"available: {available.join(", ")}";
+            throw new RivError($"{name}@{version} not found ({hint})");
+        }
+        deleteAll(target);
+        makeDir(target);
+        var[PieceFetcher] fetcher = new PieceFetcher(self.db);
+        var[Json<>] files = self.db.query("SELECT path, hash FROM files WHERE name = ? AND version = ? ORDER BY path", name, version);
+        var[Int] pieces = 0;
+        for (var[Json] file in files) {
+            var[Str] path = file.get("path").asStr();
+            var[Str] text = "";
+            for (var[Json] piece in self.db.query(
+                    "SELECT piece, hash FROM file_pieces WHERE name = ? AND version = ? AND path = ? ORDER BY piece",
+                    name, version, path)) {
+                text += fetcher.fetch(piece.get("hash").asStr(), $"{path} piece {piece.get("piece").asInt() + 1}");
+                pieces++;
+            }
+            if (hashText(text) != file.get("hash").asStr()) {
+                throw new RivError($"{name}@{version}: {path} does not match its hash after downloading");
+            }
+            var[Str] folder = folderOf(path);
+            if (!folder.isEmpty()) makeDir($"{target}/{folder}");
+            writeFile($"{target}/{path}", text);
+        }
+        self.installed<name> = version;
+        var[Str] repaired = fetcher.bad > 0 ? $", {fetcher.bad} damaged piece(s) caught by the hash check and fetched again" : "";
+        print($"  + {name}@{version}: {files.length()} file(s), {pieces} piece(s) from {fetcher.fromPeer.length()} peer(s){repaired}");
+
+        var[Json | Nil] row = package;
+        var[Manifest] manifest = parseManifest(row.get("manifest").asStr(), $"{name}/{MANIFEST}");
+        for (var[Str] dep in manifest.dependencies) {
+            self.install(dep, manifest.dependencies<dep>);
+        }
+    }
+}
+
+// ============================================================
+// Commands
+// ============================================================
+
+func[Emp] cmdInit(name[Str]) {
+    if (fileExists(MANIFEST)) {
+        throw new RivError($"{MANIFEST} already exists here");
+    }
+    var[Manifest] manifest = new Manifest();
+    manifest.name = name.isEmpty() ? baseName(cwd()) : name;
+    manifest.save();
+    if (!fileExists(manifest.entry)) {
+        writeFile(manifest.entry, $"print(\"Hello from {manifest.name}!\");\n");
+    }
+    print($"Created {MANIFEST} for '{manifest.name}' (entry: {manifest.entry})");
+}
+
+func[Emp] cmdInstall() {
+    var[Manifest] manifest = readManifest();
+    if (manifest.dependencies.isEmpty()) {
+        print("No dependencies to install.");
+        return;
+    }
+    print($"Installing dependencies of {manifest.name}:");
+    var[Installer] installer = new Installer(openNetwork());
+    for (var[Str] dep in manifest.dependencies) {
+        installer.install(dep, manifest.dependencies<dep>);
+    }
+    print($"Done: {installer.installed.length()} package(s) in {MODULES}/");
+}
+
+// riv add colors   /   riv add colors@1.0.0
+func[Emp] cmdAdd(spec[Str]) {
+    var[Manifest] manifest = readManifest();
+    var[Str<>] parts = spec.split("@");
+    var[Str] name = parts<0>;
+    var[Str] version = parts.length() > 1 ? parts<1> : latestVersion(openNetwork(), name);
+    manifest.dependencies<name> = version;
+    manifest.save();
+    print($"Added {name}@{version} to {MANIFEST}");
+    cmdInstall();
+}
+
+func[Emp] cmdRemove(name[Str]) {
+    var[Manifest] manifest = readManifest();
+    if (!manifest.dependencies.remove(name)) {
+        throw new RivError($"'{name}' is not a dependency of {manifest.name}");
+    }
+    manifest.save();
+    deleteAll($"{MODULES}/{name}");
+    print($"Removed {name}");
+}
+
+func[Emp] cmdList() {
+    var[Manifest] manifest = readManifest();
+    print($"{manifest.name}@{manifest.version}");
+    if (manifest.dependencies.isEmpty()) {
+        print("  (no dependencies)");
+    }
+    for (var[Str] dep in manifest.dependencies) {
+        var[Str] state = isDir($"{MODULES}/{dep}") ? "installed" : "not installed -- run `riv install`";
+        print($"  {dep}@{manifest.dependencies<dep>}  ({state})");
+    }
+}
+
+func[Emp] cmdSearch(text[Str]) {
+    var[Database] db = openNetwork();
+    var[Int] found = 0;
+    for (var[Json] row in db.query("SELECT DISTINCT name FROM packages ORDER BY name")) {
+        var[Str] name = row.get("name").asStr();
+        if (!name.lower().includes(text.lower())) continue;
+        var[Str<>] versions = publishedVersions(db, name);
+        var[Json | Nil] latest = db.queryOne("SELECT description FROM packages WHERE name = ? AND version = ?", name, versions.last());
+        var[Str] description = latest == nil ? "" : latest.get("description").asStr();
+        print($"{name}  [{versions.join(", ")}]  {description}");
+        found++;
+    }
+    if (found == 0) print("No packages found. Publish one with `riv publish`.");
+}
+
+// riv publish            (this folder)
+// riv publish <folder>   (another package folder)
+// riv publish --all <folder>   (every package folder inside <folder>)
+func[Emp] cmdPublish(rest[Str<>]) {
+    var[Database] db = openNetwork();
+    if (!rest.isEmpty() && rest<0> == "--all") {
+        if (rest.length() < 2) throw new RivError("`riv publish --all` needs a folder of packages");
+        var[Str] root = rest<1>;
+        var[Int] skipped = 0;
+        for (var[Str] name in listDir(root)) {
+            var[Str] folder = $"{root}/{name}";
+            if (!fileExists($"{folder}/{MANIFEST}")) continue;
+            var[Manifest] manifest = readManifest($"{folder}/{MANIFEST}");
+            if (db.queryOne("SELECT 1 AS x FROM packages WHERE name = ? AND version = ?", manifest.name, manifest.version) != nil) {
+                skipped++;
+                continue;
+            }
+            publish(db, folder);
+        }
+        if (skipped > 0) print($"({skipped} package(s) already on the network)");
+        return;
+    }
+    publish(db, rest.isEmpty() ? "." : rest<0>);
+}
+
+func[Emp] cmdNetwork(action[Str]) {
+    var[Database] db = openNetwork();
+    if (action == "churn") {
+        // Each peer goes offline with a chance of 1 in 3
+        for (var[Json] peer in db.query("SELECT id FROM peers")) {
+            db.execute("UPDATE peers SET online = ? WHERE id = ?", random() < 0.34 ? 0 : 1, peer.get("id").asInt());
+        }
+    } else if (action == "heal") {
+        db.execute("UPDATE peers SET online = 1");
+    } else if (!action.isEmpty()) {
+        throw new RivError($"unknown `riv network {action}` (use churn or heal)");
+    }
+    print($"Network: {networkPath()}");
+    for (var[Json] peer in db.query("""
+            SELECT p.name AS name, p.online AS online, p.reliability AS reliability, COUNT(pp.hash) AS pieces
+            FROM peers p LEFT JOIN peer_pieces pp ON pp.peer = p.id
+            GROUP BY p.id ORDER BY p.id
+            """)) {
+        var[Str] state = peer.get("online").asInt() == 1 ? "online " : "OFFLINE";
+        var[Int] reliable = Int(peer.get("reliability").asDbl() * 100);
+        print($"  {peer.get("name").asStr()}  {state}  {peer.get("pieces").asInt()} piece(s)  {reliable}% reliable");
+    }
+    var[Json | Nil] totals = db.queryOne("SELECT COUNT(*) AS packages FROM packages");
+    if (totals != nil) print($"  {totals.get("packages").asInt()} package version(s) published");
+}
+
+func[Emp] cmdRun(extra[Str<>]) {
+    var[Manifest] manifest = readManifest();
+    var[Str] dessa = getEnv("DESSA") ?? "dessa";
+    var[Str] command = $"\"{dessa}\" run {manifest.entry}";
+    if (!extra.isEmpty()) {
+        command += $" -- {extra.join(" ")}";
+    }
+    exit(run(command));
+}
+
+func[Emp] help() {
+    print("riv -- the Dessa package manager (prototype)");
+    print();
+    print("  riv init [name]           create riv.pkg (and main.ds) in this folder");
+    print("  riv add <pkg>[@version]   add a dependency and install it");
+    print("  riv remove <pkg>          remove a dependency");
+    print("  riv install               install every dependency into riv_modules/");
+    print("  riv list                  show this package's dependencies");
+    print("  riv search [text]         list the packages on the network");
+    print("  riv publish [folder]      share a package on the network (--all <folder> for many)");
+    print("  riv network [churn|heal]  show the peers; take random ones offline / bring them back");
+    print("  riv run [args...]         run this package's entry file");
+    print();
+    print($"Network (simulated): {networkPath()}  (set RIV_NETWORK to change it)");
+}
+
+// ============================================================
+// Main
+// ============================================================
+
+var[Str<>] argv = args();
+var[Str] command = argv.isEmpty() ? "help" : argv<0>;
+var[Str] argument = argv.length() > 1 ? argv<1> : "";
+
+func[Emp] needArgument(what[Str]) {
+    if (argument.isEmpty()) {
+        throw new RivError($"`riv {command}` needs {what}");
+    }
+}
+
+try {
+    switch (command) {
+        case "init" := { cmdInit(argument); }
+        case "install" := { cmdInstall(); }
+        case "add" := {
+            needArgument("a package name, e.g. riv add sql");
+            cmdAdd(argument);
+        }
+        case "remove" := {
+            needArgument("a package name");
+            cmdRemove(argument);
+        }
+        case "list" := { cmdList(); }
+        case "search" := { cmdSearch(argument); }
+        case "publish" := { cmdPublish(argv.slice(1, argv.length())); }
+        case "network" := { cmdNetwork(argument); }
+        case "run" := { cmdRun(argv.slice(1, argv.length())); }
+        case "help" := { help(); }
+        default := {
+            print($"riv: unknown command '{command}'");
+            print();
+            help();
+            exit(1);
+        }
+    }
+} catch (e[RivError]) {
+    print($"riv: {e.message}");
+    exit(1);
+} catch (e[Str]) {
+    print($"riv: {e}");
+    exit(1);
+}

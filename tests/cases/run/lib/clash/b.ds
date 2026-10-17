@@ -1,0 +1,6 @@
+class Node {
+    var[Int] weight = 7;
+}
+func[Node] make() {
+    return new Node();
+}

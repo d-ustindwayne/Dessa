@@ -1,0 +1,47 @@
+// Misuse of Func types, variadic and default parameters
+
+func[Int] apply(f[Func[Int, [Int]]], x[Int]) {
+    return f(x);
+}
+func[Str] name(x[Int]) {
+    return "x";
+}
+apply(name, 1);                                  // error: Cannot convert Func[Str, [Int]] to Func[Int, [Int]]
+apply((s[Str]) := 1, 1);                         // error: Cannot convert
+var[Func] bad = 1;                               // error: Func needs its return and parameter types
+var[Func[Int, Int]] f = (x[Int]) := "no";       // error: Cannot convert Str to Int
+
+func[Int] sum(first[Int], rest[Int*]) {
+    return first;
+}
+sum();                                           // error: Missing argument(s) for 'sum': first
+sum(1, 2, "3");                                  // error: Cannot convert Str to Int
+sum(1, rest: 2);                                 // error: can't be passed by name
+sum(...[1, 2]);                                  // error: Missing argument(s) for 'sum': first
+apply(...[1]);                                   // error: can only pass a list to a variadic parameter
+func[Emp] notLast(rest[Int*], x[Int]) {}         // error: must be the last parameter
+
+func[Str] greet(name[Str]="John", n[Int]) {      // error: needs a default value
+    return name;
+}
+func[Str] wrongDefault(n[Int]="one") {           // error: Cannot convert Str to Int
+    return "x";
+}
+var[Int] someNumber = 3;
+func[Int] nonConstant(n[Int]=someNumber) {       // error: must be a constant
+    return n;
+}
+const[Int] lambdaDefault = (x[Int]=1) := x;      // error: Lambda parameters can't be variadic or have default values
+
+// Loops: a value assigned nil later in the loop may be nil on the next pass
+var[Int | Nil] value = 1;
+while (true) {
+    print(value + 1);                            // error: may be nil
+    value = nil;
+}
+
+var[Int | Nil] safe = 1;
+for (var[Int] i = 0; i < 3; i++) {
+    safe = i;
+    print(safe + 1);                             // fine: assigned just before
+}

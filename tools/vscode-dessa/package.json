@@ -1,0 +1,149 @@
+{
+  "name": "dessa",
+  "displayName": "Dessa",
+  "description": "Dessa language support: highlighting (also inside HTML and .dhtml pages), errors as you type, IntelliSense, go to definition, run.",
+  "version": "0.1.0",
+  "publisher": "d-ustindwayne",
+  "license": "Apache-2.0",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Linters"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "languages": [
+      {
+        "id": "dessa",
+        "aliases": [
+          "Dessa",
+          "dessa"
+        ],
+        "extensions": [
+          ".ds",
+          ".dx",
+          ".dz",
+          ".dsx",
+          ".dxx",
+          ".dzx",
+          ".dds",
+          ".dss",
+          ".dm"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/dessa-icon.svg",
+          "dark": "./icons/dessa-icon.svg"
+        }
+      },
+      {
+        "id": "dessa-html",
+        "aliases": [
+          "Dessa HTML",
+          "dhtml"
+        ],
+        "extensions": [
+          ".dhtml"
+        ],
+        "configuration": "./dhtml-language-configuration.json",
+        "icon": {
+          "light": "./icons/dessa-icon.svg",
+          "dark": "./icons/dessa-icon.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "dessa",
+        "scopeName": "source.dessa",
+        "path": "./syntaxes/dessa.tmLanguage.json"
+      },
+      {
+        "language": "dessa-html",
+        "scopeName": "text.html.dessa",
+        "path": "./syntaxes/dhtml.tmLanguage.json",
+        "embeddedLanguages": {
+          "source.dessa.embedded.html": "dessa",
+          "source.css": "css",
+          "source.js": "javascript"
+        }
+      },
+      {
+        "scopeName": "dessa.html.injection",
+        "path": "./syntaxes/dessa-html-injection.tmLanguage.json",
+        "injectTo": [
+          "text.html.basic",
+          "text.html.derivative",
+          "text.html.dessa"
+        ],
+        "embeddedLanguages": {
+          "source.dessa.embedded.html": "dessa"
+        }
+      }
+    ],
+    "snippets": [
+      {
+        "language": "dessa",
+        "path": "./snippets/dessa.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "dessa.run",
+        "title": "Dessa: Run File",
+        "icon": "$(play)"
+      },
+      {
+        "command": "dessa.showCpp",
+        "title": "Dessa: Show Generated C++"
+      },
+      {
+        "command": "dessa.check",
+        "title": "Dessa: Check File"
+      }
+    ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "dessa.run",
+          "when": "resourceLangId == dessa || resourceLangId == dessa-html",
+          "group": "navigation"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "dessa.run",
+        "key": "ctrl+f5",
+        "when": "editorLangId == dessa || editorLangId == dessa-html"
+      }
+    ],
+    "configuration": {
+      "title": "Dessa",
+      "properties": {
+        "dessa.compilerPath": {
+          "type": "string",
+          "default": "dessa",
+          "description": "Path to the dessa compiler executable (e.g. C:\\Projects\\Dessa\\build\\dessa.exe). Leave as 'dessa' if it is on your PATH."
+        },
+        "dessa.checkOnType": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check the file for errors while typing (otherwise only on open and save)."
+        },
+        "dessa.packageFolders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Extra folders with riv packages for $(<lib>) imports (besides riv_modules). The Dessa repository's tools/riv/packages is added automatically."
+        }
+      }
+    }
+  }
+}

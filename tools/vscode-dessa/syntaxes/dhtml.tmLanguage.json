@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "comment": "Dessa HTML (.dhtml): HTML where a <script> without a type (or with a Dessa type) holds Dessa code.",
+  "name": "Dessa HTML",
+  "scopeName": "text.html.dessa",
+  "fileTypes": ["dhtml"],
+  "patterns": [
+    { "include": "#dessa-script" },
+    { "include": "text.html.basic" }
+  ],
+  "repository": {
+    "dessa-script": {
+      "begin": "(<)(script)\\b(?![^>]*\\btype\\s*=\\s*[\"']?(?!(?:text|application)/(?:dessa|ds|x-dessa)\\b))([^>]*)(>)",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.html" },
+        "2": { "name": "entity.name.tag.script.html" },
+        "3": { "name": "meta.attribute.html" },
+        "4": { "name": "punctuation.definition.tag.end.html" }
+      },
+      "end": "(</)(script)\\s*(>)",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.html" },
+        "2": { "name": "entity.name.tag.script.html" },
+        "3": { "name": "punctuation.definition.tag.end.html" }
+      },
+      "contentName": "source.dessa.embedded.html",
+      "patterns": [{ "include": "source.dessa" }]
+    }
+  }
+}

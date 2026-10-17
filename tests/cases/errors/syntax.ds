@@ -1,0 +1,11 @@
+// Parser and lexer errors are reported with positions
+
+var[Int] a = 0b102;            // error: invalid digit '2' in binary literal
+var[Int] b = 0o9;              // error: invalid digit '9' in octal literal
+var[Int] c = 12abc;            // error: invalid suffix on numeric literal
+var[Chr] d = '';               // error: Empty char literal
+var[Int] e = 1 |> 2;           // error: '|>' is reserved for future use
+var[Bul] f = 1 < 2 < 3;        // error: cannot be chained
+var[Int] g = 3                 // error: Expect ';' after variable declaration.
+var[Int] h = 4;
+print($"{}");                  // error: Invalid interpolation

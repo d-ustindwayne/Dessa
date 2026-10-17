@@ -1,0 +1,32 @@
+/***
+ * $(<time>) -- clocks and waiting. Dates and times (DateTime, time zones,
+ * names in several languages) are written in Dessa: see time.dm.
+ *
+ *     { millis, sleep } from $(<time>);
+ *
+ * Declaration file: documentation only. Bodies are `...`; the real
+ * implementation is C++ in runtime/lib/time.hpp.
+ */
+
+// Seconds since 1 January 1970 (UTC), with fractions.
+func[Dbl] now() {
+    ...
+}
+
+// Milliseconds from a steady clock. Only differences are meaningful:
+//     var[Int] start = millis();
+//     ...
+//     print($"took {millis() - start} ms");
+func[Int] millis() {
+    ...
+}
+
+// Pauses the program for `ms` milliseconds.
+func[Emp] sleep(ms[Int]) {
+    ...
+}
+
+// Local date and time as "YYYY-MM-DD HH:MM:SS".
+func[Str] date() {
+    ...
+}
