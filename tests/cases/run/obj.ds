@@ -1,0 +1,60 @@
+// Obj: any value, and anonymous objects
+
+class Dog {
+    var[Str] name;
+    var[Int] age = 3;
+    init(name[Str]) { this.name = name; }
+    func[Str] speak() { return "Woof"; }
+}
+enum Color { RED, GREEN }
+
+var[Obj] reply = new { message = "Message to the world!", code = 200 };
+print(reply.message, reply.code);
+print(reply);
+print(typeof(reply), typeof(reply.message), typeof(reply.code));
+var[Int] code = Int(reply.code);
+print(code + 1);
+
+reply.code = 404;
+reply.extra = true;
+print(reply);
+
+// anything goes into an Obj
+var[Obj<>] things = [1, "two", 3.5, 'c', true, nil, [1, 2], new Dog("Rex"), Color.GREEN, new { x = 1 }];
+for (var[Obj] t in things) print(typeof(t), t);
+
+// narrowing with is
+var[Obj] pet = new Dog("Rex");
+if (pet is Dog) print(pet.speak(), pet.name);
+print(pet.name, pet.age);
+pet.age = 5;
+print(pet);
+
+var[Obj] n = 41;
+if (n is Int) print(n + 1);
+if (!(n is Str)) print("not a Str");
+
+// equality
+print(n == 41, n == 41.0, n == "41", reply == reply, new { a = 1 } == new { a = 1 }, new { a = 1 } == new { a = 2 });
+var[Obj] nothing = nil;
+print(nothing == nil, n == nil, nothing);
+
+// nested
+var[Obj] user = new { name = "Ann", address = new { city = "Cebu", zip = 6000 } };
+print(user.address.city, Str(user.address.zip).length());
+print($"{user.name} lives in {user.address.city}");
+
+// conversions
+print(Dbl(n) / 2, Str(n) + "!", Bul(new { a = 1 }.a));
+
+// maps of Obj
+var[Map[Str, Obj]] row = {"id": 7, "name": "Bo", "tags": ["a", "b"]};
+print(row, typeof(row<"tags">));
+
+// errors when the program runs
+try { print(reply.missing); } catch (e[Str]) { print(e); }
+try { print(n.field); } catch (e[Str]) { print(e); }
+try { pet.age = "old"; } catch (e[Str]) { print(e); }
+try { pet.color = 1; } catch (e[Str]) { print(e); }
+try { print(Int(reply.message)); } catch (e[Str]) { print(e); }
+try { print(nothing.x); } catch (e[Str]) { print(e); }

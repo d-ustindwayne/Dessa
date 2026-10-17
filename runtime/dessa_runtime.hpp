@@ -200,11 +200,17 @@ struct Nil {
 };
 inline constexpr Nil nil{};
 
+struct Obj;   // any value (see "Obj" below)
+
 // Base of every Dessa class and interface.
 struct Object : std::enable_shared_from_this<Object> {
     virtual ~Object() = default;
     virtual Str ds_str() const { return "<" + ds_class() + ">"; }
     virtual Str ds_class() const { return "Object"; }
+    // Fields by name, for Obj (generated for every class)
+    virtual bool ds_get(const Str&, Obj&) const { return false; }
+    virtual bool ds_set(const Str&, const Obj&) { return false; }
+    virtual bool ds_equals(const Object& other) const { return this == &other; }
 };
 
 // `new T(args)`: the object is owned by a Ref *before* its init runs, so
@@ -284,6 +290,7 @@ bool has(const T& value) {
     else if constexpr (is_ref<U>::value || is_fn<U>::value) return static_cast<bool>(value);
     else if constexpr (is_variant<U>::value) return !std::holds_alternative<Nil>(value);
     else if constexpr (std::is_same_v<U, Nil>) return false;
+    else if constexpr (std::is_same_v<U, Obj>) return !value.isNil();
     else return true;
 }
 
@@ -323,7 +330,9 @@ To unwrap_to(const std::optional<T>& value) {
 template <class T>
 Str type_of(const T& value, const Str& known) {
     using U = bare<T>;
-    if constexpr (is_variant<U>::value) {
+    if constexpr (std::is_same_v<U, Obj>) {
+        return value.type();
+    } else if constexpr (is_variant<U>::value) {
         return std::visit([&](const auto& v) { return type_of(v, known); }, value);
     } else if constexpr (is_optional<U>::value) {
         return value.has_value() ? type_of(*value, known) : Str("Nil");
@@ -353,7 +362,9 @@ Str type_of(const T& value, const Str& known) {
 template <class T, class V>
 bool is(const V& value) {
     using U = bare<V>;
-    if constexpr (is_variant<U>::value) {
+    if constexpr (std::is_same_v<U, Obj>) {
+        return value.template holds<T>();
+    } else if constexpr (is_variant<U>::value) {
         return std::visit([](const auto& v) { return is<T>(v); }, value);
     } else if constexpr (is_optional<U>::value) {
         return value.has_value() && is<T>(*value);
@@ -369,7 +380,9 @@ bool is(const V& value) {
 template <class T, class V>
 Ref<T> as(const V& value) {
     using U = bare<V>;
-    if constexpr (is_variant<U>::value) {
+    if constexpr (std::is_same_v<U, Obj>) {
+        return value.template as<T>();
+    } else if constexpr (is_variant<U>::value) {
         return std::visit([](const auto& v) -> Ref<T> { return as<T>(v); }, value);
     } else if constexpr (is_ref<U>::value) {
         auto cast = std::dynamic_pointer_cast<T>(value);
@@ -417,12 +430,15 @@ R coalesce(const T& value, F&& fallback) {
 // Equality across nullable / union values
 // ============================================================
 
+template <class A, class B> bool obj_eq(const A& a, const B& b);   // defined with Obj
+
 template <class A, class B>
 bool eq(const A& a, const B& b) {
     using UA = bare<A>;
     using UB = bare<B>;
     if constexpr (std::is_same_v<UA, Nil>) return !has(b);
     else if constexpr (std::is_same_v<UB, Nil>) return !has(a);
+    else if constexpr (std::is_same_v<UA, Obj> || std::is_same_v<UB, Obj>) return obj_eq(a, b);
     else if constexpr (is_variant<UA>::value && !is_variant<UB>::value) {
         return std::visit([&](const auto& v) { return eq(v, b); }, a);
     } else if constexpr (is_variant<UB>::value && !is_variant<UA>::value) {
@@ -621,6 +637,7 @@ Str to_str(const T& value) {
     else if constexpr (std::is_same_v<U, Chr>) return utf8_encode(value);
     else if constexpr (std::is_same_v<U, Bul>) return value ? "true" : "false";
     else if constexpr (std::is_same_v<U, Nil>) return "Nil";
+    else if constexpr (std::is_same_v<U, Obj>) return value.str();
     else if constexpr (std::is_same_v<U, Radix>) return radix_str(value);
     else if constexpr (std::is_same_v<U, float>) return float_str(value, true);
     else if constexpr (std::is_floating_point_v<U>) return float_str(value, false);
@@ -669,6 +686,7 @@ template <class T>
 Str repr(const T& value) {
     using U = bare<T>;
     if constexpr (std::is_same_v<U, Str>) return quote(value, '"');
+    else if constexpr (std::is_same_v<U, Obj>) return value.repr();
     else if constexpr (std::is_same_v<U, Chr>) return quote(utf8_encode(value), '\'');
     else if constexpr (is_optional<U>::value) return value ? repr(*value) : "Nil";
     else if constexpr (is_variant<U>::value) return std::visit([](const auto& v) { return repr(v); }, value);
@@ -689,7 +707,9 @@ inline Str trim_copy(const Str& s) {
 template <class T>
 Int to_int(const T& value) {
     using U = bare<T>;
-    if constexpr (std::is_same_v<U, Str>) {
+    if constexpr (std::is_same_v<U, Obj>) {
+        return value.toInt();
+    } else if constexpr (std::is_same_v<U, Str>) {
         Str t = trim_copy(value);
         Int result = 0;
         auto [p, ec] = std::from_chars(t.data(), t.data() + t.size(), result);
@@ -713,7 +733,9 @@ Int to_int(const T& value) {
 template <class T>
 Dbl to_dbl(const T& value) {
     using U = bare<T>;
-    if constexpr (std::is_same_v<U, Str>) {
+    if constexpr (std::is_same_v<U, Obj>) {
+        return value.toDbl();
+    } else if constexpr (std::is_same_v<U, Str>) {
         Str t = trim_copy(value);
         char* end = nullptr;
         double d = std::strtod(t.c_str(), &end);
@@ -727,7 +749,9 @@ Dbl to_dbl(const T& value) {
 template <class T>
 Flt to_flt(const T& value) {
     using U = bare<T>;
-    if constexpr (std::is_same_v<U, Str>) {
+    if constexpr (std::is_same_v<U, Obj>) {
+        return static_cast<Flt>(value.toDbl());
+    } else if constexpr (std::is_same_v<U, Str>) {
         Str t = trim_copy(value);
         char* end = nullptr;
         double d = std::strtod(t.c_str(), &end);
@@ -741,7 +765,9 @@ Flt to_flt(const T& value) {
 template <class T>
 Bul to_bul(const T& value) {
     using U = bare<T>;
-    if constexpr (std::is_same_v<U, Str>) {
+    if constexpr (std::is_same_v<U, Obj>) {
+        return value.toBul();
+    } else if constexpr (std::is_same_v<U, Str>) {
         Str t = trim_copy(value);
         for (auto& c : t) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
         if (t == "true" || t == "1" || t == "yes") return true;
@@ -755,7 +781,9 @@ Bul to_bul(const T& value) {
 template <class T>
 Chr to_chr(const T& value) {
     using U = bare<T>;
-    if constexpr (std::is_same_v<U, Str>) {
+    if constexpr (std::is_same_v<U, Obj>) {
+        return value.toChr();
+    } else if constexpr (std::is_same_v<U, Str>) {
         if (utf8_length(value) != 1) fail("Cannot convert \"" + value + "\" to Chr: it must be exactly one character");
         size_t i = 0;
         return utf8_next(value, i);
@@ -768,6 +796,303 @@ Chr to_chr(const T& value) {
         return static_cast<Chr>(value);
     }
 }
+
+// ============================================================
+// Obj: any value
+// ============================================================
+//
+//   var[Obj] reply = new { message = "Hi", code = 200 };
+//   print(reply.message);          // fields are looked up when the program runs
+//   if (reply is Int) ...          // narrowing: the value as an Int
+//
+// An Obj holds a copy of the value (class instances stay shared, like
+// everywhere else). An empty Obj is nil.
+
+template <class T> Str obj_type_name();
+
+struct ObjBox {
+    virtual ~ObjBox() = default;
+    virtual Str type() const = 0;                       // typeof()
+    virtual Str str() const = 0;                        // print()
+    virtual Str repr() const = 0;                       // inside a collection
+    virtual const std::type_info& held() const = 0;
+    virtual const void* get() const = 0;                // the value itself
+    virtual bool numeric() const { return false; }
+    virtual Dbl number() const { return 0; }
+    virtual const Ref<Object>* object() const { return nullptr; }   // class instances
+    virtual bool same(const ObjBox& other) const = 0;   // ==
+    virtual Int toInt() const = 0;
+    virtual Dbl toDbl() const = 0;
+    virtual Bul toBul() const = 0;
+    virtual Chr toChr() const = 0;
+};
+
+template <class T>
+struct ObjBoxOf final : ObjBox {
+    T value;
+    explicit ObjBoxOf(T v) : value(std::move(v)) {}
+    Str type() const override {
+        if constexpr (std::is_same_v<T, Ref<Object>>) return value->ds_class();
+        else return obj_type_name<T>();
+    }
+    Str str() const override { return to_str(value); }
+    Str repr() const override { return dessa::repr(value); }
+    const std::type_info& held() const override { return typeid(T); }
+    const void* get() const override { return &value; }
+    bool numeric() const override { return std::is_arithmetic_v<T> && !std::is_same_v<T, Bul> && !std::is_same_v<T, Chr>; }
+    Dbl number() const override {
+        if constexpr (std::is_arithmetic_v<T>) return static_cast<Dbl>(value);
+        else return 0;
+    }
+    const Ref<Object>* object() const override {
+        if constexpr (std::is_same_v<T, Ref<Object>>) return &value;
+        else return nullptr;
+    }
+    bool same(const ObjBox& other) const override;
+    Int toInt() const override {
+        if constexpr (std::is_same_v<T, Str> || std::is_arithmetic_v<T> || std::is_enum_v<T>) return to_int(value);
+        else fail("Cannot convert " + type() + " to Int");
+    }
+    Dbl toDbl() const override {
+        if constexpr (std::is_same_v<T, Str> || (std::is_arithmetic_v<T> && !std::is_same_v<T, Chr>)) return to_dbl(value);
+        else fail("Cannot convert " + type() + " to Dbl");
+    }
+    Bul toBul() const override {
+        if constexpr (std::is_same_v<T, Str> || (std::is_arithmetic_v<T> && !std::is_same_v<T, Chr>)) return to_bul(value);
+        else fail("Cannot convert " + type() + " to Bul");
+    }
+    Chr toChr() const override {
+        if constexpr (std::is_same_v<T, Str> || std::is_same_v<T, Chr> || std::is_integral_v<T>) return to_chr(value);
+        else fail("Cannot convert " + type() + " to Chr");
+    }
+};
+
+struct Obj {
+    std::shared_ptr<const ObjBox> box;   // empty: nil
+
+    Obj() = default;
+    Obj(Nil) {}
+    Obj(const char* text) : Obj(Str(text)) {}
+    template <class T, std::enable_if_t<!std::is_same_v<bare<T>, Obj> && !std::is_same_v<bare<T>, Nil>, int> = 0>
+    Obj(const T& value) { set(value); }
+
+    bool isNil() const { return !box; }
+    Str type() const { return box ? box->type() : Str("Nil"); }
+    Str str() const { return box ? box->str() : Str("Nil"); }
+    Str repr() const { return box ? box->repr() : Str("Nil"); }
+
+    // Does it hold a T? For classes and interfaces: an instance of one.
+    template <class T>
+    bool holds() const {
+        if (!box) return false;
+        if constexpr (std::is_base_of_v<Object, T>) {
+            const Ref<Object>* o = box->object();
+            return o && *o && dynamic_cast<const T*>(o->get()) != nullptr;
+        } else if constexpr (is_ref<T>::value) {
+            return holds<typename T::element_type>();
+        } else {
+            return box->held() == typeid(T);
+        }
+    }
+
+    // The value as a T, after an `is T` check (for a class: its Ref<T>)
+    template <class T>
+    auto as() const {
+        if constexpr (is_ref<T>::value) {
+            return as<typename T::element_type>();
+        } else if constexpr (std::is_base_of_v<Object, T>) {
+            if (!holds<T>()) fail("Value is not the expected class (" + type() + ")");
+            return std::dynamic_pointer_cast<T>(*box->object());
+        } else {
+            if (!holds<T>()) fail("Value is " + type() + ", not " + obj_type_name<T>());
+            return *static_cast<const T*>(box->get());
+        }
+    }
+
+    Int toInt() const { if (!box) fail("Cannot convert Nil to Int"); return box->toInt(); }
+    Dbl toDbl() const { if (!box) fail("Cannot convert Nil to Dbl"); return box->toDbl(); }
+    Bul toBul() const { if (!box) fail("Cannot convert Nil to Bul"); return box->toBul(); }
+    Chr toChr() const { if (!box) fail("Cannot convert Nil to Chr"); return box->toChr(); }
+
+    bool operator==(const Obj& other) const {
+        if (!box || !other.box) return !box && !other.box;
+        if (box->numeric() && other.box->numeric()) return box->number() == other.box->number();
+        return box->same(*other.box);
+    }
+    bool operator!=(const Obj& other) const { return !(*this == other); }
+    // Sets and sorting: by type, then by text
+    bool operator<(const Obj& other) const {
+        if (box && other.box && box->numeric() && other.box->numeric()) return box->number() < other.box->number();
+        const Str a = type(), b = other.type();
+        if (a != b) return a < b;
+        return repr() < other.repr();
+    }
+
+private:
+    template <class T>
+    void set(const T& value) {
+        using U = bare<T>;
+        if constexpr (is_optional<U>::value) {
+            if (value) set(*value);
+        } else if constexpr (is_variant<U>::value) {
+            std::visit([this](const auto& v) {
+                if constexpr (!std::is_same_v<bare<decltype(v)>, Nil>) set(v);
+            }, value);
+        } else if constexpr (is_ref<U>::value) {
+            if (value) box = std::make_shared<ObjBoxOf<Ref<Object>>>(std::static_pointer_cast<Object>(value));
+        } else if constexpr (is_fn<U>::value) {
+            if (value) box = std::make_shared<ObjBoxOf<U>>(value);
+        } else {
+            box = std::make_shared<ObjBoxOf<U>>(value);
+        }
+    }
+};
+
+// Can two values of this type be compared with ==? (Functions can't, nor
+// collections holding them.)
+template <class T>
+constexpr bool obj_comparable() {
+    if constexpr (is_fn<T>::value) return false;
+    else if constexpr (is_list<T>::value || is_set<T>::value || is_optional<T>::value) return obj_comparable<typename T::value_type>();
+    else if constexpr (is_map<T>::value) return obj_comparable<typename T::key_type>() && obj_comparable<typename T::mapped_type>();
+    else if constexpr (is_variant<T>::value) {
+        return []<size_t... I>(std::index_sequence<I...>) {
+            return (obj_comparable<std::variant_alternative_t<I, T>>() && ...);
+        }(std::make_index_sequence<std::variant_size_v<T>>{});
+    } else return true;
+}
+
+template <class T>
+bool ObjBoxOf<T>::same(const ObjBox& other) const {
+    if (other.held() != typeid(T)) return false;
+    const T& theirs = *static_cast<const T*>(other.get());
+    if constexpr (std::is_same_v<T, Ref<Object>>) return value == theirs || value->ds_equals(*theirs);
+    else if constexpr (!obj_comparable<T>()) return &value == &theirs;
+    else return eq(value, theirs);
+}
+
+// typeof() of a value held in an Obj
+template <class T>
+Str obj_type_name() {
+    if constexpr (std::is_same_v<T, Str>) return "Str";
+    else if constexpr (std::is_same_v<T, Int>) return "Int";
+    else if constexpr (std::is_same_v<T, Dbl>) return "Dbl";
+    else if constexpr (std::is_same_v<T, Flt>) return "Flt";
+    else if constexpr (std::is_same_v<T, Bul>) return "Bul";
+    else if constexpr (std::is_same_v<T, Chr>) return "Chr";
+    else if constexpr (std::is_same_v<T, Obj>) return "Obj";
+    else if constexpr (std::is_enum_v<T>) return ds_enum_type(T{});   // generated, found by ADL
+    else if constexpr (is_list<T>::value) return "List";
+    else if constexpr (is_set<T>::value) return "Set";
+    else if constexpr (is_map<T>::value) return "Map";
+    else if constexpr (is_fn<T>::value) return "Func";
+    else if constexpr (is_ref<T>::value) return "Object";
+    else return "Obj";
+}
+
+// A value from an Obj, for a typed place (a class field set by name)
+template <class T>
+T obj_to(const Obj& o, const Str& what) {
+    using U = bare<T>;
+    if constexpr (std::is_same_v<U, Obj>) {
+        return o;
+    } else if constexpr (is_optional<U>::value) {
+        if (o.isNil()) return std::nullopt;
+        return U(obj_to<typename U::value_type>(o, what));
+    } else if constexpr (is_variant<U>::value) {
+        if (o.isNil()) {
+            if constexpr (requires { U(nil); }) return U(nil);
+            fail("Cannot store Nil in " + what);
+        }
+        std::optional<U> out;
+        [&]<size_t... I>(std::index_sequence<I...>) {
+            ((!out && o.holds<std::variant_alternative_t<I, U>>() ? (out = U(o.as<std::variant_alternative_t<I, U>>()), 0) : 0), ...);
+        }(std::make_index_sequence<std::variant_size_v<U>>{});
+        if (!out) fail("Cannot store " + o.type() + " in " + what);
+        return *out;
+    } else if constexpr (is_ref<U>::value) {
+        if (o.isNil()) return nullptr;
+        if (!o.holds<typename U::element_type>()) fail("Cannot store " + o.type() + " in " + what);
+        return o.as<typename U::element_type>();
+    } else {
+        if (o.isNil()) fail("Cannot store Nil in " + what);
+        if constexpr (std::is_same_v<U, Int>) {
+            if (o.holds<Int>()) return o.as<Int>();
+        } else if constexpr (std::is_same_v<U, Flt>) {
+            if (o.holds<Flt>()) return o.as<Flt>();
+            if (o.holds<Int>()) return static_cast<Flt>(o.as<Int>());
+        } else if constexpr (std::is_same_v<U, Dbl>) {
+            if (o.box->numeric()) return o.box->number();
+        } else {
+            if (o.holds<U>()) return o.as<U>();
+        }
+        fail("Cannot store " + o.type() + " in " + what);
+    }
+}
+
+// new { message = "Hi", code = 200 }
+struct AnonObject final : Object {
+    Map<Str, Obj> fields;
+    Str ds_class() const override { return "Obj"; }
+    Str ds_str() const override {
+        Str out = "{";
+        bool first = true;
+        for (const auto& [name, value] : fields) {
+            out += (first ? "" : ", ") + name + " = " + value.repr();
+            first = false;
+        }
+        return out + "}";
+    }
+    bool ds_get(const Str& name, Obj& out) const override {
+        const Obj* found = fields.find(name);
+        if (!found) return false;
+        out = *found;
+        return true;
+    }
+    bool ds_set(const Str& name, const Obj& value) override {
+        fields.put(name, value);
+        return true;
+    }
+    bool ds_equals(const Object& other) const override {
+        const auto* theirs = dynamic_cast<const AnonObject*>(&other);
+        return theirs && fields == theirs->fields;
+    }
+};
+
+inline Obj anon(std::initializer_list<std::pair<Str, Obj>> fields) {
+    auto object = std::make_shared<AnonObject>();
+    for (const auto& [name, value] : fields) object->fields.put(name, value);
+    return Obj(Ref<Object>(object));
+}
+
+// "a Str", "an Int"
+inline Str with_article(const Str& type) {
+    return (Str("AEIOU").find(type.empty() ? 'x' : type[0]) != Str::npos ? "an " : "a ") + type;
+}
+
+// o.name
+inline Obj obj_get(const Obj& o, const char* name) {
+    if (o.isNil()) fail(Str("Nil reference: tried to read '") + name + "' of nil");
+    const Ref<Object>* object = o.box->object();
+    if (!object) fail("There is no field '" + Str(name) + "' in " + with_article(o.type()));
+    Obj out;
+    if (!(*object)->ds_get(name, out)) fail(o.type() + " has no field '" + name + "'");
+    return out;
+}
+
+// o.name = value (anonymous objects get new fields; classes only have theirs)
+inline Obj obj_set(const Obj& o, const char* name, const Obj& value) {
+    if (o.isNil()) fail(Str("Nil reference: tried to set '") + name + "' of nil");
+    const Ref<Object>* object = o.box->object();
+    if (!object) fail("There is no field '" + Str(name) + "' in " + with_article(o.type()));
+    if (!(*object)->ds_set(name, value)) fail(o.type() + " has no field '" + name + "'");
+    return value;
+}
+
+template <class A, class B> bool obj_eq(const A& a, const B& b) { return Obj(a) == Obj(b); }
+
+// After an `is` check: the Obj's value as that type
+template <class T> auto obj_as(const Obj& o) { return o.template as<T>(); }
 
 // $"Hello {name}" -> cat("Hello ", name)
 template <class... Parts>
@@ -1302,3 +1627,12 @@ int run_main(int argc, char** argv, Body&& body) {
 
 } // namespace dessa
 
+
+// Obj as a Map key
+template <>
+struct std::hash<dessa::Obj> {
+    size_t operator()(const dessa::Obj& o) const {
+        if (o.box && o.box->numeric()) return std::hash<double>()(o.box->number());   // 1 == 1.0
+        return std::hash<std::string>()(o.type() + ":" + o.repr());
+    }
+};

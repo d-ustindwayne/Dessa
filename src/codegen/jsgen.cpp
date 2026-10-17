@@ -421,6 +421,28 @@ void JsCodegen::emitClass(const ClassInfo& info) {
         emitFunction(method, memberName(method->name), true);
     }
 
+    // Fields by name, for Obj: o.name
+    line("$get(name) {");
+    indentLevel++;
+    for (const auto& f : info.fieldOrder) line("if (name === " + jsString(f) + ") return this." + memberName(f) + ";");
+    line("return super.$get(name);");
+    indentLevel--;
+    line("}");
+    line("$set(name, v) {");
+    indentLevel++;
+    for (const auto& f : info.fieldOrder) {
+        const SemanticType& type = info.fields.at(f).type;
+        const SemanticType base = withoutNil(type);
+        std::string value = "v";
+        if (base.is(SemanticTypeKind::Dbl) || base.is(SemanticTypeKind::Flt)) value = "(typeof v === \"bigint\" ? Number(v) : v)";
+        if (base.is(SemanticTypeKind::Flt)) value = "Math.fround" + value;
+        line("if (name === " + jsString(f) + ") { if (!(" + fitsCheck("v", type) + ")) $.storeFail(v, " +
+             jsString("field '" + f + "' (" + type.toString() + ")") + "); this." + memberName(f) + " = " + value + "; return true; }");
+    }
+    line("return super.$set(name, v);");
+    indentLevel--;
+    line("}");
+
     // How print shows an instance: toStr() if the class has one, otherwise ClassName(field: value, ...)
     const ClassInfo* withToStr = nullptr;
     std::vector<const ClassInfo*> chain;
@@ -910,6 +932,13 @@ std::string JsCodegen::expr(const Expr* e) {
         case ExprKind::Lambda: return lambda(static_cast<const LambdaExpr*>(e));
         case ExprKind::New: {
             const auto* n = static_cast<const NewExpr*>(e);
+            if (n->isAnonymous) {
+                std::string fields;
+                for (const auto& f : n->args) {
+                    fields += (fields.empty() ? "" : ", ") + std::string("[") + jsString(f.name.value_or("")) + ", " + expr(f.value.get()) + "]";
+                }
+                return "$.anon([" + fields + "])";
+            }
             const SemanticType& type = typeOf(e);
             const ClassInfo* info = analyser.findClass(type);
             std::vector<FunctionParameterSymbol> ps;
@@ -960,6 +989,25 @@ std::string JsCodegen::isCheck(const std::string& value, const SemanticType& tar
             if (isExtern(target)) return "(" + value + " instanceof " + target.name + ")";
             return "$.isClass(" + value + ", " + className(target) + ")";
         default: return "false";
+    }
+}
+
+std::string JsCodegen::fitsCheck(const std::string& value, const SemanticType& target) const {
+    switch (target.kind) {
+        case SemanticTypeKind::Unknown:
+        case SemanticTypeKind::Obj:
+            return "true";
+        case SemanticTypeKind::Union: {
+            std::string out;
+            for (const auto& m : target.unionMembers) out += (out.empty() ? "" : " || ") + fitsCheck(value, m);
+            return "(" + out + ")";
+        }
+        case SemanticTypeKind::Dbl:
+            return "(typeof " + value + " === \"number\" || typeof " + value + " === \"bigint\")";
+        case SemanticTypeKind::Flt:
+            return "(typeof " + value + " === \"number\" || typeof " + value + " === \"bigint\")";
+        default:
+            return isCheck(value, target);
     }
 }
 
@@ -1111,6 +1159,10 @@ std::string JsCodegen::assign(const AssignExpr* e) {
         }
     };
 
+    if (target->kind == ExprKind::Member && analyser.isDynamicMember(target)) {
+        const auto* m = static_cast<const MemberExpr*>(target);
+        return "$.objSet(" + expr(m->object.get()) + ", " + jsString(m->name.lexeme) + ", " + expr(e->value.get()) + ")";
+    }
     if (target->kind == ExprKind::Index) {
         const auto* index = static_cast<const IndexExpr*>(target);
         const SemanticType& objectType = typeOf(index->object.get());
@@ -1340,6 +1392,7 @@ std::string JsCodegen::member(const MemberExpr* e) {
     const Symbol* symbol = analyser.memberOf(e);
     const Expr* object = e->object.get();
     const SemanticType& objectType = typeOf(object);
+    if (analyser.isDynamicMember(e)) return "$.objGet(" + expr(object) + ", " + jsString(e->name.lexeme) + ")";
     if (!symbol) return "undefined";
 
     // Enum value

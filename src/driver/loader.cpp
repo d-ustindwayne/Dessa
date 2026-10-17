@@ -50,7 +50,7 @@ Diagnostic diagnosticFromMessage(const std::string& file, const std::string& mes
 ModuleLoader::ModuleLoader(std::vector<Diagnostic>& diagnostics) : diagnostics(diagnostics) {}
 
 void ModuleLoader::addError(const std::string& file, int line, int column, const std::string& message) {
-    diagnostics.push_back({DiagnosticSeverity::Error, message, file, line, column});
+    diagnostics.push_back({DiagnosticSeverity::Error, message, file, line, column, "", 0});
 }
 
 Program ModuleLoader::load(const std::string& entryPath) {
@@ -246,7 +246,7 @@ int ModuleLoader::visit(Program& program, const std::string& path, const std::st
                     diagnostics.push_back({DiagnosticSeverity::Warning,
                                            "'" + spec.path + "' is your file " + displayPath(local) + ", which hides the " + spec.path +
                                                " library (rename the file to use the library)",
-                                           module->displayPath, spec.line, spec.column});
+                                           module->displayPath, spec.line, spec.column, "", 0});
                 }
             }
             if (spec.isBuiltin) {

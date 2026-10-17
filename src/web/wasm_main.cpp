@@ -75,7 +75,7 @@ EMSCRIPTEN_KEEPALIVE const char* dessa_compile(const char* entryPath) {
         for (const auto& lib : analyser.builtinLibrariesUsed()) {
             if (!withJs.count(lib)) {
                 diagnostics.push_back({DiagnosticSeverity::Error,
-                                       "The library '" + lib + "' has a C++ part, so it can't run in the browser", "", 0, 0});
+                                       "The library '" + lib + "' has a C++ part, so it can't run in the browser", "", 0, 0, "", 0});
                 ok = false;
             }
         }

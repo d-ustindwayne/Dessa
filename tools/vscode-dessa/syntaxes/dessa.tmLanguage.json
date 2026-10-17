@@ -333,7 +333,7 @@
     },
     "type-annotation": {
       "comment": "param[Type] and catch(e[Type])",
-      "begin": "\\b([a-z_]\\w*)\\s*(\\[)(?=\\s*(Str|Int|Bul|Flt|Dbl|Chr|Emp|Nil|Func|Map|[A-Z]\\w*)\\b)",
+      "begin": "\\b([a-z_]\\w*)\\s*(\\[)(?=\\s*(Str|Int|Bul|Flt|Dbl|Chr|Emp|Nil|Obj|Func|Map|[A-Z]\\w*)\\b)",
       "beginCaptures": {
         "1": {
           "name": "variable.parameter.dessa"
@@ -386,7 +386,7 @@
         },
         {
           "name": "support.type.primitive.dessa",
-          "match": "\\b(Str|Int|Bul|Flt|Dbl|Chr|Emp|Nil)\\b"
+          "match": "\\b(Str|Int|Bul|Flt|Dbl|Chr|Emp|Nil|Obj)\\b"
         },
         {
           "name": "entity.name.type.dessa",
@@ -522,7 +522,7 @@
       "patterns": [
         {
           "name": "support.type.primitive.dessa",
-          "match": "\\b(Str|Int|Bul|Flt|Dbl|Chr|Emp|Nil)\\b"
+          "match": "\\b(Str|Int|Bul|Flt|Dbl|Chr|Emp|Nil|Obj)\\b"
         },
         {
           "name": "entity.name.type.dessa",

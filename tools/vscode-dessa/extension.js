@@ -17,6 +17,7 @@ const PRIMITIVES = {
     Str: 'Text', Int: '64-bit integer (Int[2], Int[8], Int[16] print in that base)', Bul: 'Boolean (true / false)',
     Flt: '32-bit floating point', Dbl: '64-bit floating point', Chr: 'Single character', Emp: 'No value (functions that return nothing)',
     Nil: 'The type of nil; use T | Nil for optional values',
+    Obj: 'Any value (fields are looked up when the program runs): new { name = "Ann" }',
 };
 
 // Builtin methods, mirroring Analyser::builtinMethod.

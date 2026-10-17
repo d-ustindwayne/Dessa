@@ -103,6 +103,8 @@ private:
     std::string arguments(const Expr* callExpr, const std::vector<Argument>& args,
                           const std::vector<FunctionParameterSymbol>& params, bool toExtern = false);
     std::string isCheck(const std::string& value, const SemanticType& target) const;
+    // Can `value` be stored in a place of this type? (Obj setting a class field)
+    std::string fitsCheck(const std::string& value, const SemanticType& target) const;
     std::string number(const Expr* e);   // the operand as a JS number (Int converted)
     std::string fromExtern(const std::string& code, const SemanticType& type) const;
     std::string toExtern(const std::string& code, const SemanticType& type) const;

@@ -22,7 +22,8 @@ enum class SemanticTypeKind {
     Map,        // Map[K, V]: keyType + elementType (the value type)
     UserDefined, // class, interface or enum; see `name` + `moduleId`
     Union,
-    Function
+    Function,
+    Obj         // any value: fields are looked up when the program runs
 };
 
 // What a UserDefined type refers to.

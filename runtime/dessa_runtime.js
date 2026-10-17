@@ -85,12 +85,49 @@ $.chr = (code) => {
 };
 
 // Base of every generated class.
+const NO_FIELD = Symbol("no field");
 class Obj {
     $str() { return `<${this.$class}>`; }
+    // Fields by name, for Obj (generated classes add theirs)
+    $get() { return NO_FIELD; }
+    $set() { return false; }
 }
 Obj.prototype.$class = "Object";
 Obj.prototype.$ifaces = [];
 $.Obj = Obj;
+
+// new { message = "Hi", code = 200 }
+class AnonObject extends Obj {
+    constructor(entries) { super(); this.fields = new Map(entries); }
+    $str() {
+        const parts = [];
+        for (const [name, v] of this.fields) parts.push(name + " = " + repr(v));
+        return "{" + parts.join(", ") + "}";
+    }
+    $get(name) { return this.fields.has(name) ? this.fields.get(name) : NO_FIELD; }
+    $set(name, v) { this.fields.set(name, v); return true; }
+}
+AnonObject.prototype.$class = "Obj";
+$.anon = (entries) => new AnonObject(entries);
+
+// "a Str", "an Int"
+const withArticle = (type) => ("AEIOU".includes(type[0]) ? "an " : "a ") + type;
+
+// o.name and o.name = v on an Obj
+$.objGet = (o, name) => {
+    if (o === null || o === undefined) $.fail(`Nil reference: tried to read '${name}' of nil`);
+    if (!(o instanceof Obj)) $.fail(`There is no field '${name}' in ${withArticle($.typeOf(o, "Obj"))}`);
+    const v = o.$get(name);
+    if (v === NO_FIELD) $.fail(`${o.$class} has no field '${name}'`);
+    return v;
+};
+$.objSet = (o, name, v) => {
+    if (o === null || o === undefined) $.fail(`Nil reference: tried to set '${name}' of nil`);
+    if (!(o instanceof Obj)) $.fail(`There is no field '${name}' in ${withArticle($.typeOf(o, "Obj"))}`);
+    if (!o.$set(name, v)) $.fail(`${o.$class} has no field '${name}'`);
+    return v;
+};
+$.storeFail = (v, what) => $.fail(`Cannot store ${$.typeOf(v, "Obj")} in ${what}`);
 
 // enum Color { RED, GREEN = 5, BLUE }: values without a number count on (6)
 $.enumType = (name, entries) => {
@@ -175,6 +212,7 @@ const eq = (a, b) => {
         return true;
     }
     if (a instanceof DsSet && b instanceof DsSet) return eq(a.items, b.items);
+    if (a instanceof AnonObject && b instanceof AnonObject) return eq(a.fields, b.fields);
     if (a instanceof Map && b instanceof Map) {
         if (a.size !== b.size) return false;
         for (const [k, v] of a) if (!b.has(k) || !eq(b.get(k), v)) return false;
@@ -467,7 +505,14 @@ const parseFloatText = (t) => {
     if (l === "nan" || l === "-nan") return NaN;
     return undefined;
 };
+const notConvertible = (v, to) => {
+    if (v === null || v === undefined) $.fail(`Cannot convert Nil to ${to}`);
+    if (typeof v === "object" && !(v instanceof Chr) && !isEnum(v) && !(v instanceof FltValue) && !(v instanceof Radix)) {
+        $.fail(`Cannot convert ${$.typeOf(v, "Obj")} to ${to}`);
+    }
+};
 $.toInt = (v) => {
+    notConvertible(v, "Int");
     if (typeof v === "string") {
         const t = trimText(v);
         if (/^-?\d+$/.test(t)) {
@@ -486,6 +531,7 @@ $.toInt = (v) => {
     return $.trunc(Number(v));
 };
 $.toDbl = (v) => {
+    notConvertible(v, "Dbl");
     if (typeof v === "string") {
         const t = trimText(v), d = parseFloatText(t);
         if (!t || d === undefined) $.fail(`Cannot convert "${v}" to Dbl`);
@@ -504,6 +550,7 @@ $.toFlt = (v) => {
     return Math.fround($.toDbl(v));
 };
 $.toBul = (v) => {
+    notConvertible(v, "Bul");
     if (typeof v === "string") {
         const t = trimText(v).toLowerCase();
         if (t === "true" || t === "1" || t === "yes") return true;
@@ -515,6 +562,7 @@ $.toBul = (v) => {
     return Boolean(v);
 };
 $.toChr = (v) => {
+    notConvertible(v, "Chr");
     if (typeof v === "string") {
         const chars = Array.from(v);
         if (chars.length !== 1) $.fail(`Cannot convert "${v}" to Chr: it must be exactly one character`);
@@ -556,6 +604,12 @@ $.typeOf = (v, known) => {
     if (v instanceof Chr) return "Chr";
     if (v instanceof Obj) return v.$class;
     if (isEnum(v)) return v.$enum.$name;
+    if (known === "Obj") {
+        if (Array.isArray(v)) return "List";
+        if (v instanceof DsSet) return "Set";
+        if (v instanceof Map) return "Map";
+        if (typeof v === "function") return "Func";
+    }
     return known;
 };
 

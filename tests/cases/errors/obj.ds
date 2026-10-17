@@ -1,0 +1,18 @@
+// Obj: what the compiler still checks
+
+class Dog {
+    var[Str] name = "Rex";
+    func[Str] speak() { return "Woof"; }
+}
+
+var[Obj] o = new { name = "Ann", age = 30 };
+var[Str] s = o;                                // error: Cannot convert Obj to Str
+var[Int] sum = o.age + 1;                      // error: Operator '+' cannot be used with Obj and Int
+o.speak();                                     // error: Cannot call 'speak' on an Obj
+var[Obj] twice = new { a = 1, a = 2 };         // error: Duplicate field 'a'
+var[Obj] pet = new Dog();
+if (pet is Dog) print(pet.speak());
+var[Str] fine = Str(o.name);
+var[Int] age = Int(o.age);
+var[Obj] none = nil;
+print(none == nil, o ?? 5);

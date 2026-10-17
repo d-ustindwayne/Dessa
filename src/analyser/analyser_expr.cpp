@@ -155,6 +155,7 @@ SemanticType Analyser::analyseConvert(const ConvertExpr* expression) {
         error(expression, "Value of type " + value.toString() + " may be nil; check it with != nil or use ?? before " + name + "(...)");
         return target;
     }
+    if (value.is(SemanticTypeKind::Obj)) return target;   // checked when the program runs
 
     using K = SemanticTypeKind;
     const bool isStr = value.is(K::Str), isBul = value.is(K::Bul), isChr = value.is(K::Chr);
@@ -196,6 +197,7 @@ SemanticType Analyser::analyseIs(const IsExpr* expression) {
     if (const Symbol* s = expression->value->kind == ExprKind::Identifier ? symbolOf(expression->value.get()) : nullptr) {
         if (s->kind == SymbolKind::Variable || s->kind == SymbolKind::Parameter || s->kind == SymbolKind::Constant) value = s->type;
     }
+    if (value.is(SemanticTypeKind::Obj)) return boolean;   // an Obj may hold anything
     const SemanticType base = withoutNil(value);
     std::vector<SemanticType> members = base.kind == SemanticTypeKind::Union ? base.unionMembers : std::vector<SemanticType>{base};
 
@@ -444,7 +446,7 @@ SemanticType Analyser::analyseBinary(const BinaryExpr* expression) {
         const SemanticType& other = isNilLiteral(expression->left.get()) ? right : left;
         // Use the declared type: `x` may currently be narrowed.
         const Expr* otherExpr = unwrapGrouping(isNilLiteral(expression->left.get()) ? expression->right.get() : expression->left.get());
-        bool nullable = other.containsNil() || other.isUnknown();
+        bool nullable = other.containsNil() || other.isUnknown() || other.is(SemanticTypeKind::Obj);
         if (otherExpr && otherExpr->kind == ExprKind::Identifier) {
             if (const Symbol* s = symbolOf(otherExpr)) nullable = nullable || s->type.containsNil();
         }
@@ -456,6 +458,7 @@ SemanticType Analyser::analyseBinary(const BinaryExpr* expression) {
     }
 
     if (op == TokenType::QUESTION_QUESTION) {
+        if (left.is(SemanticTypeKind::Obj)) return left;   // an Obj may hold nil
         if (!left.containsNil() && !left.isUnknown()) {
             warning(expression, "Left side of '?" "?' can never be nil (" + left.toString() + ")");
             return left;
@@ -494,6 +497,7 @@ SemanticType Analyser::binaryResult(const Token& op, const SemanticType& left, c
     };
     auto nilHint = [&]() -> std::string {
         if (left.containsNil() || right.containsNil()) return " (a value may be nil; check it with != nil or use ?? first)";
+        if (left.is(SemanticTypeKind::Obj) || right.is(SemanticTypeKind::Obj)) return " (convert the Obj first, e.g. Int(x), or check its type with is)";
         return "";
     };
 
@@ -690,6 +694,10 @@ SemanticType Analyser::analyseAssignmentTarget(const Expr* target) {
             error(target, "Cannot assign through '?.'; check for nil first");
         }
         SemanticType type = analyseExpression(target);
+        if (dynamicMembers.count(target)) {
+            exprTypes[target] = type;
+            return type;   // o.message = ... on an Obj
+        }
         const Symbol* symbol = memberOf(target);
         if (!symbol) return SemanticType::unknown();
         if (symbol->kind != SymbolKind::Field) {
@@ -1118,6 +1126,12 @@ SemanticType Analyser::analyseMember(const MemberExpr* expression) {
         optionalChains.insert(expression);
     }
 
+    // o.message on an Obj: whatever the value has, found when the program runs
+    if (objectType.is(SemanticTypeKind::Obj)) {
+        dynamicMembers.insert(expression);
+        return objectType;
+    }
+
     SemanticType memberType = SemanticType::unknown();
     if (isSuper && expression->name.type == TokenType::INIT) {
         const ClassInfo* parent = findClass(objectType);
@@ -1399,6 +1413,10 @@ SemanticType Analyser::analyseCall(const CallExpr* expression) {
         SemanticType memberType = analyseExpression(callee);
         const Symbol* symbol = memberOf(callee);
         if (!symbol) {
+            if (dynamicMembers.count(callee)) {
+                error(expression, "Cannot call '" + member->name.lexeme + "' on an Obj; check its type with is first, e.g. if (x is Dog) x." +
+                                      member->name.lexeme + "()");
+            }
             for (const auto& a : expression->args) analyseExpression(a.value.get());
             return SemanticType::unknown();
         }
@@ -1411,6 +1429,12 @@ SemanticType Analyser::analyseCall(const CallExpr* expression) {
             if (!symbol->cppName.empty() && mutating.count(member->name.lexeme) && receiver->kind == ExprKind::Identifier) {
                 const std::string& name = static_cast<const IdentifierExpr*>(receiver)->name.lexeme;
                 const Symbol* target = resolveSymbol(name);
+                // A narrowed Obj gives a copy of its value
+                if (target && target->type.is(SemanticTypeKind::Obj)) {
+                    const SemanticType* now = typeOf(receiver);
+                    error(expression, "'" + name + "' is an Obj: its value can't be changed in place; copy it first, e.g. var[" +
+                                          (now ? now->toString() : std::string("Int<>")) + "] items = " + name + ";");
+                }
                 if (target && !target->isGlobal && target->kind != SymbolKind::Field) {
                     for (Scope* s = currentScope; s && !s->resolveLocal(name); s = s->parent()) {
                         if (s->kind() == ScopeKind::Lambda) {
@@ -1485,6 +1509,16 @@ SemanticType Analyser::analyseCall(const CallExpr* expression) {
 }
 
 SemanticType Analyser::analyseNew(const NewExpr* expression) {
+    if (expression->isAnonymous) {
+        std::unordered_set<std::string> seen;
+        for (const auto& field : expression->args) {
+            SemanticType t = analyseExpression(field.value.get());
+            if (t.isVoidLike()) error(field.value.get(), "Field '" + field.name.value_or("") + "' has no value (Emp)");
+            if (field.name && !seen.insert(*field.name).second) error(field.value.get(), "Duplicate field '" + *field.name + "'");
+            expectedTypes[field.value.get()] = simple(SemanticTypeKind::Obj);
+        }
+        return simple(SemanticTypeKind::Obj);
+    }
     const std::string& className = expression->className.lexeme;
     const Symbol* symbol = resolveSymbol(className);
     if (!symbol || symbol->kind != SymbolKind::Class) {

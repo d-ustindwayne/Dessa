@@ -231,6 +231,11 @@ private:
     void endScope();
     bool declareSymbol(Symbol symbol, int line, int column);
     Symbol* resolveSymbol(const std::string& name);
+    // o.name on an Obj: looked up when the program runs
+    std::unordered_set<const Expr*> dynamicMembers;
+public:
+    bool isDynamicMember(const Expr* e) const { return dynamicMembers.count(e) != 0; }
+private:
     void narrowAfterAssignment(const std::string& name, const SemanticType& valueType);
 
     // ---- Types ----

@@ -60,6 +60,7 @@ SemanticType SemanticType::unionOf(std::vector<SemanticType> members) {
     std::vector<SemanticType> unique;
     for (const auto& member : flat) {
         if (member.isUnknown()) return SemanticType::unknown();
+        if (member.kind == SemanticTypeKind::Obj) return member;   // Obj holds everything already
         bool found = std::any_of(unique.begin(), unique.end(), [&](const SemanticType& e) { return e == member; });
         if (!found) unique.push_back(member);
     }
@@ -131,6 +132,7 @@ std::string SemanticType::toString() const {
         case SemanticTypeKind::Flt: return "Flt";
         case SemanticTypeKind::Dbl: return "Dbl";
         case SemanticTypeKind::Chr: return "Chr";
+        case SemanticTypeKind::Obj: return "Obj";
         case SemanticTypeKind::List: return (elementType ? elementType->toString() : "Unknown") + "<>";
         case SemanticTypeKind::Set: return (elementType ? elementType->toString() : "Unknown") + "{}";
         case SemanticTypeKind::Map:

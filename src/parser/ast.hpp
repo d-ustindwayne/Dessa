@@ -260,9 +260,12 @@ struct LambdaExpr : Expr {
 };
 
 // new ClassB(), new Setting()
+// new Dog("Rex") -- or an anonymous object, new { message = "Hi", code = 200 },
+// whose fields are the named args
 struct NewExpr : Expr {
     Token className;
     std::vector<Argument> args;
+    bool isAnonymous = false;
     NewExpr(Token className, std::vector<Argument> args)
         : Expr(ExprKind::New), className(std::move(className)), args(std::move(args)) {}
 };

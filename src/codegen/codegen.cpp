@@ -115,6 +115,7 @@ std::string Codegen::cppType(const SemanticType& type) const {
         case SemanticTypeKind::Flt: return "dessa::Flt";
         case SemanticTypeKind::Dbl: return "dessa::Dbl";
         case SemanticTypeKind::Chr: return "dessa::Chr";
+        case SemanticTypeKind::Obj: return "dessa::Obj";
         case SemanticTypeKind::List:
             return "dessa::List<" + cppType(type.elementType ? *type.elementType : kUnknown) + ">";
         case SemanticTypeKind::Set:
@@ -258,6 +259,7 @@ void Codegen::emitTypeDeclarations() {
             line("    }");
             line("    return \"" + decl->name + "(\" + std::to_string(static_cast<dessa::Int>(value)) + \")\";");
             line("}");
+            line("inline dessa::Str ds_enum_type(" + name + ") { return \"" + decl->name + "\"; }");
         }
         line("} // namespace " + ns(module->id));
         line("");
@@ -334,6 +336,8 @@ void Codegen::emitClass(const ClassInfo& info) {
     }
     line("dessa::Str ds_class() const override { return \"" + info.name + "\"; }");
     line("dessa::Str ds_str() const override;");
+    line("bool ds_get(const dessa::Str& ds_name, dessa::Obj& ds_out) const override;");
+    line("bool ds_set(const dessa::Str& ds_name, const dessa::Obj& ds_value) override;");
     indentLevel--;
     line("};");
     line("} // namespace " + ns(info.moduleId));
@@ -494,6 +498,24 @@ void Codegen::emitClassBodies(const ClassInfo& info) {
             withToStr = k;
         }
     }
+    // Fields by name, for Obj: o.name
+    const std::string parent = info.parent ? typeName(*info.parent) : "dessa::Object";
+    line("bool " + name + "::ds_get(const dessa::Str& ds_name, dessa::Obj& ds_out) const {");
+    for (const auto& f : info.fieldOrder) {
+        line("    if (ds_name == \"" + f + "\") { ds_out = dessa::Obj(this->" + mangle(f) + "); return true; }");
+    }
+    line("    return " + parent + "::ds_get(ds_name, ds_out);");
+    line("}");
+    line("bool " + name + "::ds_set(const dessa::Str& ds_name, const dessa::Obj& ds_value) {");
+    for (const auto& f : info.fieldOrder) {
+        const SemanticType& type = info.fields.at(f).type;
+        line("    if (ds_name == \"" + f + "\") { this->" + mangle(f) + " = dessa::obj_to<" + cppType(type) + ">(ds_value, \"field '" + f +
+             "' (" + type.toString() + ")\"); return true; }");
+    }
+    line("    return " + parent + "::ds_set(ds_name, ds_value);");
+    line("}");
+    line("");
+
     line("dessa::Str " + name + "::ds_str() const {");
     if (withToStr) {
         line("    return const_cast<" + name + "*>(this)->" + mangle("toStr") + "();");
@@ -925,6 +947,7 @@ std::string Codegen::exprAs(const Expr* e, const SemanticType& target) {
     // `c ? (x[Int]) := x : (x[Int]) := -x` have the same C++ type.
     if (inner->kind == ExprKind::Lambda) {
         if (withoutNil(target).kind == SemanticTypeKind::Function) return cppType(target) + "(" + expr(e) + ")";
+        if (target.is(SemanticTypeKind::Obj)) return "dessa::Obj(" + cppType(typeOf(e)) + "(" + expr(e) + "))";
         return expr(e);
     }
     const SemanticType& source = typeOf(e);
@@ -972,6 +995,14 @@ std::string Codegen::expr(const Expr* e) {
         case ExprKind::Lambda: return lambda(static_cast<const LambdaExpr*>(e));
         case ExprKind::New: {
             const auto* n = static_cast<const NewExpr*>(e);
+            if (n->isAnonymous) {
+                std::string fields;
+                for (const auto& f : n->args) {
+                    fields += (fields.empty() ? "" : ", ") + std::string("{\"") + f.name.value_or("") + "\", " +
+                              exprAs(f.value.get(), SemanticType::simple(SemanticTypeKind::Obj)) + "}";
+                }
+                return "dessa::anon({" + fields + "})";
+            }
             const SemanticType& type = typeOf(e);
             const ClassInfo* info = analyser.findClass(type);
             std::vector<FunctionParameterSymbol> params;
@@ -1084,6 +1115,9 @@ std::string Codegen::identifier(const IdentifierExpr* e) {
     const SemanticType& declared = symbol->type;
     if (now.isUnknown() || now == declared) return name;
     if (isOptionalValue(declared) && now == withoutNil(declared)) return "dessa::unwrap(" + name + ")";
+    if (declared.is(SemanticTypeKind::Obj)) {
+        return "dessa::obj_as<" + (now.isReference() ? typeName(now) : cppType(now)) + ">(" + name + ")";
+    }
     if (now.isReference()) {
         if (withoutNil(declared) == now) return name; // Ref<T> already; nil was ruled out
         return "dessa::as<" + typeName(now) + ">(" + name + ")";
@@ -1169,6 +1203,11 @@ std::string Codegen::assign(const AssignExpr* e) {
     }
 
     if (e->op.type == TokenType::EQUAL) {
+        if (target->kind == ExprKind::Member && analyser.isDynamicMember(target)) {
+            const auto* m = static_cast<const MemberExpr*>(target);
+            return "dessa::obj_set(" + expr(m->object.get()) + ", \"" + m->name.lexeme + "\", " +
+                   exprAs(e->value.get(), SemanticType::simple(SemanticTypeKind::Obj)) + ")";
+        }
         if (target->kind == ExprKind::Index) {
             const auto* index = static_cast<const IndexExpr*>(target);
             const SemanticType& mapType = typeOf(index->object.get());
@@ -1434,6 +1473,7 @@ std::string Codegen::member(const MemberExpr* e) {
     const Symbol* symbol = analyser.memberOf(e);
     const Expr* object = e->object.get();
     const SemanticType& objectType = typeOf(object);
+    if (analyser.isDynamicMember(e)) return "dessa::obj_get(" + expr(object) + ", \"" + e->name.lexeme + "\")";
 
     if (!symbol) return "/* unknown member */";
 

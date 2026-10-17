@@ -50,6 +50,7 @@ doesn't run.
 | `T \| Nil` | a T or nothing | `Str \| Nil` |
 | `Func[R, [P1, P2]]` | a function taking P1, P2 and returning R | `Func[Int, [Int]]` |
 | `Int[16]` | an Int that prints in base 16 (also 2, 8) | prints `0xff` |
+| `Obj` | any value (see [Obj](#obj)) | `new { name = "Ann" }` |
 
 Nested types work as you would expect: `Int<><>` is a list of lists,
 `(Int | Str)<>` is a list holding Ints and Strs, `Map[Str, Int<>]` maps text
@@ -305,6 +306,32 @@ switch (c) {
     default := { }
 }
 ```
+
+## Obj
+
+An `Obj` holds any value: a number, text, a list, an instance of a class, or
+an object made on the spot with `new { ... }` (like C#'s anonymous objects).
+
+```dessa
+var[Obj] reply = new { message = "Message to the world!", code = 200 };
+print(reply.message);                   // Message to the world!
+print(reply);                           // {message = "Message to the world!", code = 200}
+reply.code = 404;                       // fields can be changed and added
+var[Int] code = Int(reply.code);        // a field is an Obj too: convert it to use it
+
+var[Obj<>] things = [1, "two", 3.5, new Dog("Rex")];
+for (var[Obj] t in things) print(typeof(t), t);
+
+var[Obj] pet = new Dog("Rex");
+if (pet is Dog) print(pet.speak());     // after `is`, it is a Dog
+```
+
+Fields are looked up when the program runs, so a missing field is an error
+then (`Obj has no field 'missing'`). The compiler still checks the rest: an
+`Obj` can't be used as a `Str` or in `+` without converting it (`Str(x)`,
+`Int(x)`) or checking it with `is`, and methods are only called after `is`.
+`==` compares values, and two anonymous objects are equal when their fields
+are. An `Obj` may hold `nil`.
 
 ## Errors
 

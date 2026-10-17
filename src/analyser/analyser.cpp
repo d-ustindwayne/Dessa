@@ -33,6 +33,7 @@ void Analyser::analyse(const Program& prog) {
     optionalChains.clear(); argOrders.clear(); declTypes.clear(); functionSymbols.clear(); catchTypes.clear(); isTargets.clear();
     recursiveLambdas.clear(); recursiveRefs.clear(); definingLambda = nullptr; enumCases.clear();
     importRecords.clear();
+    dynamicMembers.clear();
 
     builtinScope = std::make_unique<Scope>(ScopeKind::Module);
     for (const auto& fn : globalBuiltins()) {
@@ -159,7 +160,7 @@ void Analyser::report(DiagnosticSeverity severity, int line, int column, const s
     if (program && currentModule >= 0 && static_cast<size_t>(currentModule) < program->modules.size()) {
         file = program->modules[currentModule]->displayPath;
     }
-    diagnostics.push_back({severity, message, file, line, column});
+    diagnostics.push_back({severity, message, file, line, column, "", 0});
 }
 
 void Analyser::error(const Expr* at, const std::string& message) {
@@ -982,6 +983,7 @@ SemanticType Analyser::resolveType(const TypeNode& typeNode, int line, int colum
 }
 
 SemanticType Analyser::resolveTypeName(const std::string& name, int line, int column) {
+    if (name == "Obj") return SemanticType::simple(SemanticTypeKind::Obj);
     if (name == "Str") return SemanticType::simple(SemanticTypeKind::Str);
     if (name == "Int") return SemanticType::simple(SemanticTypeKind::Int);
     if (name == "Bul") return SemanticType::simple(SemanticTypeKind::Bul);
@@ -1032,6 +1034,7 @@ bool Analyser::implementsInterface(const SemanticType& klassType, const Semantic
 bool Analyser::isAssignable(const SemanticType& target, const SemanticType& value) const {
     if (target.isUnknown() || value.isUnknown()) return true;
     if (target == value) return true;
+    if (target.is(SemanticTypeKind::Obj)) return !value.isVoidLike();   // anything goes into an Obj
 
     if (value.kind == SemanticTypeKind::Union) {
         return std::all_of(value.unionMembers.begin(), value.unionMembers.end(), [&](const SemanticType& member) {
@@ -1084,6 +1087,7 @@ bool Analyser::isAssignable(const SemanticType& target, const SemanticType& valu
 
 bool Analyser::isComparable(const SemanticType& left, const SemanticType& right) const {
     if (left.isUnknown() || right.isUnknown()) return true;
+    if (left.is(SemanticTypeKind::Obj) || right.is(SemanticTypeKind::Obj)) return true;
     if (left.isNumeric() && right.isNumeric()) return true;
     return isAssignable(left, right) || isAssignable(right, left);
 }
@@ -1203,7 +1207,8 @@ bool Analyser::checkConversion(const SemanticType& target, const Expr* value, co
         if (ok) return true;
     }
 
-    error(value, "Cannot convert " + valueType.toString() + " to " + target.toString() + " " + context);
+    error(value, "Cannot convert " + valueType.toString() + " to " + target.toString() + " " + context +
+                     (valueType.is(SemanticTypeKind::Obj) ? "; convert it, e.g. " + target.toString() + "(x), or check its type with is first" : ""));
     return false;
 }
 

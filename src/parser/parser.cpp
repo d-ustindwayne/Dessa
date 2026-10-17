@@ -1170,6 +1170,23 @@ ExprPtr Parser::primary() {
 
     if (match({TokenType::NEW})) {
         Token newToken = previous();
+        // new { message = "Hi", code = 200 }: an anonymous object (an Obj)
+        if (check(TokenType::L_BRACE)) {
+            Token brace = advance();
+            std::vector<Argument> fields;
+            while (!check(TokenType::R_BRACE) && !isAtEnd()) {
+                Argument field;
+                field.name = consume(TokenType::IDENTIFIER, "Expect a field name, e.g. new { message = \"Hi\" }.").lexeme;
+                if (!match({TokenType::EQUAL, TokenType::COLON})) throw error(peek(), "Expect '=' after the field name.");
+                field.value = expression();
+                fields.push_back(std::move(field));
+                if (!match({TokenType::COMMA})) break;
+            }
+            consume(TokenType::R_BRACE, "Expect '}' after the fields of the object.");
+            auto anonymous = std::make_unique<NewExpr>(brace, std::move(fields));
+            anonymous->isAnonymous = true;
+            return place(std::move(anonymous), newToken);
+        }
         Token className = consume(TokenType::IDENTIFIER, "Expect class name after 'new'.");
         consume(TokenType::L_PAREN, "Expect '(' after class name.");
         std::vector<Argument> args = parseArguments();
