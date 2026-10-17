@@ -138,6 +138,11 @@ static bool cObject(const fs::path& source, std::string& object, std::string& er
     const bool isC = source.extension() == ".c";
     std::uint64_t key = fnv1a(compiler(), fnv1a(readFile(source)));
     if (!isC) key = fnv1a(readFile(fs::path(runtime) / "dessa_runtime.hpp"), key);
+    // Files it may include from its own folder (ashwee.cpp includes ashwee_gtk.inc)
+    if (!isC) for (const auto& entry : fs::directory_iterator(source.parent_path(), ec)) {
+        const auto ext = entry.path().extension();
+        if (ext == ".inc" || ext == ".hpp" || ext == ".h") key = fnv1a(readFile(entry.path()), key);
+    }
     fs::path dir = workDir() / "objects";
     fs::create_directories(dir, ec);
     fs::path target = dir / (source.stem().string() + "_" + hex(key) + ".o");
@@ -145,7 +150,9 @@ static bool cObject(const fs::path& source, std::string& object, std::string& er
     if (fs::exists(target, ec)) return true;
     std::cerr << "dessa: compiling " << source.filename().string() << " (only needed once)...\n";
     fs::path log = dir / (source.stem().string() + ".log");
-    std::string command = quoteArg(compiler()) + (isC ? " -x c -O2" : " -std=c++20 -O2") +
+    // .mm: Objective-C++ (macOS windows for ashwee)
+    const bool isObjC = source.extension() == ".mm";
+    std::string command = quoteArg(compiler()) + (isC ? " -x c -O2" : isObjC ? " -x objective-c++ -fobjc-arc -std=c++20 -O2" : " -std=c++20 -O2") +
                           " -I" + quoteArg(runtime) + " -I" + quoteArg(include) +
                           " -c " + quoteArg(source.string()) + " -o " + quoteArg(object) +
                           " > " + quoteArg(log.string()) + " 2>&1";

@@ -1,9 +1,13 @@
 // Native part of $(<ashwee>); the API (Window, Button, run, ...) is in ashwee.dm
+// Windows: Win32 (ashwee.cpp). Linux: GTK 3, loaded when needed (ashwee_gtk.inc). macOS: AppKit (ashwee_mac.mm).
 header ashwee.hpp
 source ashwee.cpp
+source.macos ashwee_mac.mm
 link.windows -lgdi32
 link.windows -luser32
 link.windows -lcomctl32
+link.linux -ldl
+link.macos -framework Cocoa
 
 func[Int] _window(title[Str], width[Int], height[Int])
 func[Int] _control(window[Int], kind[Str], text[Str], x[Int], y[Int], width[Int], height[Int])

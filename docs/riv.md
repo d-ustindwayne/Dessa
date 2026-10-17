@@ -59,7 +59,7 @@ that folder with `riv install`.
 | `phl` | read and write PHL documents |
 | `sql` | SQLite and SQL Server (or any ODBC database) |
 | `request` | HTTP requests (`get`, `post`, ...) through curl |
-| `ashwee` | desktop windows and controls (Windows) |
+| `ashwee` | desktop windows and controls (Windows, Linux, macOS) |
 | `numbers` | Roman numerals, numbers in words, spreadsheet columns, digits, fractions, temperatures |
 | `codes` | check digits (UPC, ISBN, USPS, credit cards) and simple ciphers |
 | `colors` | terminal colours and colour codes |

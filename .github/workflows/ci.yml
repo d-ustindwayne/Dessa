@@ -42,6 +42,10 @@ jobs:
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-python
 
+      - name: Install GTK 3 and an invisible display (Linux, for ashwee)
+        if: matrix.os == 'ubuntu-24.04'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libgtk-3-0t64 xvfb xauth
+
       - name: Build dessa
         run: |
           cmake -S . -B build ${{ matrix.os == 'windows-latest' && '-G Ninja' || '' }} -DCMAKE_BUILD_TYPE=Release
@@ -51,7 +55,7 @@ jobs:
         run: cmake --build build --target riv
 
       - name: Test
-        run: python3 tests/test.py
+        run: ${{ matrix.os == 'ubuntu-24.04' && 'xvfb-run -a ' || '' }}python3 tests/test.py
 
       - name: Test the JavaScript backend (same tests, run with Node)
         run: python3 tests/test.py --js

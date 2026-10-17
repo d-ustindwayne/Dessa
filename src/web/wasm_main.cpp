@@ -95,7 +95,7 @@ EMSCRIPTEN_KEEPALIVE const char* dessa_compile(const char* entryPath) {
 }
 
 EMSCRIPTEN_KEEPALIVE const char* dessa_version() {
-    return "0.1.0";
+    return "0.0.5";
 }
 
 } // extern "C"

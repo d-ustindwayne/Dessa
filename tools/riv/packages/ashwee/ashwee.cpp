@@ -301,29 +301,6 @@ List<Str> _nextEvent() {
 
 } // namespace dessa::ashwee
 
-#else // not Windows yet
-
-namespace dessa::ashwee {
-
-[[noreturn]] static void unsupported() {
-    fail("ashwee: windows are only supported on Windows for now");
-}
-
-Int _window(const Str&, Int, Int) { unsupported(); }
-Int _control(Int, const Str&, const Str&, Int, Int, Int, Int) { unsupported(); }
-void _show(Int) { unsupported(); }
-void _close(Int) { unsupported(); }
-void _setText(Int, const Str&) { unsupported(); }
-Str _getText(Int) { unsupported(); }
-void _setEnabled(Int, Bul) { unsupported(); }
-void _setChecked(Int, Bul) { unsupported(); }
-Bul _isChecked(Int) { unsupported(); }
-void _listAdd(Int, const Str&) { unsupported(); }
-void _listClear(Int) { unsupported(); }
-Int _listSelected(Int) { unsupported(); }
-void _message(const Str&, const Str&) { unsupported(); }
-List<Str> _nextEvent() { unsupported(); }
-
-} // namespace dessa::ashwee
-
-#endif
+#elif defined(__linux__)
+#include "ashwee_gtk.inc"
+#endif   // macOS: ashwee_mac.mm

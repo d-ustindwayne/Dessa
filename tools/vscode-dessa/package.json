@@ -1,10 +1,27 @@
 {
   "name": "dessa",
   "displayName": "Dessa",
-  "description": "Dessa language support: highlighting (also inside HTML and .dhtml pages), errors as you type, IntelliSense, go to definition, run.",
-  "version": "0.1.0",
+  "description": "Dessa language support: highlighting, errors as you type, completion, hover, go to definition and run, for .ds files, .dhtml pages and Dessa scripts inside HTML.",
+  "version": "0.0.5",
   "publisher": "d-ustindwayne",
+  "author": {
+    "name": "d-ustindwayne"
+  },
   "license": "Apache-2.0",
+  "icon": "icons/dessa-128x128.png",
+  "galleryBanner": {
+    "color": "#1e1e2e",
+    "theme": "dark"
+  },
+  "homepage": "https://github.com/d-ustindwayne/Dessa#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/d-ustindwayne/Dessa.git",
+    "directory": "tools/vscode-dessa"
+  },
+  "bugs": {
+    "url": "https://github.com/d-ustindwayne/Dessa/issues"
+  },
   "engines": {
     "vscode": "^1.75.0"
   },
@@ -12,6 +29,17 @@
     "Programming Languages",
     "Snippets",
     "Linters"
+  ],
+  "keywords": [
+    "dessa",
+    "dhtml",
+    "language",
+    "compiler",
+    "transpiler",
+    "c++",
+    "javascript",
+    "intellisense",
+    "riv"
   ],
   "main": "./extension.js",
   "activationEvents": [],

@@ -224,11 +224,19 @@ bool loadNativeLibrary(const std::string& folder, const std::string& name, std::
     lib.name = name;
     lib.baseDir = folder;
     std::string ns = "dessa::" + name;
+    // "source.linux", "link.macos", ...: lines for one system. unix = Linux and macOS.
 #ifdef _WIN32
-    const std::string thisOs = "windows";
+    const std::vector<std::string> thisOs = {"windows"};
+#elif defined(__APPLE__)
+    const std::vector<std::string> thisOs = {"macos", "unix"};
 #else
-    const std::string thisOs = "unix";
+    const std::vector<std::string> thisOs = {"linux", "unix"};
 #endif
+    auto forThisOs = [&](const std::string& key, const std::string& base) {
+        if (key == base) return true;
+        for (const auto& os : thisOs) if (key == base + "." + os) return true;
+        return false;
+    };
     std::string line;
     int number = 0;
     while (std::getline(in, line)) {
@@ -247,12 +255,12 @@ bool loadNativeLibrary(const std::string& folder, const std::string& name, std::
         };
         if (key == "header") {
             lib.header = folder + "/" + value;
-        } else if (key == "source") {
+        } else if (forThisOs(key, "source")) {
             lib.cSources.push_back(value);
-        } else if (key == "link" || key == "link." + thisOs) {
+        } else if (forThisOs(key, "link")) {
             lib.linkFlags.push_back(value);
-        } else if (key.rfind("link.", 0) == 0) {
-            // a flag for another OS
+        } else if (key.rfind("link.", 0) == 0 || key.rfind("source.", 0) == 0) {
+            // for another system
         } else if (key == "namespace") {
             ns = value;
         } else if (key == "func") {

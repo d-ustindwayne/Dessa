@@ -1,6 +1,6 @@
-# Push a tag like v0.1.0 to build prebuilt Dessa for Windows, Linux and macOS
+# Push a tag like v0.0.5 to build prebuilt Dessa for Windows, Linux and macOS
 # and attach them to a GitHub release:
-#     git tag v0.1.0 && git push origin v0.1.0
+#     git tag v0.0.5 && git push origin v0.0.5
 name: Release
 
 on:
@@ -82,8 +82,34 @@ jobs:
           name: dessa-web
           path: web/dessa.js
 
+  vscode:
+    # The VS Code extension as a .vsix, published to the Marketplace when the
+    # repository has a VSCE_PAT secret
+    name: VS Code extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Package
+        working-directory: tools/vscode-dessa
+        run: npx --yes @vscode/vsce package -o "dessa-vscode-${GITHUB_REF_NAME#v}.vsix"
+      - name: Publish
+        if: startsWith(github.ref, 'refs/tags/')
+        working-directory: tools/vscode-dessa
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [ -z "$VSCE_PAT" ]; then echo "No VSCE_PAT secret: skipping the Marketplace"; exit 0; fi
+          npx --yes @vscode/vsce publish --packagePath dessa-vscode-*.vsix
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dessa-vscode
+          path: tools/vscode-dessa/*.vsix
+
   release:
-    needs: [build, web]
+    needs: [build, web, vscode]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:

@@ -106,7 +106,7 @@ systems have.
 
 ### ashwee
 
-Desktop windows on Windows:
+Desktop windows on Windows (Win32), Linux (GTK 3) and macOS (AppKit):
 
 ```dessa
 { Window, Label, TextBox } from $(<ashwee>);
@@ -120,6 +120,9 @@ win.run();
 Controls: `label`, `button`, `input`, `password`, `textArea`, `checkBox`,
 `list`, plus `message(text)` for a message box. A full example is in
 `tools/riv/packages/ashwee/examples/todo.ds`.
+
+On Linux, programs need GTK 3 at run time (`libgtk-3-0` on Debian and Ubuntu,
+`gtk3` on Fedora and Arch). Nothing extra is needed to build them.
 
 ### numbers
 

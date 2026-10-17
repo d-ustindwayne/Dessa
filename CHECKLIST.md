@@ -37,6 +37,7 @@ to check that everything still works.
 
 **Tools**
 - riv: package manager with a simulated peer-to-peer network
+- `ashwee` on Windows, Linux (GTK 3) and macOS
 - Installers for Windows (wizard), Linux and macOS; prebuilt releases
 - VS Code: highlighting (also in HTML and `.dhtml`), errors as you type, completion, hover with links, go to definition, links on imports, parameter hints, HTML help in `.dhtml`
 - CI on Windows, Linux and macOS; releases on tags
@@ -44,5 +45,4 @@ to check that everything still works.
 ## Later
 
 - Pipe operator `|>` (the token is reserved)
-- `ashwee` on Linux and macOS
 - riv: a real network between computers, binary files, version ranges, a lock file

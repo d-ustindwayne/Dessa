@@ -1,4 +1,4 @@
-// needs: windows
+// needs: display
 // $(<ashwee>) without showing the window: controls keep and return their state
 { Window, Label, Button, TextBox, CheckBox, ListBox } from $(<ashwee>);
 

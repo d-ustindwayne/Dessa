@@ -1,5 +1,5 @@
 /***
- * $(<ashwee>) -- desktop windows and controls. Windows only for now.
+ * $(<ashwee>) -- desktop windows and controls on Windows, Linux and macOS.
  *
  *     { Window, Label, TextBox } from $(<ashwee>);
  *
@@ -12,7 +12,8 @@
  * Positions and sizes are in pixels at 100% screen scaling (x, y from the
  * top-left corner of the window); ashwee scales them for the screen.
  *
- * The native part (Win32) is ashwee.hpp / ashwee.cpp, described by ashwee.native.
+ * The native part is ashwee.hpp plus ashwee.cpp (Win32, and GTK 3 through
+ * ashwee_gtk.inc) and ashwee_mac.mm (AppKit), described by ashwee.native.
  */
 
 { _window, _control, _show, _close, _setText, _getText, _setEnabled, _setChecked, _isChecked,

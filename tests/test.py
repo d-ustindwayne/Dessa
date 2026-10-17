@@ -170,11 +170,13 @@ def run_test(path, update):
     if first and (m := EXIT_RE.match(first[0])):
         expected_exit = int(m.group(1))
 
-    # `// needs: windows` tests (ashwee) only run on Windows
-    if "// needs: windows" in path.read_text(encoding="utf-8") and os.name != "nt":
-        return ["SKIP", "Windows only"]
-    if JS and "// needs: windows" in path.read_text(encoding="utf-8"):
-        return ["SKIP", "needs native Windows"]
+    # `// needs: display` tests (ashwee windows): Windows and macOS always have
+    # one; on Linux a desktop or xvfb (DISPLAY / WAYLAND_DISPLAY). Not in JS.
+    if "// needs: display" in path.read_text(encoding="utf-8"):
+        if JS:
+            return ["SKIP", "native windows"]
+        if sys.platform.startswith("linux") and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+            return ["SKIP", "no display"]
     command = ["run", str(path.relative_to(ROOT))] + (["--target", "js"] if JS else [])
     result = run(command, stdin_file=path.with_suffix(".in"))
     if JS and "has a C++ part" in result.stderr:

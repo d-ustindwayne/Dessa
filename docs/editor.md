@@ -37,7 +37,10 @@ PHL is a separate project with its own VS Code extension.
 
 ## Installing
 
-The installers can install the extension. To do it by hand, copy (or link)
+Search for "Dessa" in VS Code's Extensions view (publisher d-ustindwayne), or
+download the `.vsix` from a GitHub release and use "Install from VSIX...".
+
+The installers can also install the extension. To do it by hand, copy (or link)
 `tools/vscode-dessa` to your extensions folder as `dessa-0.1.0`, then restart
 VS Code:
 
