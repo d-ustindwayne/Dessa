@@ -1,0 +1,55 @@
+// $("dsds"): data structures holding any value
+{ Stack, Queue, Deque, LinkedList, PriorityQueue, SearchTree, Graph, compareValues } from $("dsds");
+
+var[Stack] s = new Stack();
+s.push(1); s.push("two"); s.push(3.5);
+print(s, s.size(), s.peek());
+print(s.pop(), s.pop(), s.size(), s.isEmpty());
+
+var[Queue] q = new Queue();
+for (var[Int] i = 0; i < 100; i++) q.enqueue(i);
+var[Int] total = 0;
+while (q.size() > 3) total += Int(q.dequeue());
+print(q, total, q.peek());
+
+var[Deque] d = new Deque();
+d.pushBack("b"); d.pushFront("a"); d.pushBack("c");
+print(d, d.popFront(), d.popBack(), d.peekFront(), d.peekBack());
+
+var[LinkedList] l = new LinkedList();
+l.addLast(2); l.addLast(3); l.addFirst(1); l.insertAt(3, 4); l.insertAt(1, 1.5);
+print(l, l.size(), l.get(1), l.indexOf(3), l.includes(9));
+print(l.removeAt(1), l.removeFirst(), l.removeLast(), l);
+l.set(0, "x");
+l.reverse();
+print(l);
+
+var[PriorityQueue] pq = new PriorityQueue();
+for (var[Int] n in [5, 1, 4, 2, 3]) pq.push(n);
+print(pq, pq.peek(), pq.pop(), pq.pop(), pq.size());
+var[PriorityQueue] largest = new PriorityQueue((a[Obj], b[Obj]) := compareValues(b, a));
+for (var[Str] w in ["pear", "apple", "fig"]) largest.push(w);
+print(largest.pop(), largest.pop());
+
+var[SearchTree] t = new SearchTree();
+for (var[Int] n in [50, 30, 70, 20, 40, 60, 80, 30]) t.add(n);
+print(t, t.size(), t.has(40), t.has(45), t.min(), t.max());
+print(t.remove(50), t.remove(20), t.remove(99), t);
+
+var[Graph] g = new Graph();
+g.addEdge("Cebu", "Manila", 570);
+g.addEdge("Manila", "Baguio", 250);
+g.addEdge("Cebu", "Davao", 400);
+g.addEdge("Davao", "Manila", 980);
+g.addNode("Island");
+print(g.nodes(), g.neighbors("Manila"));
+print(g.bfs("Cebu"), g.dfs("Cebu"));
+print(g.shortestPath("Cebu", "Baguio"), g.distance("Cebu", "Baguio"));
+print(g.hasPath("Cebu", "Island"), g.shortestPath("Cebu", "Island"));
+
+var[Graph] oneWay = new Graph(true);
+oneWay.addEdge("a", "b");
+print(oneWay.hasPath("a", "b"), oneWay.hasPath("b", "a"));
+
+try { new Stack().pop(); } catch (e[Str]) { print(e); }
+try { l.get(10); } catch (e[Str]) { print(e); }

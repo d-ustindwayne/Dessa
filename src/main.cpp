@@ -233,7 +233,7 @@ std::string readTextFile(const fs::path& p) {
 // JavaScript for an analysed program, or "" with the reason in `errors`.
 std::string javascriptFor(Compilation& c, std::string& errors) {
     // Libraries with a C++ part can't run in JavaScript (except the core ones, which have JS twins)
-    static const std::set<std::string> withJs = {"math", "os", "sys", "time"};
+    static const std::set<std::string> withJs = {"math", "os", "sys", "time", "random", "dcrypto"};
     for (const auto& lib : c.analyser.builtinLibrariesUsed()) {
         if (!withJs.count(lib)) {
             errors += "dessa: the library '" + lib + "' has a C++ part, so it can't run in JavaScript or a browser "

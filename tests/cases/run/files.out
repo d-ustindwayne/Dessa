@@ -1,0 +1,14 @@
+<File dessa_files_test.txt (w) closed> false
+<File dessa_files_test.txt (r)>
+first line
+false
+["sécond line 😀", "third"]
+Nil true
+31 true
+4
+File 'dessa_files_test2.txt' is open for writing, not reading
+File 'dessa_files_test.txt' is open for reading, not writing (open it with "w" or "a")
+Cannot read file 'no/such/folder/file.txt'
+open: mode must be "r" (read), "w" (write) or "a" (add to the end), got "x"
+The file is closed
+true true

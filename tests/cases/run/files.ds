@@ -1,0 +1,38 @@
+// $("os"): File, open a file and read or write it a piece at a time
+{ open, File, readFile, deleteFile } from $("os");
+
+var[Str] path = "dessa_files_test.txt";
+var[File] out = open(path, "w");
+out.writeLine("first line");
+out.write("sécond ");
+out.writeLine("line 😀");
+out.close();
+print(out, out.isOpen());
+
+var[File] more = open(path, "a");
+more.writeLine("third");
+more.close();
+
+var[File] f = open(path);
+print(f);
+print(f.readLine());
+print(f.atEnd());
+print(f.lines());
+print(f.readLine(), f.atEnd());
+f.close();
+
+var[File] g = open(path);
+print(g.read().length(), g.read() == "");
+g.close();
+print(readFile(path).split("\n").length());
+
+var[File] w = open("dessa_files_test2.txt", "w");
+try { w.readLine(); } catch (e[Str]) { print(e); }
+w.close();
+var[File] r = open(path);
+try { r.write("x"); } catch (e[Str]) { print(e); }
+r.close();
+try { open("no/such/folder/file.txt"); } catch (e[Str]) { print(e); }
+try { open(path, "x"); } catch (e[Str]) { print(e); }
+try { f.readLine(); } catch (e[Str]) { print(e); }
+print(deleteFile(path), deleteFile("dessa_files_test2.txt"));

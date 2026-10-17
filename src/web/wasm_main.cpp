@@ -71,7 +71,7 @@ EMSCRIPTEN_KEEPALIVE const char* dessa_compile(const char* entryPath) {
         }
     }
     if (ok) {
-        static const std::set<std::string> withJs = {"math", "os", "sys", "time"};
+        static const std::set<std::string> withJs = {"math", "os", "sys", "time", "random", "dcrypto"};
         for (const auto& lib : analyser.builtinLibrariesUsed()) {
             if (!withJs.count(lib)) {
                 diagnostics.push_back({DiagnosticSeverity::Error,

@@ -1,0 +1,65 @@
+/***
+ * $("random") -- random numbers, choices and shuffles.
+ *
+ *     { randInt, pick, shuffle, seed } from $("random");
+ *
+ *     print(randInt(1, 6));                     // a dice roll
+ *     print(pick(["rock", "paper", "scissors"]));
+ *     print(shuffle([1, 2, 3, 4, 5]));
+ *     seed(42);                                 // the same numbers every run
+ *
+ * Declaration file: documentation only. Bodies are `...`; the real
+ * implementation is C++ in random.hpp (and JavaScript in the runtime). Both
+ * use the same generator, so seed(n) gives the same numbers in both.
+ * Not for passwords or keys: use $("dcrypto") for those.
+ */
+
+// Makes the numbers that follow the same every time the program runs.
+func[Emp] seed(value[Int]) {
+    ...
+}
+
+// A decimal from 0 (included) to 1 (not included).
+func[Dbl] rand() {
+    ...
+}
+
+// A whole number from low to high, both included: randInt(1, 6).
+func[Int] randInt(low[Int], high[Int]) {
+    ...
+}
+
+// A decimal from low to high.
+func[Dbl] randDbl(low[Dbl], high[Dbl]) {
+    ...
+}
+
+// true with probability p: chance(0.25) is true about one time in four.
+func[Bul] chance(p[Dbl]) {
+    ...
+}
+
+// One item of a list (any list), e.g. pick(["a", "b"]).
+func[Obj] pick(items[Obj<>]) {
+    ...
+}
+
+// A shuffled copy of a list (any list).
+func[Obj<>] shuffle(items[Obj<>]) {
+    ...
+}
+
+// `count` different items of a list, in random order.
+func[Obj<>] sample(items[Obj<>], count[Int]) {
+    ...
+}
+
+// Random letters and digits: randStr(8) gives something like "q3ZkP0aB".
+func[Str] randStr(length[Int]) {
+    ...
+}
+
+// A random UUID (version 4), e.g. "3f2b8c1e-9a4d-4c2b-8f1e-2d3c4b5a6e7f".
+func[Str] uuid() {
+    ...
+}

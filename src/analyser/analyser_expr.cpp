@@ -1300,6 +1300,11 @@ ArgumentOrder Analyser::checkArguments(const std::string& name,
             if (!actual.isNumeric() && !actual.isUnknown()) {
                 error(valueExpr, "'" + parameters[index].name + "' of '" + name + "' must be numeric, got " + actual.toString());
             }
+        } else if (expected.isUnknown() && expected.name == "List") {
+            // any list (random's pick / shuffle)
+            if (!actual.is(SemanticTypeKind::List) && !actual.isUnknown()) {
+                error(valueExpr, "'" + parameters[index].name + "' of '" + name + "' must be a list, got " + actual.toString());
+            }
         } else if (!expected.isUnknown()) {
             checkConversion(expected, valueExpr, actual, "for parameter '" + parameters[index].name + "' of '" + name + "'");
         }
@@ -1324,6 +1329,12 @@ ArgumentOrder Analyser::checkArguments(const std::string& name,
 
 SemanticType Analyser::callResult(const Symbol& callee, const std::vector<SemanticType>& argTypes) const {
     const SemanticType& ret = callee.returnType;
+    // Same: the type of the first argument; Elem: the type of its elements
+    if (ret.isUnknown() && (ret.name == "Same" || ret.name == "Elem")) {
+        if (argTypes.empty()) return SemanticType::unknown();
+        if (ret.name == "Same") return argTypes.front();
+        return argTypes.front().elementType ? *argTypes.front().elementType : SemanticType::unknown();
+    }
     if (ret.isUnknown() && ret.name == "T") {
         SemanticType result = SemanticType::unknown();
         for (size_t i = 0; i < callee.parameters.size() && i < argTypes.size(); ++i) {

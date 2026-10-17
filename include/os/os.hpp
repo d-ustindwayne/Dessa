@@ -3,6 +3,8 @@
 #include "dessa_runtime.hpp"
 #include <filesystem>
 #include <fstream>
+#include <memory>
+#include <vector>
 
 namespace dessa::os {
 
@@ -81,6 +83,79 @@ inline Opt<Str> getEnv(const Str& name) {
 inline Int run(const Str& command) {
     std::cout.flush();
     return std::system(command.c_str());
+}
+
+// ---- helpers for class File in os.dm: open files by number ----
+
+struct OpenFile {
+    std::fstream stream;
+    Str path;
+    Str mode;   // "r", "w" or "a"
+};
+
+inline std::vector<std::unique_ptr<OpenFile>>& openFiles() {
+    static std::vector<std::unique_ptr<OpenFile>> files;
+    return files;
+}
+
+inline OpenFile& openFile(Int handle, bool reading) {
+    auto& files = openFiles();
+    if (handle < 0 || handle >= static_cast<Int>(files.size()) || !files[static_cast<size_t>(handle)]) fail("The file is closed");
+    OpenFile& f = *files[static_cast<size_t>(handle)];
+    if (reading && f.mode != "r") fail("File '" + f.path + "' is open for writing, not reading");
+    if (!reading && f.mode == "r") fail("File '" + f.path + "' is open for reading, not writing (open it with \"w\" or \"a\")");
+    return f;
+}
+
+inline Int _fileOpen(const Str& path, const Str& mode) {
+    std::ios::openmode how;
+    if (mode == "r") how = std::ios::in | std::ios::binary;
+    else if (mode == "w") how = std::ios::out | std::ios::trunc | std::ios::binary;
+    else if (mode == "a") how = std::ios::out | std::ios::app | std::ios::binary;
+    else fail("open: mode must be \"r\" (read), \"w\" (write) or \"a\" (add to the end), got \"" + mode + "\"");
+    auto f = std::make_unique<OpenFile>();
+    f->stream.open(path, how);
+    if (!f->stream.is_open()) fail(mode == "r" ? "Cannot read file '" + path + "'" : "Cannot write file '" + path + "'");
+    f->path = path;
+    f->mode = mode;
+    openFiles().push_back(std::move(f));
+    return static_cast<Int>(openFiles().size()) - 1;
+}
+
+inline Opt<Str> _fileReadLine(Int handle) {
+    OpenFile& f = openFile(handle, true);
+    Str line;
+    if (!std::getline(f.stream, line)) return std::nullopt;
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    return line;
+}
+
+inline Str _fileRead(Int handle) {
+    OpenFile& f = openFile(handle, true);
+    std::ostringstream rest;
+    rest << f.stream.rdbuf();
+    f.stream.clear();
+    return rest.str();
+}
+
+inline Bul _fileAtEnd(Int handle) {
+    OpenFile& f = openFile(handle, true);
+    return f.stream.peek() == std::char_traits<char>::eof();
+}
+
+inline void _fileWrite(Int handle, const Str& text) {
+    OpenFile& f = openFile(handle, false);
+    f.stream << text;
+    if (!f.stream) fail("Cannot write file '" + f.path + "'");
+}
+
+inline void _fileFlush(Int handle) {
+    openFile(handle, false).stream.flush();
+}
+
+inline void _fileClose(Int handle) {
+    auto& files = openFiles();
+    if (handle >= 0 && handle < static_cast<Int>(files.size())) files[static_cast<size_t>(handle)].reset();
 }
 
 } // namespace dessa::os

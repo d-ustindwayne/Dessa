@@ -1049,6 +1049,97 @@ $.sys = {
     platform: () => isNode ? (process.platform === "win32" ? "windows" : process.platform === "darwin" ? "macos" : process.platform) : "web",
 };
 
+// random: xoshiro256** seeded with splitmix64, like random.hpp (the same
+// numbers for the same seed)
+{
+    const M = (1n << 64n) - 1n;
+    const rotl = (x, k) => ((x << k) | (x >> (64n - k))) & M;
+    let s = [0n, 0n, 0n, 0n];
+    const seedWith = (value) => {
+        let x = BigInt.asUintN(64, value);
+        s = s.map(() => {
+            x = (x + 0x9E3779B97F4A7C15n) & M;
+            let z = x;
+            z = ((z ^ (z >> 30n)) * 0xBF58476D1CE4E5B9n) & M;
+            z = ((z ^ (z >> 27n)) * 0x94D049BB133111EBn) & M;
+            return z ^ (z >> 31n);
+        });
+    };
+    const next = () => {
+        const result = (rotl((s[1] * 5n) & M, 7n) * 9n) & M;
+        const t = (s[1] << 17n) & M;
+        s[2] ^= s[0];
+        s[3] ^= s[1];
+        s[1] ^= s[2];
+        s[0] ^= s[3];
+        s[2] ^= t;
+        s[3] = rotl(s[3], 45n);
+        return result;
+    };
+    {
+        const words = new Uint32Array(2);
+        if (globalThis.crypto && globalThis.crypto.getRandomValues) globalThis.crypto.getRandomValues(words);
+        else { words[0] = Math.random() * 2 ** 32; words[1] = Math.random() * 2 ** 32; }
+        seedWith((BigInt(words[0]) << 32n) ^ BigInt(words[1]) ^ BigInt(Date.now()));
+    }
+    const rand = () => Number(next() >> 11n) * 2 ** -53;
+    const randInt = (low, high) => {
+        if (low > high) $.fail(`randInt: low (${low}) is bigger than high (${high})`);
+        const range = (BigInt.asUintN(64, high) - BigInt.asUintN(64, low) + 1n) & M;
+        if (range === 0n) return BigInt.asIntN(64, next());
+        const limit = (M / range) * range;
+        let r;
+        do r = next(); while (r >= limit);
+        return BigInt.asIntN(64, BigInt.asUintN(64, low) + r % range);
+    };
+    const shuffle = (items) => {
+        const out = items.slice();
+        for (let i = out.length - 1; i > 0; i--) {
+            const j = Number(randInt(0n, BigInt(i)));
+            [out[i], out[j]] = [out[j], out[i]];
+        }
+        return out;
+    };
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    $.random = {
+        seed: (value) => seedWith(value),
+        rand,
+        randInt,
+        randDbl: (low, high) => low + rand() * (high - low),
+        chance: (p) => rand() < p,
+        pick: (items) => {
+            if (items.length === 0) $.fail("pick: the list is empty");
+            return items[Number(randInt(0n, BigInt(items.length - 1)))];
+        },
+        shuffle,
+        sample: (items, count) => {
+            if (count < 0n || count > BigInt(items.length)) $.fail(`sample: can't take ${count} items from a list of ${items.length}`);
+            return shuffle(items).slice(0, Number(count));
+        },
+        randStr: (length) => {
+            if (length < 0n) $.fail("randStr: length can't be negative");
+            let out = "";
+            for (let i = 0n; i < length; i++) out += alphabet[Number(randInt(0n, 61n))];
+            return out;
+        },
+        uuid: () => {
+            const bytes = [];
+            for (let half = 0; half < 2; half++) {
+                const r = next();
+                for (let i = 0n; i < 8n; i++) bytes.push(Number((r >> (56n - 8n * i)) & 0xFFn));
+            }
+            bytes[6] = (bytes[6] & 0x0F) | 0x40;
+            bytes[8] = (bytes[8] & 0x3F) | 0x80;
+            let out = "";
+            bytes.forEach((b, i) => {
+                if (i === 4 || i === 6 || i === 8 || i === 10) out += "-";
+                out += b.toString(16).padStart(2, "0");
+            });
+            return out;
+        },
+    };
+}
+
 // os: files only exist in Node; in a browser these are errors
 const nodeOnly = (what) => () => $.fail(`${what} isn't available in the browser`);
 if (nodeRequire) {
@@ -1067,10 +1158,53 @@ if (nodeRequire) {
         getEnv: (n) => process.env[n] ?? null,
         run: (c) => { const r = cp.spawnSync(c, { shell: true, stdio: "inherit" }); return BigInt(r.status ?? 1); },
     };
+    // helpers for class File in os.dm (like os.hpp): a file being read is
+    // read whole when it's opened
+    const files = [];
+    const openFile = (h, reading) => {
+        const f = files[Number(h)];
+        if (!f) $.fail("The file is closed");
+        if (reading && f.mode !== "r") $.fail(`File '${f.path}' is open for writing, not reading`);
+        if (!reading && f.mode === "r") $.fail(`File '${f.path}' is open for reading, not writing (open it with "w" or "a")`);
+        return f;
+    };
+    Object.assign($.os, {
+        _fileOpen: (p, mode) => {
+            if (mode !== "r" && mode !== "w" && mode !== "a") $.fail(`open: mode must be "r" (read), "w" (write) or "a" (add to the end), got "${mode}"`);
+            const f = { path: p, mode, text: "", at: 0, fd: null };
+            try {
+                if (mode === "r") f.text = fs.readFileSync(p, "utf8");
+                else f.fd = fs.openSync(p, mode);
+            } catch (e) {
+                $.fail(mode === "r" ? `Cannot read file '${p}'` : `Cannot write file '${p}'`);
+            }
+            files.push(f);
+            return BigInt(files.length - 1);
+        },
+        _fileReadLine: (h) => {
+            const f = openFile(h, true);
+            if (f.at >= f.text.length) return null;
+            let end = f.text.indexOf("\n", f.at);
+            if (end < 0) end = f.text.length;
+            let line = f.text.slice(f.at, end);
+            f.at = end + 1;
+            if (line.endsWith("\r")) line = line.slice(0, -1);
+            return line;
+        },
+        _fileRead: (h) => { const f = openFile(h, true); const rest = f.text.slice(f.at); f.at = f.text.length; return rest; },
+        _fileAtEnd: (h) => { const f = openFile(h, true); return f.at >= f.text.length; },
+        _fileWrite: (h, text) => { const f = openFile(h, false); try { fs.writeSync(f.fd, text); } catch (e) { $.fail(`Cannot write file '${f.path}'`); } },
+        _fileFlush: (h) => { openFile(h, false); },
+        _fileClose: (h) => {
+            const f = files[Number(h)];
+            if (f && f.fd !== null) fs.closeSync(f.fd);
+            files[Number(h)] = undefined;
+        },
+    });
 } else {
     $.os = {};
-    for (const f of ["readFile", "writeFile", "appendFile", "fileExists", "isDir", "deleteAll", "deleteFile", "listDir", "makeDir", "cwd", "run"]) {
-        $.os[f] = nodeOnly(`${f}()`);
+    for (const f of ["readFile", "writeFile", "appendFile", "fileExists", "isDir", "deleteAll", "deleteFile", "listDir", "makeDir", "cwd", "run", "_fileOpen"]) {
+        $.os[f] = nodeOnly(`${f === "_fileOpen" ? "open" : f}()`);
     }
     $.os.getEnv = () => null;
 }
