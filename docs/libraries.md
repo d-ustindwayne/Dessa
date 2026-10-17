@@ -56,6 +56,94 @@ Files and the system: `readFile`, `writeFile`, `appendFile`, `fileExists`,
 `isDir`, `listDir`, `makeDir`, `deleteFile`, `deleteAll`, `cwd`, `getEnv`,
 `run(command)`.
 
+`open(path, mode)` gives a `File` to read or write a piece at a time. The mode
+is `"r"` to read (the default), `"w"` to write (replacing what was there) or
+`"a"` to add to the end:
+
+```dessa
+{ open, File } from $("os");
+var[File] log = open("log.txt", "a");
+log.writeLine("started");
+log.close();
+
+var[File] f = open("log.txt");
+while (!f.atEnd()) print(f.readLine());
+f.close();
+```
+
+A `File` has `readLine()` (nil at the end), `lines()`, `read()` (the rest),
+`atEnd()`, `write(text)`, `writeLine(text)`, `flush()`, `isOpen()` and
+`close()`.
+
+### random
+
+```dessa
+{ randInt, pick, shuffle, seed } from $("random");
+print(randInt(1, 6));                          // 1 to 6
+print(pick(["rock", "paper", "scissors"]));
+print(shuffle([1, 2, 3, 4, 5]));
+seed(42);                                      // the same numbers every run
+```
+
+Also `rand()` (0 to 1), `randDbl(low, high)`, `chance(p)`, `sample(list,
+count)`, `randStr(length)` (letters and digits) and `uuid()`. `pick`,
+`shuffle` and `sample` take any list. A seed gives the same numbers in a native
+program and in JavaScript. For passwords and keys use `dcrypto` instead.
+
+### dsds
+
+Data structures, written in Dessa. They hold `Obj` values, so anything fits:
+
+```dessa
+{ Stack, Queue, PriorityQueue, Graph } from $("dsds");
+var[Stack] undo = new Stack();
+undo.push("typed a");
+print(undo.pop());
+
+var[PriorityQueue] tasks = new PriorityQueue();      // smallest first
+tasks.push(5); tasks.push(1);
+print(tasks.pop());                                  // 1
+
+var[Graph] roads = new Graph();
+roads.addEdge("Cebu", "Manila", 570);
+roads.addEdge("Manila", "Baguio", 250);
+print(roads.shortestPath("Cebu", "Baguio"), roads.distance("Cebu", "Baguio"));
+```
+
+| Class | Main methods |
+|---|---|
+| `Stack` | `push`, `pop`, `peek` |
+| `Queue` | `enqueue`, `dequeue`, `peek` |
+| `Deque` | `pushFront`, `pushBack`, `popFront`, `popBack`, `peekFront`, `peekBack` |
+| `LinkedList` | `addFirst`, `addLast`, `get`, `set`, `insertAt`, `removeAt`, `removeFirst`, `removeLast`, `indexOf`, `includes`, `reverse` |
+| `PriorityQueue` | `push`, `pop`, `peek` (give it a compare function for another order) |
+| `SearchTree` | `add`, `has`, `remove`, `min`, `max`, `toList` (sorted) |
+| `Graph` | `addNode`, `addEdge`, `neighbors`, `bfs`, `dfs`, `hasPath`, `shortestPath`, `distance` (`new Graph(true)` for one-way edges) |
+
+All of them have `size()`, `isEmpty()`, `clear()` and `toList()`.
+`compareValues(a, b)` is the order they use: numbers by value, text
+alphabetically.
+
+### dcrypto
+
+```dessa
+{ sha256, hashPassword, verifyPassword, encrypt, decrypt } from $("dcrypto");
+print(sha256("hello"));
+
+var[Str] stored = hashPassword("s3cret");       // save this, not the password
+print(verifyPassword("s3cret", stored));        // true
+
+var[Str] secret = encrypt("meet at noon", "my password");
+print(decrypt(secret, "my password"));
+```
+
+Hashes: `md5`, `sha1`, `sha256`, `sha512` (as hex) and `hmac(key, text)`
+(HMAC-SHA256). `hashPassword` uses PBKDF2-SHA256 with a random salt.
+`encrypt` uses AES-256-GCM with a key made from the password, so a wrong
+password or changed text makes `decrypt` fail. Also `toBase64`, `fromBase64`,
+`toHex`, `fromHex` and `token(bytes)` (secure random hex). md5 and sha1 are
+for checksums only.
+
 ### sys
 
 `args()` (the program's arguments), `exit(code)`, `platform()`.

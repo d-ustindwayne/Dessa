@@ -173,6 +173,26 @@ const std::vector<BuiltinLibrary>& builtinLibraries() {
             },
             {},
         },
+        {
+            "dcrypto", "dcrypto/dcrypto.hpp",
+            {
+                {"md5",            {{"text", "Str"}}, "Str", "dessa::dcrypto::md5"},
+                {"sha1",           {{"text", "Str"}}, "Str", "dessa::dcrypto::sha1"},
+                {"sha256",         {{"text", "Str"}}, "Str", "dessa::dcrypto::sha256"},
+                {"sha512",         {{"text", "Str"}}, "Str", "dessa::dcrypto::sha512"},
+                {"hmac",           {{"key", "Str"}, {"text", "Str"}}, "Str", "dessa::dcrypto::hmac"},
+                {"hashPassword",   {{"password", "Str"}}, "Str", "dessa::dcrypto::hashPassword"},
+                {"verifyPassword", {{"password", "Str"}, {"stored", "Str"}}, "Bul", "dessa::dcrypto::verifyPassword"},
+                {"encrypt",        {{"text", "Str"}, {"password", "Str"}}, "Str", "dessa::dcrypto::encrypt"},
+                {"decrypt",        {{"data", "Str"}, {"password", "Str"}}, "Str", "dessa::dcrypto::decrypt"},
+                {"toBase64",       {{"text", "Str"}}, "Str", "dessa::dcrypto::toBase64"},
+                {"fromBase64",     {{"text", "Str"}}, "Str", "dessa::dcrypto::fromBase64"},
+                {"toHex",          {{"text", "Str"}}, "Str", "dessa::dcrypto::toHex"},
+                {"fromHex",        {{"text", "Str"}}, "Str", "dessa::dcrypto::fromHex"},
+                {"token",          {{"bytes", "Int"}}, "Str", "dessa::dcrypto::token"},
+            },
+            {},
+        },
     };
     return libraries;
 }

@@ -13,7 +13,8 @@ to check that everything still works.
 - Native and JavaScript output are identical on every test
 
 **Language**
-- Types: `Str Int Bul Flt Dbl Chr Emp Nil`, lists `T<>`, sets `T{}`, `Map[K, V]`, unions, `Int[2|8|16]`
+- Types: `Str Int Bul Flt Dbl Chr Emp Nil Obj`, lists `T<>`, sets `T{}`, `Map[K, V]`, unions, `Int[2|8|16]`
+- `Obj` holds any value; anonymous objects `new { name = "Ann" }` with fields looked up at run time
 - Variables, constants, functions (hoisted), named arguments, defaults, variadic parameters, spread
 - Lambdas (also recursive), `Func[R, [P]]`, capture by value
 - Classes, inheritance, interfaces, enums, `is` with narrowing
@@ -22,10 +23,10 @@ to check that everything still works.
 - Checked `Int` arithmetic, Euclidean `%`, `Int / Int` gives a decimal
 - Unicode text counted in characters; template strings; multi-line strings
 - `typeof`, `zip`, sort with a comparator
-- Modules, `.dm` module files, riv packages
+- Modules (`$("math")`, `$("my.file")`), `.dm` module files, riv packages; unused imports shown faded
 
 **Libraries**
-- Core: `math` (with statistics and `Big`), `os`, `sys`, `time` (with `DateTime`, time zones, 11 languages), `webutils`
+- Core: `math` (with statistics and `Big`), `os` (with `File`), `sys`, `time` (with `DateTime`, time zones, 11 languages), `random`, `dsds` (data structures), `dcrypto` (hashes, passwords, encryption), `webutils`
 - Packages: `json`, `phl`, `sql`, `request`, `ashwee`, `numbers`, `codes`, `colors`, `textfx`
 - Packages can include C++ through a `.native` file
 

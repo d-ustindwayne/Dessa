@@ -15,7 +15,10 @@ If none of them has it, the error says `riv add <name>`.
 | Library | What it does |
 |---|---|
 | `math` | numbers, rounding, trigonometry, random, `Big` (whole numbers of any size, in `math.dm`) |
-| `os` | files, folders, environment, shell commands |
+| `os` | files, folders, environment, shell commands, `File` (open files, in `os.dm`) |
+| `random` | `randInt`, `pick`, `shuffle`, `sample`, `uuid`, ... (seedable, same numbers in C++ and JS) |
+| `dsds` | data structures written in Dessa: `Stack`, `Queue`, `Deque`, `LinkedList`, `PriorityQueue`, `SearchTree`, `Graph` |
+| `dcrypto` | hashes (md5, sha1, sha256, sha512, hmac), passwords, AES-256-GCM `encrypt` / `decrypt`, base64, hex |
 | `sys` | command-line arguments, exit, platform |
 | `time` | clocks, sleep, `DateTime` (time zones, formatting, month / day names in 11+ languages; in `time.dm`) |
 | `webutils` | the web page: `document`, elements, events, `alert` / `prompt` / `confirm`, `log`, timers, `fetchText` (browser only; JavaScript part `webutils.js`, see `web/README.md`) |

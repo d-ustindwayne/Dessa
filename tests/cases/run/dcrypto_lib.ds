@@ -1,0 +1,31 @@
+// $("dcrypto"): hashes, passwords and encryption (C++ and JavaScript agree)
+$("dcrypto");
+
+print(md5("abc"), md5(""));
+print(sha1("abc"));
+print(sha256("abc"));
+print(sha256("héllo 😀"));
+print(sha512("abc"));
+print(hmac("key", "The quick brown fox jumps over the lazy dog"));
+print(sha256("a".repeat(1000)) == sha256("a".repeat(999) + "a"));
+
+var[Str] stored = hashPassword("s3cret");
+print(stored.startsWith("pbkdf2-sha256$100000$"), verifyPassword("s3cret", stored), verifyPassword("S3cret", stored));
+print(stored != hashPassword("s3cret"));   // a new salt each time
+
+// made earlier (by either runtime): must still decrypt
+print(decrypt("AVMWArSHprX4VuFBs7IiICX21RHDg7C1t096HM5VSM1IuAyBegrkNlkYQt9Vu3EglCfbAp/b6+dbAwnmCbLRLH0=", "my password"));
+var[Str] long = "Dessa ".repeat(40) + "ñ";
+var[Str] secret = encrypt(long, "pw");
+print(decrypt(secret, "pw") == long, secret != encrypt(long, "pw"), decrypt(encrypt("", "pw"), "pw").length());
+
+try { decrypt(secret, "wrong"); } catch (e[Str]) { print(e); }
+var[Str] changed = secret.substr(0, 60) + (secret<60> == 'A' ? "B" : "A") + secret.substr(61, secret.length() - 61);
+try { decrypt(changed, "pw"); } catch (e[Str]) { print(e); }
+try { decrypt("not base64!", "pw"); } catch (e[Str]) { print(e); }
+try { verifyPassword("x", "plain"); } catch (e[Str]) { print(e); }
+
+print(toBase64("Hello, Dessa!"), fromBase64("SGVsbG8sIERlc3NhIQ=="), toBase64("ab"), toBase64("a"));
+print(toHex("Hi ñ"), fromHex("4869"), fromHex("C3B1"));
+try { fromHex("abc"); } catch (e[Str]) { print(e); }
+print(token(16).length(), token(16) != token(16));

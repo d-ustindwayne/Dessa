@@ -1,0 +1,91 @@
+/***
+ * $("dcrypto") -- hashes, passwords, and encrypting text with a password.
+ *
+ *     { sha256, hashPassword, verifyPassword, encrypt, decrypt } from $("dcrypto");
+ *
+ *     print(sha256("hello"));                         // 2cf24dba5fb0a30e...
+ *
+ *     var[Str] stored = hashPassword("s3cret");       // save this, never the password
+ *     print(verifyPassword("s3cret", stored));        // true
+ *
+ *     var[Str] secret = encrypt("meet at noon", "my password");
+ *     print(decrypt(secret, "my password"));          // meet at noon
+ *
+ * Declaration file: documentation only. Bodies are `...`; the real
+ * implementation is C++ in dcrypto.hpp (and JavaScript in the runtime). Text
+ * made by encrypt in one can be decrypted by the other.
+ *
+ * encrypt uses AES-256-GCM with a key made from the password (PBKDF2-SHA256,
+ * 100000 rounds, a new random salt each time), so the same text encrypts
+ * differently every time and any change to it is noticed by decrypt.
+ */
+
+// MD5 of the text as hex. Only for checksums: not safe for passwords.
+func[Str] md5(text[Str]) {
+    ...
+}
+
+// SHA-1 of the text as hex. Only for checksums: not safe for passwords.
+func[Str] sha1(text[Str]) {
+    ...
+}
+
+// SHA-256 of the text as hex (64 digits).
+func[Str] sha256(text[Str]) {
+    ...
+}
+
+// SHA-512 of the text as hex (128 digits).
+func[Str] sha512(text[Str]) {
+    ...
+}
+
+// HMAC-SHA256: a signature of the text with a secret key, as hex.
+func[Str] hmac(key[Str], text[Str]) {
+    ...
+}
+
+// A slow, salted hash of a password to store instead of the password.
+func[Str] hashPassword(password[Str]) {
+    ...
+}
+
+// Does the password match a hash made by hashPassword?
+func[Bul] verifyPassword(password[Str], stored[Str]) {
+    ...
+}
+
+// The text encrypted with a password, as base64 text.
+func[Str] encrypt(text[Str], password[Str]) {
+    ...
+}
+
+// The text back from encrypt. Error if the password is wrong or the data was changed.
+func[Str] decrypt(data[Str], password[Str]) {
+    ...
+}
+
+// The text's bytes as base64.
+func[Str] toBase64(text[Str]) {
+    ...
+}
+
+// Text from base64.
+func[Str] fromBase64(text[Str]) {
+    ...
+}
+
+// The text's bytes as hex: toHex("Hi") is "4869".
+func[Str] toHex(text[Str]) {
+    ...
+}
+
+// Text from hex: fromHex("4869") is "Hi".
+func[Str] fromHex(text[Str]) {
+    ...
+}
+
+// Secure random hex text for keys and session ids: token(16) gives 32 digits.
+func[Str] token(bytes[Int]) {
+    ...
+}
