@@ -53,6 +53,9 @@ struct Symbol {
     // Builtin: the C++ expression the call/constant maps to
     std::string cppName;
     bool variadic = false;
+    // Imported: which import brought it in (Analyser::importRecords), so
+    // unused imports can be found
+    int importId = -1;
 };
 
 enum class ScopeKind {

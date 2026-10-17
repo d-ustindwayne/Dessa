@@ -1,8 +1,8 @@
 /***
- * $(<time>) -- the Dessa part: dates and times in any time zone, with month
+ * $("time") -- the Dessa part: dates and times in any time zone, with month
  * and day names in several languages.
  *
- *     { DateTime, dateNow, dateOf, parseDate } from $(<time>);
+ *     { DateTime, dateNow, dateOf, parseDate } from $("time");
  *
  *     var[DateTime] now = dateNow();                         // here, now
  *     print(now.format("EEEE, d MMMM yyyy HH:mm"));          // Saturday, 17 October 2026 15:45
@@ -24,7 +24,7 @@
  * The native helpers are in time.hpp (declared in time.ds).
  */
 
-{ _epochMillis, _epochOf, _civil, _offsetMinutes, _isZone } from $(<time>);
+{ _epochMillis, _epochOf, _civil, _offsetMinutes, _isZone } from $("time");
 
 // ============================================================
 // Languages
@@ -45,14 +45,14 @@ class Locale {
          longDate[Str]="d MMMM yyyy") {
         if (months.length() != 12 || shortMonths.length() != 12) throw $"Locale '{code}' needs 12 month names";
         if (days.length() != 7 || shortDays.length() != 7) throw $"Locale '{code}' needs 7 day names (Monday first)";
-        self.code = code;
-        self.months = months;
-        self.shortMonths = shortMonths;
-        self.days = days;
-        self.shortDays = shortDays;
-        self.am = am;
-        self.pm = pm;
-        self.longDate = longDate;
+        this.code = code;
+        this.months = months;
+        this.shortMonths = shortMonths;
+        this.days = days;
+        this.shortDays = shortDays;
+        this.am = am;
+        this.pm = pm;
+        this.longDate = longDate;
     }
 }
 
@@ -190,82 +190,82 @@ class DateTime {
     var[Int] offset = 0;    // minutes ahead of UTC in this zone at this instant
 
     init(millis[Int]=0, zone[Str]="UTC") {
-        self.millis = millis;
-        self.zone = zone;
-        self.offset = _offsetMinutes(zone, millis);
+        this.millis = millis;
+        this.zone = zone;
+        this.offset = _offsetMinutes(zone, millis);
     }
 
-    func[Int<>] _parts() { return _civil(self.millis, self.offset); }
+    func[Int<>] _parts() { return _civil(this.millis, this.offset); }
 
     // ---- Parts, in this zone ----
-    func[Int] year() { return self._parts()<0>; }
-    func[Int] month() { return self._parts()<1>; }          // 1 to 12
-    func[Int] day() { return self._parts()<2>; }            // 1 to 31
-    func[Int] hour() { return self._parts()<3>; }           // 0 to 23
-    func[Int] minute() { return self._parts()<4>; }
-    func[Int] second() { return self._parts()<5>; }
-    func[Int] millisecond() { return self._parts()<6>; }
-    func[Int] weekday() { return self._parts()<7>; }        // 1 = Monday ... 7 = Sunday
-    func[Int] dayOfYear() { return self._parts()<8>; }      // 1 to 366
+    func[Int] year() { return this._parts()<0>; }
+    func[Int] month() { return this._parts()<1>; }          // 1 to 12
+    func[Int] day() { return this._parts()<2>; }            // 1 to 31
+    func[Int] hour() { return this._parts()<3>; }           // 0 to 23
+    func[Int] minute() { return this._parts()<4>; }
+    func[Int] second() { return this._parts()<5>; }
+    func[Int] millisecond() { return this._parts()<6>; }
+    func[Int] weekday() { return this._parts()<7>; }        // 1 = Monday ... 7 = Sunday
+    func[Int] dayOfYear() { return this._parts()<8>; }      // 1 to 366
 
-    func[Str] monthName(locale[Str]="en") { return _locale(locale).months<self.month() - 1>; }
-    func[Str] weekdayName(locale[Str]="en") { return _locale(locale).days<self.weekday() - 1>; }
+    func[Str] monthName(locale[Str]="en") { return _locale(locale).months<this.month() - 1>; }
+    func[Str] weekdayName(locale[Str]="en") { return _locale(locale).days<this.weekday() - 1>; }
 
     // ---- Moving in time ----
     // Exact amounts of time:
-    func[DateTime] addMillis(amount[Int]) { return new DateTime(self.millis + amount, self.zone); }
-    func[DateTime] addSeconds(amount[Int]) { return self.addMillis(amount * 1000); }
-    func[DateTime] addMinutes(amount[Int]) { return self.addMillis(amount * 60000); }
-    func[DateTime] addHours(amount[Int]) { return self.addMillis(amount * 3600000); }
+    func[DateTime] addMillis(amount[Int]) { return new DateTime(this.millis + amount, this.zone); }
+    func[DateTime] addSeconds(amount[Int]) { return this.addMillis(amount * 1000); }
+    func[DateTime] addMinutes(amount[Int]) { return this.addMillis(amount * 60000); }
+    func[DateTime] addHours(amount[Int]) { return this.addMillis(amount * 3600000); }
 
     // Calendar steps: the clock time stays the same, even across daylight saving changes.
     func[DateTime] addDays(amount[Int]) {
-        var[Int<>] p = self._parts();
-        return _fromWallClock(p<0>, p<1>, p<2> + amount, p<3>, p<4>, p<5>, p<6>, self.zone);
+        var[Int<>] p = this._parts();
+        return _fromWallClock(p<0>, p<1>, p<2> + amount, p<3>, p<4>, p<5>, p<6>, this.zone);
     }
-    func[DateTime] addWeeks(amount[Int]) { return self.addDays(amount * 7); }
+    func[DateTime] addWeeks(amount[Int]) { return this.addDays(amount * 7); }
 
     // 31 January + 1 month is 28 (or 29) February.
     func[DateTime] addMonths(amount[Int]) {
-        var[Int<>] p = self._parts();
+        var[Int<>] p = this._parts();
         var[Int] total = p<0> * 12 + p<1> - 1 + amount;
         var[Int] year = _floorDiv(total, 12);
         var[Int] month = total - year * 12 + 1;
         var[Int] day = p<2> > daysInMonth(year, month) ? daysInMonth(year, month) : p<2>;
-        return _fromWallClock(year, month, day, p<3>, p<4>, p<5>, p<6>, self.zone);
+        return _fromWallClock(year, month, day, p<3>, p<4>, p<5>, p<6>, this.zone);
     }
-    func[DateTime] addYears(amount[Int]) { return self.addMonths(amount * 12); }
+    func[DateTime] addYears(amount[Int]) { return this.addMonths(amount * 12); }
 
     // Midnight at the start of this day, in this zone.
     func[DateTime] startOfDay() {
-        var[Int<>] p = self._parts();
-        return _fromWallClock(p<0>, p<1>, p<2>, 0, 0, 0, 0, self.zone);
+        var[Int<>] p = this._parts();
+        return _fromWallClock(p<0>, p<1>, p<2>, 0, 0, 0, 0, this.zone);
     }
 
     // The same instant seen from another zone.
     func[DateTime] toZone(zone[Str]) {
         _checkZone(zone);
-        return new DateTime(self.millis, zone);
+        return new DateTime(this.millis, zone);
     }
-    func[DateTime] toUtc() { return new DateTime(self.millis, "UTC"); }
-    func[DateTime] toLocal() { return new DateTime(self.millis, "local"); }
+    func[DateTime] toUtc() { return new DateTime(this.millis, "UTC"); }
+    func[DateTime] toLocal() { return new DateTime(this.millis, "local"); }
 
     // ---- Comparing ----
-    func[Int] millisUntil(other[DateTime]) { return other.millis - self.millis; }
-    func[Int] secondsUntil(other[DateTime]) { return Int(self.millisUntil(other) / 1000); }
-    func[Int] minutesUntil(other[DateTime]) { return Int(self.millisUntil(other) / 60000); }
-    func[Int] hoursUntil(other[DateTime]) { return Int(self.millisUntil(other) / 3600000); }
+    func[Int] millisUntil(other[DateTime]) { return other.millis - this.millis; }
+    func[Int] secondsUntil(other[DateTime]) { return Int(this.millisUntil(other) / 1000); }
+    func[Int] minutesUntil(other[DateTime]) { return Int(this.millisUntil(other) / 60000); }
+    func[Int] hoursUntil(other[DateTime]) { return Int(this.millisUntil(other) / 3600000); }
     // Whole days (24 hours) from this to `other`; negative if `other` is earlier.
-    func[Int] daysUntil(other[DateTime]) { return Int(self.millisUntil(other) / 86400000); }
+    func[Int] daysUntil(other[DateTime]) { return Int(this.millisUntil(other) / 86400000); }
 
     // -1 if this is earlier, 1 if later, 0 if the same instant (zones don't matter).
     func[Int] compare(other[DateTime]) {
-        if (self.millis < other.millis) return -1;
-        return self.millis > other.millis ? 1 : 0;
+        if (this.millis < other.millis) return -1;
+        return this.millis > other.millis ? 1 : 0;
     }
-    func[Bul] isBefore(other[DateTime]) { return self.millis < other.millis; }
-    func[Bul] isAfter(other[DateTime]) { return self.millis > other.millis; }
-    func[Bul] equals(other[DateTime]) { return self.millis == other.millis; }
+    func[Bul] isBefore(other[DateTime]) { return this.millis < other.millis; }
+    func[Bul] isAfter(other[DateTime]) { return this.millis > other.millis; }
+    func[Bul] equals(other[DateTime]) { return this.millis == other.millis; }
 
     // ---- Text ----
     // Pattern letters (repeat them for longer forms), anything in '...' is copied:
@@ -277,7 +277,7 @@ class DateTime {
     // Names come from `locale`: "en", "es", "fr", "de", "it", "pt", "nl", "fil", "ja", "zh", "ko", ...
     func[Str] format(pattern[Str]="yyyy-MM-dd HH:mm:ss", locale[Str]="en") {
         var[Locale] names = _locale(locale);
-        var[Int<>] p = self._parts();
+        var[Int<>] p = this._parts();
         var[Chr<>] chars = pattern.chars();
         var[Str] out = "";
         var[Int] i = 0;
@@ -300,7 +300,7 @@ class DateTime {
             }
             var[Int] j = i;
             while (j < chars.length() && chars<j> == letter) j++;
-            out += self._field(letter, j - i, p, names);
+            out += this._field(letter, j - i, p, names);
             i = j;
         }
         return out;
@@ -324,23 +324,23 @@ class DateTime {
             case 's' := { return _pad(p<5>, count); }
             case 'S' := { return _pad(p<6>, 3).substr(0, count < 3 ? count : 3); }
             case 'a' := { return p<3> < 12 ? names.am : names.pm; }
-            case 'Z' := { return _offsetText(self.offset); }
-            case 'z' := { return self.zone; }
+            case 'Z' := { return _offsetText(this.offset); }
+            case 'z' := { return this.zone; }
             default := { throw $"Unknown letter '{letter}' in a date pattern (put text in quotes: 'at')"; }
         }
     }
 
     // The language's usual long date: "October 17, 2026", "17 de octubre de 2026", "2026年10月17日"
     func[Str] longDate(locale[Str]="en") {
-        return self.format(_locale(locale).longDate, locale);
+        return this.format(_locale(locale).longDate, locale);
     }
 
     // ISO 8601: 2026-10-17T15:45:00.000+08:00
     func[Str] toIso() {
-        return self.format("yyyy-MM-dd'T'HH:mm:ss.SSS") + (self.offset == 0 && self.zone == "UTC" ? "Z" : _offsetText(self.offset));
+        return this.format("yyyy-MM-dd'T'HH:mm:ss.SSS") + (this.offset == 0 && this.zone == "UTC" ? "Z" : _offsetText(this.offset));
     }
 
-    func[Str] toStr() { return self.toIso(); }
+    func[Str] toStr() { return this.toIso(); }
 }
 
 // ============================================================

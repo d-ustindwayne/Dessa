@@ -13,11 +13,6 @@ const cp = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-const KEYWORDS = [
-    'var', 'const', 'func', 'class', 'interface', 'enum', 'init', 'if', 'else', 'switch', 'case',
-    'default', 'for', 'in', 'while', 'loop', 'break', 'continue', 'return', 'try', 'catch', 'throw',
-    'from', 'as', 'new', 'self', 'super', 'true', 'false', 'nil', 'is',
-];
 const PRIMITIVES = {
     Str: 'Text', Int: '64-bit integer (Int[2], Int[8], Int[16] print in that base)', Bul: 'Boolean (true / false)',
     Flt: '32-bit floating point', Dbl: '64-bit floating point', Chr: 'Single character', Emp: 'No value (functions that return nothing)',
@@ -75,7 +70,7 @@ function compilerPath() {
     return vscode.workspace.getConfiguration('dessa').get('compilerPath') || 'dessa';
 }
 
-// Extra folders where `$(<lib>)` finds riv packages (besides riv_modules):
+// Extra folders where `$("lib")` finds riv packages (besides riv_modules):
 // the dessa.packageFolders setting, plus tools/riv/packages when the Dessa
 // repository itself is open.
 function compilerEnv() {
@@ -179,20 +174,27 @@ async function check(doc) {
         return;
     }
 
+    // Unused imports: faded (dim), a warning, or nothing (off)
+    const unusedImports = vscode.workspace.getConfiguration('dessa').get('unusedImports') || 'dim';
     const byFile = new Map();
     for (const d of items) {
+        if (d.tag === 'unused' && unusedImports === 'off') continue;
         const file = d.file ? path.resolve(cwd, d.file) : doc.fileName;
         const key = vscode.Uri.file(file).toString();
         if (!byFile.has(key)) byFile.set(key, []);
         let range;
         const target = vscode.workspace.textDocuments.find((t) => t.uri.toString() === key);
-        if (target) range = wordRange(target, d.line || 1, d.column || 1);
-        else range = new vscode.Range(Math.max(0, (d.line || 1) - 1), Math.max(0, (d.column || 1) - 1), Math.max(0, (d.line || 1) - 1), 1000);
+        const line = Math.max(0, (d.line || 1) - 1), column = Math.max(0, (d.column || 1) - 1);
+        if (d.length > 0) range = new vscode.Range(line, column, line, column + d.length);
+        else if (target) range = wordRange(target, d.line || 1, d.column || 1);
+        else range = new vscode.Range(line, column, line, 1000);
         const severity = d.severity === 'warning' ? vscode.DiagnosticSeverity.Warning
             : d.severity === 'note' ? vscode.DiagnosticSeverity.Information
+            : d.severity === 'hint' ? (unusedImports === 'warning' ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Hint)
             : vscode.DiagnosticSeverity.Error;
         const diag = new vscode.Diagnostic(range, d.message, severity);
         diag.source = 'dessa';
+        if (d.tag === 'unused') diag.tags = [vscode.DiagnosticTag.Unnecessary];
         byFile.get(key).push(diag);
     }
 
@@ -264,7 +266,7 @@ function enclosingClass(text) {
 // The declared type of `receiver` in `receiver.member`, as far as we can
 // tell from the text before the cursor and the compiler's symbol table.
 function receiverType(doc, before, receiver, data) {
-    if (receiver === 'self') return { type: enclosingClass(before), isTypeName: false };
+    if (receiver === 'this') return { type: enclosingClass(before), isTypeName: false };
     if (receiver === 'super') {
         const cls = enclosingClass(before);
         const m = cls && new RegExp(`class\\s*(?:\\[[^\\]]*\\])?\\s*${cls}\\s*\\(\\s*(\\w+)`).exec(doc.getText());
@@ -436,7 +438,7 @@ function definedInLink(location) {
     return `\n\nDefined in [${path.basename(location.uri.fsPath)}, line ${location.range.start.line + 1}](${uri.toString()})`;
 }
 
-// The import ($(<lib>) or $("module")) at a position, from the compiler's symbols
+// The import ($("lib") or $("module")) at a position, from the compiler's symbols
 function importAt(data, position) {
     for (const i of (data && data.imports) || []) {
         if (i.line - 1 === position.line && position.character >= i.column - 1 && position.character <= i.column - 1 + i.length) return i;
@@ -527,19 +529,11 @@ async function compilerCompletions(doc, position) {
         item.detail = declarationText(s, result.member ? owner : '');
         // Fields before methods; nearest scope first for plain names
         item.sortText = `${isMethod ? 1 : 0}${String(index).padStart(4, '0')}`;
-        if (isMethod && !(result.member && s.kind === 'constant')) {
-            item.insertText = new vscode.SnippetString(`${s.name}($0)`);
-            item.command = { command: 'editor.action.triggerParameterHints', title: 'Parameter hints' };
-        }
         item.dessa = { symbol: s, memberOf: result.member ? owner : '' };
         items.push(item);
     });
+    // Names only: no keywords, and no () added after functions
     if (!result.member) {
-        for (const k of KEYWORDS) {
-            const item = new vscode.CompletionItem(k, vscode.CompletionItemKind.Keyword);
-            item.sortText = `2${k}`;
-            items.push(item);
-        }
         for (const [p, desc] of Object.entries(PRIMITIVES)) {
             const item = new vscode.CompletionItem(p, vscode.CompletionItemKind.TypeParameter);
             item.detail = desc;
@@ -561,7 +555,7 @@ async function compilerHover(doc, position) {
     return text + definedInLink(await locationOf(doc, s, result.memberOf));
 }
 
-// Hovering $(<webutils>) / $("utils.strings"): what the module is, with a link to it
+// Hovering $("webutils") / $("utils.strings"): what the module is, with a link to it
 async function importHover(doc, position) {
     const imp = importAt(await symbols(doc), position);
     if (!imp) return null;
@@ -576,7 +570,7 @@ async function importHover(doc, position) {
     } catch {
         // no summary
     }
-    const what = imp.builtin ? `library <${imp.spec}>` : `module "${imp.spec}"`;
+    const what = imp.builtin ? `library "${imp.spec}"` : `module "${imp.spec}"`;
     const link = vscode.Uri.file(imp.file).toString();
     return `**${what}** ([${path.basename(imp.file)}](${link}))` + (summary ? '\n\n```text\n' + summary + '\n```' : '');
 }
@@ -696,20 +690,22 @@ function symbolKind(kind) {
 // ============================================================
 
 const completionProvider = {
-    async provideCompletionItems(doc, position) {
+    async provideCompletionItems(doc, position, token, context) {
         if (!inDessaScript(doc, position)) return undefined;   // HTML markup: leave it to the HTML extension
         const linePrefix = doc.lineAt(position).text.slice(0, position.character);
         const before = doc.getText(new vscode.Range(new vscode.Position(0, 0), position));
         const data = await symbols(doc);
 
-        // $(<math>
-        if (/\$\(\s*(?:<[\w.]+>\s*,\s*)*<[\w.]*$/.test(linePrefix)) {
+        // $("ma
+        if (/\$\(\s*(?:"[\w.]*"\s*,\s*)*"[\w.]*$/.test(linePrefix)) {
             return (data ? data.libraries : []).map((lib) => {
                 const item = new vscode.CompletionItem(lib.name, vscode.CompletionItemKind.Module);
                 item.detail = `builtin library: ${lib.members.map((m) => m.name).join(', ')}`;
                 return item;
             });
         }
+        // A quote typed anywhere else starts an ordinary string
+        if (context && context.triggerCharacter === '"') return undefined;
 
         // Ask the compiler first: exact types, locals, narrowing, imports
         const fromCompiler = await compilerCompletions(doc, position);
@@ -730,7 +726,6 @@ const completionProvider = {
             seen.add(item.label);
             items.push(item);
         };
-        for (const k of KEYWORDS) push(new vscode.CompletionItem(k, vscode.CompletionItemKind.Keyword));
         for (const [p, desc] of Object.entries(PRIMITIVES)) {
             const item = new vscode.CompletionItem(p, vscode.CompletionItemKind.TypeParameter);
             item.detail = desc;
@@ -884,7 +879,7 @@ const hoverProvider = {
     },
 };
 
-// Ctrl+click on $(<webutils>) / $("utils.strings") opens the module
+// Ctrl+click on $("webutils") / $("utils.strings") opens the module
 const documentLinkProvider = {
     async provideDocumentLinks(doc) {
         const data = await symbols(doc);
@@ -1070,7 +1065,7 @@ function activate(context) {
     context.subscriptions.push(
         diagnosticCollection,
         output,
-        vscode.languages.registerCompletionItemProvider(selector, completionProvider, '.', '<'),
+        vscode.languages.registerCompletionItemProvider(selector, completionProvider, '.', '"'),
         vscode.languages.registerHoverProvider(selector, hoverProvider),
         vscode.languages.registerSignatureHelpProvider(selector, signatureHelpProvider, '(', ','),
         vscode.languages.registerDefinitionProvider(selector, definitionProvider),

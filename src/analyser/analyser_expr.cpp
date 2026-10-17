@@ -100,7 +100,7 @@ SemanticType Analyser::analyseLiteral(const LiteralExpr* expression) {
                 (void)std::stoll(expression->token.lexeme);
             } catch (const std::exception&) {
                 error(expression, "Integer literal " + expression->token.lexeme +
-                      " is too large for Int; for bigger numbers use new Big(\"" + expression->token.lexeme + "\") from $(<math>)");
+                      " is too large for Int; for bigger numbers use new Big(\"" + expression->token.lexeme + "\") from $(\"math\")");
             }
             return simple(SemanticTypeKind::Int);
         case TokenType::BINARY_LITERAL:
@@ -233,10 +233,10 @@ SemanticType Analyser::analyseTemplateString(const TemplateStringExpr* expressio
 SemanticType Analyser::analyseIdentifier(const IdentifierExpr* expression, bool allowTypeName) {
     const std::string& name = expression->name.lexeme;
 
-    if (expression->name.type == TokenType::SELF) {
+    if (expression->name.type == TokenType::THIS) {
         const ClassInfo* klass = currentClass();
         if (!klass) {
-            error(expression, "'self' can only be used inside a class");
+            error(expression, "'this' can only be used inside a class");
             return SemanticType::unknown();
         }
         return klass->type();
@@ -280,7 +280,7 @@ SemanticType Analyser::analyseIdentifier(const IdentifierExpr* expression, bool 
             functionDepth == 0) {
             error(expression, "'" + name + "' is used before its declaration on line " + std::to_string(it->second.line));
         } else {
-            error(expression, "Undefined name '" + name + "'");
+            error(expression, "Undefined name '" + name + "'" + (name == "self" ? " (Dessa uses 'this')" : ""));
         }
         return SemanticType::unknown();
     }
@@ -357,7 +357,7 @@ std::vector<Symbol> Analyser::membersOf(const SemanticType& type) const {
     }
     // Every name builtinMethod() knows; it decides which apply to this type.
     static const char* const builtinNames[] = {
-        "length", "isEmpty", "upper", "lower", "trim", "includes", "startsWith", "endsWith", "indexOf",
+        "length", "isEmpty", "upper", "lower", "trim", "title", "plain", "caseless", "includes", "startsWith", "endsWith", "indexOf",
         "replace", "replaceAll", "split", "substr", "repeat", "chars", "isDigit", "isAlpha", "isSpace",
         "isUpper", "isLower", "code", "toChr", "toFixed", "name", "value", "add", "push", "pop", "insert",
         "remove", "removeAt", "clear", "copy", "first", "last", "get", "getOr", "set", "has", "keys",
@@ -645,7 +645,7 @@ SemanticType Analyser::analyseAssignmentTarget(const Expr* target) {
     if (target->kind == ExprKind::Identifier) {
         const auto* identifier = static_cast<const IdentifierExpr*>(target);
         const std::string& name = identifier->name.lexeme;
-        if (identifier->name.type == TokenType::SELF || identifier->name.type == TokenType::SUPER) {
+        if (identifier->name.type == TokenType::THIS || identifier->name.type == TokenType::SUPER) {
             error(target, "Cannot assign to '" + name + "'");
             return SemanticType::unknown();
         }
@@ -958,7 +958,7 @@ std::optional<Symbol> Analyser::builtinMethod(const SemanticType& receiver, cons
     if (receiver.is(K::Str)) {
         if (name == "length") return make({}, Int);
         if (name == "isEmpty") return make({}, Bul);
-        if (name == "upper" || name == "lower" || name == "trim") return make({}, Str);
+        if (name == "upper" || name == "lower" || name == "trim" || name == "title" || name == "plain" || name == "caseless") return make({}, Str);
         if (name == "includes" || name == "startsWith" || name == "endsWith") return make({{"text", Str}}, Bul);
         if (name == "indexOf") return make({{"text", Str}}, Int);
         if (name == "replace" || name == "replaceAll") return make({{"target", Str}, {"replacement", Str}}, Str);
@@ -1061,8 +1061,8 @@ SemanticType Analyser::analyseMember(const MemberExpr* expression) {
             completion.objectIsType = objSymbol && (objSymbol->kind == SymbolKind::Enum ||
                                                     objSymbol->kind == SymbolKind::Class ||
                                                     objSymbol->kind == SymbolKind::Interface);
-            completion.objectIsSelf = object->kind == ExprKind::Identifier &&
-                                      static_cast<const IdentifierExpr*>(object)->name.type == TokenType::SELF;
+            completion.objectIsThis = object->kind == ExprKind::Identifier &&
+                                      static_cast<const IdentifierExpr*>(object)->name.type == TokenType::THIS;
         }
         return SemanticType::unknown();
     }
@@ -1143,7 +1143,7 @@ SemanticType Analyser::analyseMember(const MemberExpr* expression) {
             return memberType;
         }
         if (isSuper) {
-            error(expression, "Use self." + name + " to access fields; super is only for calling parent methods");
+            error(expression, "Use this." + name + " to access fields; super is only for calling parent methods");
         }
     } else if (auto builtin = builtinMethod(objectType, name)) {
         memberSymbols[expression] = *builtin;

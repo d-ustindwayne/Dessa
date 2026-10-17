@@ -8,11 +8,11 @@ print("this top-level print must not run on import");
 class Circle {
     var[Dbl] radius = 0.0;
     init(radius[Dbl]) {
-        self.radius = radius;
+        this.radius = radius;
         created++;
     }
     func[Dbl] circumference() {
-        return TAU * self.radius;
+        return TAU * this.radius;
     }
 }
 

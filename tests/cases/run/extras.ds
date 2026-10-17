@@ -1,5 +1,5 @@
 // The helpers from the extras: math statistics and the numbers, codes, colors, textfx packages
-{ mean, median, mode, stdev, sum } from $(<math>);
+{ mean, median, mode, stdev, sum } from $("math");
 $("numbers");
 $("codes");
 { textColor, background, stripColors, rgbToHex, hexToRgb, clearLines } from $("colors");

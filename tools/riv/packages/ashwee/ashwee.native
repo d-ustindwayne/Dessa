@@ -1,4 +1,4 @@
-// Native part of $(<ashwee>); the API (Window, Button, run, ...) is in ashwee.dm
+// Native part of $("ashwee"); the API (Window, Button, run, ...) is in ashwee.dm
 // Windows: Win32 (ashwee.cpp). Linux: GTK 3, loaded when needed (ashwee_gtk.inc). macOS: AppKit (ashwee_mac.mm).
 header ashwee.hpp
 source ashwee.cpp

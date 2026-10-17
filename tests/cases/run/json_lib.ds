@@ -1,6 +1,6 @@
-// $(<json>) -- written in Dessa (tools/riv/packages/json/json.dm)
+// $("json") -- written in Dessa (tools/riv/packages/json/json.dm)
 
-$(<json>);
+$("json");
 
 var[Str] text = "{\"name\": \"Ann\", \"age\": 30, \"admin\": true, \"scores\": [90, 85.5], \"address\": {\"city\": \"Cebu\"}, \"nickname\": null, \"quote\": \"say \\\"hi\\\"\\n\", \"pi\": 3.14e0}";
 var[Json] data = parseJson(text);

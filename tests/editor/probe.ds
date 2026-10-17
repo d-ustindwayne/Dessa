@@ -1,6 +1,6 @@
 // Fixture for the editor test in tests/test.py (dessa complete / hover).
 // //PROBE is replaced by a half-typed line; the cursor goes at its end.
-{ Big } from $(<math>);
+{ Big } from $("math");
 
 enum Color { RED, GREEN }
 

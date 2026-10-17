@@ -29,7 +29,7 @@ json = 1.0.0
 Programs then import the packages like libraries:
 
 ```dessa
-$(<sql>);
+$("sql");
 { red, banner } from $("colors");
 ```
 
@@ -71,7 +71,7 @@ The installers share all of these, so `riv add <name>` works right away. See
 ## Making a package
 
 A package is a folder with a `riv.pkg` and Dessa files. The entry file
-(`lib.ds`, or `<name>.dm`) is what `$("<name>")` or `$(<name>)` loads.
+(`lib.ds`, or `<name>.dm`) is what `$("name")` loads.
 
 ```
 greet/

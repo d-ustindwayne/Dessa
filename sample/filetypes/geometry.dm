@@ -15,10 +15,10 @@ interface Shape {
 class[Shape] Circle {
     var[Dbl] radius = 1.0;
     init(radius[Dbl]) {
-        self.radius = radius;
+        this.radius = radius;
     }
     func[Dbl] area() {
-        return PI * self.radius ^ 2;
+        return PI * this.radius ^ 2;
     }
     func[Str] name() {
         return "circle";
@@ -29,14 +29,14 @@ class[Shape] Rectangle {
     var[Dbl] width = 1.0;
     var[Dbl] height = 1.0;
     init(width[Dbl], height[Dbl]=1.0) {
-        self.width = width;
-        self.height = height;
+        this.width = width;
+        this.height = height;
     }
     func[Dbl] area() {
-        return self.width * self.height;
+        return this.width * this.height;
     }
     func[Str] name() {
-        return self.width == self.height ? "square" : "rectangle";
+        return this.width == this.height ? "square" : "rectangle";
     }
 }
 

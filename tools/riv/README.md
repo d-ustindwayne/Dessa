@@ -58,8 +58,8 @@ A package with C++ code also has a `<name>.native` file (see `include/README.md`
 ## Using an installed package
 
 ```dessa
-$(<sql>);                              // riv_modules/sql/sql.dm, plus its C++ part
-{ Window, Button } from $(<ashwee>);
+$("sql");                              // riv_modules/sql/sql.dm, plus its C++ part
+{ Window, Button } from $("ashwee");
 { red, banner } from $("colors");      // riv_modules/colors/lib.ds
 ```
 

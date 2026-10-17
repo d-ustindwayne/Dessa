@@ -15,10 +15,10 @@ class[Named] Item {
     var[Map[Str, Int]] counts = {:};
     var[Func[Int, Int]] scale = (x[Int]) := x;
     init(name[Str]) {
-        self.name = name;
+        this.name = name;
     }
     func[Str] describe() {
-        return $"{self.name}: {self.counts}";
+        return $"{this.name}: {this.counts}";
     }
 }
 

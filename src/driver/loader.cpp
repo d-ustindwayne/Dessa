@@ -67,13 +67,41 @@ Program ModuleLoader::load(const std::string& entryPath, const std::string* sour
     return program;
 }
 
-std::string ModuleLoader::resolve(const std::string& importingFile, const std::string& dotted) const {
+// All Dessa file types, in order of preference. (They are compiled the same
+// way for now.)
+static const char* const extensions[] = {".ds", ".dm", ".dx", ".dz", ".dsx", ".dxx", ".dzx", ".dds", ".dss"};
+
+// Is this file part of a library (include/, riv_modules/, DESSA_PACKAGES)?
+bool ModuleLoader::inLibrary(const std::string& file) const {
+    const std::string f = fs::path(normalise(file)).generic_string();
+    if (!includeDir.empty() && f.rfind(fs::path(includeDir).generic_string(), 0) == 0) return true;
+    if (f.find("/riv_modules/") != std::string::npos) return true;
+    if (const char* extra = std::getenv("DESSA_PACKAGES"); extra && *extra) {
+#ifdef _WIN32
+        const char separator = ';';
+#else
+        const char separator = ':';
+#endif
+        std::string list = extra;
+        size_t start = 0;
+        while (start <= list.size()) {
+            size_t end = list.find(separator, start);
+            std::string entry = list.substr(start, end == std::string::npos ? std::string::npos : end - start);
+            if (!entry.empty() && f.rfind(fs::path(normalise(fs::path(entry))).generic_string(), 0) == 0) return true;
+            if (end == std::string::npos) break;
+            start = end + 1;
+        }
+    }
+    return false;
+}
+
+// A file of the project: next to the importing file, then in the project root
+// (libraries only look next to their own files)
+std::string ModuleLoader::resolveLocal(const std::string& importingFile, const std::string& dotted) const {
     std::string relative = dotted;
     std::replace(relative.begin(), relative.end(), '.', '/');
-    // All Dessa file types, in order of preference. (They are compiled the
-    // same way for now.)
-    static const char* const extensions[] = {".ds", ".dm", ".dx", ".dz", ".dsx", ".dxx", ".dzx", ".dds", ".dss"};
-    const fs::path folders[] = {fs::path(importingFile).parent_path(), fs::path(projectRoot)};
+    std::vector<fs::path> folders = {fs::path(importingFile).parent_path()};
+    if (!inLibrary(importingFile)) folders.push_back(fs::path(projectRoot));
     for (const auto& folder : folders) {
         for (const char* extension : extensions) {
             fs::path candidate = folder / (relative + extension);
@@ -81,6 +109,23 @@ std::string ModuleLoader::resolve(const std::string& importingFile, const std::s
             if (fs::is_regular_file(candidate, ec)) return normalise(candidate);
         }
     }
+    return "";
+}
+
+// A library: built in (math, os, ...), or a package with native code or a
+// .dm file (sql, json). Packages of plain Dessa files (colors) are modules.
+bool ModuleLoader::isLibrary(const std::string& dotted) const {
+    if (findBuiltinLibrary(dotted)) return true;
+    fs::path folder = libraryFolder(dotted);
+    if (folder.empty()) return false;
+    std::error_code ec;
+    if (!includeDir.empty() && folder.string().rfind(fs::path(includeDir).string(), 0) == 0) return true;
+    const std::string last = dotted.substr(dotted.rfind('.') + 1);
+    return fs::is_regular_file(folder / (last + ".native"), ec) || fs::is_regular_file(folder / (last + ".dm"), ec);
+}
+
+std::string ModuleLoader::resolve(const std::string& importingFile, const std::string& dotted) const {
+    if (std::string local = resolveLocal(importingFile, dotted); !local.empty()) return local;
 
     // Packages installed by riv live in riv_modules/<package>/ (see libraryFolder):
     //   $("colors")         -> riv_modules/colors/lib.ds (or colors.ds)
@@ -106,7 +151,7 @@ std::string ModuleLoader::resolve(const std::string& importingFile, const std::s
     return "";
 }
 
-// The folder of library `dotted` ($(<sql>), $(<ui.widgets>)), first found of:
+// The folder of library `dotted` ($("sql"), $("ui.widgets")), first found of:
 //   include/sql/                        built into Dessa
 //   <project or a parent>/riv_modules/sql/   installed with `riv add sql`
 //   <each folder in DESSA_PACKAGES>/sql/      extra package folders
@@ -189,8 +234,23 @@ int ModuleLoader::visit(Program& program, const std::string& path, const std::st
         if (!statement || statement->kind != StmtKind::Import) continue;
         const auto* import = static_cast<const ImportStmt*>(statement.get());
         for (const auto& spec : import->modules) {
+            // A file of the project wins over a library of the same name. (A
+            // library's own files import its native part: $("sql") in sql.dm.)
+            if (!spec.isBuiltin && isLibrary(spec.path)) {
+                // json.ds importing $("json") means the library, too
+                const std::string local = resolveLocal(path, spec.path);
+                const fs::path folder = libraryFolder(spec.path);
+                if (local.empty() || local == path || (!folder.empty() && fs::path(local).parent_path() == folder)) {
+                    spec.isBuiltin = true;
+                } else {
+                    diagnostics.push_back({DiagnosticSeverity::Warning,
+                                           "'" + spec.path + "' is your file " + displayPath(local) + ", which hides the " + spec.path +
+                                               " library (rename the file to use the library)",
+                                           module->displayPath, spec.line, spec.column});
+                }
+            }
             if (spec.isBuiltin) {
-                // $(<lib>): include/<lib>/ or an installed riv package. Its
+                // $("lib"): include/<lib>/ or an installed riv package. Its
                 // native part is in the compiler (include/) or described by
                 // <lib>.native (package); its Dessa part is <lib>.dm.
                 const std::string last = spec.path.substr(spec.path.rfind('.') + 1);
@@ -201,7 +261,7 @@ int ModuleLoader::visit(Program& program, const std::string& path, const std::st
                 if (isPackage && fs::is_regular_file(folder / (last + ".native"), ec)) {
                     std::string error;
                     if (!loadNativeLibrary(folder.generic_string(), last, error)) {
-                        addError(module->displayPath, spec.line, spec.column, "Library <" + spec.path + ">: " + error);
+                        addError(module->displayPath, spec.line, spec.column, "Library '" + spec.path + "': " + error);
                     }
                 }
                 fs::path dm = folder / (last + ".dm");
@@ -224,7 +284,7 @@ int ModuleLoader::visit(Program& program, const std::string& path, const std::st
                 std::string rel = spec.path;
                 std::replace(rel.begin(), rel.end(), '.', '/');
                 addError(module->displayPath, spec.line, spec.column,
-                         "Cannot find module '" + spec.path + "' (looked for " + rel + ".ds / .dm / .dx ... next to this file and in the project root)" +
+                         "Cannot find module or library '" + spec.path + "' (looked for " + rel + ".ds / .dm / .dx ... next to this file and in the project root, then for a library; for a riv package: riv add " + spec.path + ")" +
                          (spec.path.find('/') != std::string::npos || spec.path.find(".ds") != std::string::npos
                               ? "; write module paths with dots, e.g. \"utils.strings\"" : ""));
                 continue;

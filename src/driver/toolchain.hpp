@@ -15,7 +15,7 @@ std::string includeDir(const char* argv0);
 
 // Compiles generated C++ into `outputExe`. On failure `error` holds the
 // compiler's output.
-// `libraries`: the builtin libraries the program imports ($(<sql>) needs
+// `libraries`: the builtin libraries the program imports ($("sql") needs
 // extra link flags and a C file compiled in).
 bool compile(const std::string& cpp, const std::string& outputExe, const char* argv0, std::string& error, bool fast,
              const std::vector<std::string>& libraries = {});

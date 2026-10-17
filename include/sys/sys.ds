@@ -1,7 +1,7 @@
 /***
- * $(<sys>) -- the running program.
+ * $("sys") -- the running program.
  *
- *     $(<sys>);
+ *     $("sys");
  *
  * Declaration file: documentation only. Bodies are `...`; the real
  * implementation is C++ in runtime/lib/sys.hpp.

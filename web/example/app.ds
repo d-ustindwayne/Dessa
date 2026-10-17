@@ -1,6 +1,6 @@
 // A to-do list running in the browser: index.html loads ../dessa.js, which
 // compiles this file to JavaScript and runs it.
-{ document, Element, Event, log } from $(<webutils>);
+{ document, Element, Event, log } from $("webutils");
 { plural } from $("text");          // text.ds, next to this file
 
 // The element with this id; an error if the page doesn't have it.

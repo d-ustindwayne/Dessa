@@ -258,7 +258,7 @@ EDITOR_FIXTURE = ROOT / "tests" / "editor" / "probe.ds"
 COMPLETION_CASES = [
     ("    rex.", {"age", "fetch", "name", "speak"}, {"length"}),          # own + inherited members
     ("    print(names.le", {"length", "push", "join"}, {"upper"}),         # Str<> methods
-    ("    if (b.", {"add", "sci", "digits"}, {"_of", "_make"}),             # Big from $(<math>), no _helpers
+    ("    if (b.", {"add", "sci", "digits"}, {"_of", "_make"}),             # Big from $("math"), no _helpers
     ("    var[Color] c = Color.", {"RED", "GREEN"}, set()),                 # enum values
     ("    lo", {"local", "rex", "count", "main", "Big", "print"}, set()),   # locals, params, globals, imports
     ("    print(maybe?.", {"name", "fetch"}, set()),                        # Dog | Nil through ?.
@@ -299,6 +299,17 @@ def editor_test():
         result = run(["hover", str(EDITOR_FIXTURE), "--at", f"{line + 1}:{column}"])
         if expected not in result.stdout:
             problems.append(f"hover {word!r} on line {line + 1}: expected {expected} in {result.stdout.strip()}")
+    # Unused imports: hints the editor shows faded
+    source = '{ sqrt, PI, floor } from $("math");\n{ now } from $("time");\n$("os");\nprint(sqrt(PI));\n'
+    result = subprocess.run([str(EXE), "check", str(EDITOR_FIXTURE), "--json", "--stdin"],
+                            input=source, capture_output=True, text=True, encoding="utf-8", timeout=60)
+    try:
+        hints = {(d["line"], d["message"]) for d in json.loads(result.stdout) if d.get("tag") == "unused"}
+    except json.JSONDecodeError:
+        hints = set()
+    expected_hints = {(1, "'floor' is imported but never used"), (2, "'now' is imported but never used"), (3, "Unused import")}
+    if hints != expected_hints:
+        problems.append(f"unused imports: expected {sorted(expected_hints)}, got {sorted(hints)}")
     return problems
 
 

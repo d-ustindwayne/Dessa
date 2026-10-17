@@ -1,4 +1,4 @@
-// Linux implementation of $(<ashwee>), with GTK 3. Included by ashwee.cpp.
+// Linux implementation of $("ashwee"), with GTK 3. Included by ashwee.cpp.
 //
 // GTK is loaded when the first window is made (dlopen), so building a
 // program needs no GTK development files: running it needs GTK 3, which

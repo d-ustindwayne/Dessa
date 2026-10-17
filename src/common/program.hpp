@@ -12,7 +12,8 @@ namespace dessa {
 enum class DiagnosticSeverity {
     Error,
     Warning,
-    Note
+    Note,
+    Hint        // only for editors (an unused import), never printed
 };
 
 struct Diagnostic {
@@ -21,6 +22,8 @@ struct Diagnostic {
     std::string file;   // path of the .ds file ("" if not tied to one)
     int line = 0;
     int column = 0;
+    std::string tag;    // "unused": editors show it faded
+    int length = 0;     // characters it covers (0: just the word there)
 };
 
 // One parsed .ds file.
@@ -36,7 +39,7 @@ struct Module {
     std::string jsNative;
 
     // For every user-module spec in this file's imports, the id of the
-    // module it resolved to. Builtin specs ($(<math>)) are not listed.
+    // module it resolved to. Builtin specs ($("math")) are not listed.
     std::unordered_map<const ModuleSpec*, int> resolvedImports;
 };
 

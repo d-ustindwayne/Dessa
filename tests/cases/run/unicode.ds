@@ -31,3 +31,9 @@ try {
 } catch (err[Str]) {
     print(err);
 }
+
+// title, plain, caseless
+print("hello wORLD from dessa".title(), "ñandú éxito".title());
+print("Café Niño, Straße, Łódź, Ærø, Việt Nam".plain());
+print("ŁÓDŹ".lower(), "łódź".upper(), "Ǆ".lower());
+print("Straße".caseless() == "STRASSE".caseless(), "Hello".caseless() == "hELLO".caseless(), "a" == "A");

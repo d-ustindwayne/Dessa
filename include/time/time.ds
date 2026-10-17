@@ -1,8 +1,8 @@
 /***
- * $(<time>) -- clocks and waiting. Dates and times (DateTime, time zones,
+ * $("time") -- clocks and waiting. Dates and times (DateTime, time zones,
  * names in several languages) are written in Dessa: see time.dm.
  *
- *     { millis, sleep } from $(<time>);
+ *     { millis, sleep } from $("time");
  *
  * Declaration file: documentation only. Bodies are `...`; the real
  * implementation is C++ in runtime/lib/time.hpp.

@@ -114,7 +114,7 @@ public:
         bool isMember = false;              // obj.|  (else a plain name)
         SemanticType objectType = SemanticType::unknown();
         bool objectIsType = false;          // Color.|  (enum values)
-        bool objectIsSelf = false;          // self.|   (private _members too)
+        bool objectIsThis = false;          // this.|   (private _members too)
         std::vector<Symbol> visible;        // plain name: everything in scope, innermost first
     };
     // Hover: the identifier / member name / declaration at a position of a module.
@@ -204,7 +204,20 @@ private:
     // ---- Pipeline ----
     void declareTypeNames(const Module& module);
     void processImports(const Module& module);
-    void importSymbol(const Symbol& symbol, const std::string& localName, int line, int column);
+    void importSymbol(const Symbol& symbol, const std::string& localName, int line, int column, int importId);
+    void reportUnusedImports(const Module& module);
+
+    // One imported name, or one whole `$("x");`, and whether the code uses it
+    struct ImportRecord {
+        int moduleId = 0;
+        const Stmt* statement = nullptr;
+        std::string name;        // "" for `$("x");`
+        int line = 0;
+        int column = 0;
+        int length = 0;
+        bool used = false;
+    };
+    std::vector<ImportRecord> importRecords;
     void collectTypeMembers(const Module& module);
     void collectClassMembers(ClassInfo& info);
     void collectInterfaceMembers(InterfaceInfo& info);

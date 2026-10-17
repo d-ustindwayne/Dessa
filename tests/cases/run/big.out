@@ -6,7 +6,7 @@
 5 true true 5
 9223372036854775808 has 19 digits
 43 2.5
-Int overflow: 9223372036854775807 + 1 doesn't fit in an Int (-9223372036854775808 to 9223372036854775807); use Big from $(<math>) for bigger numbers
-Int overflow: 2 ^ 64 is too big for Int; use Big from $(<math>) for bigger numbers, e.g. new Big(2).pow(64)
+Int overflow: 9223372036854775807 + 1 doesn't fit in an Int (-9223372036854775808 to 9223372036854775807); use Big from $("math") for bigger numbers
+Int overflow: 2 ^ 64 is too big for Int; use Big from $("math") for bigger numbers, e.g. new Big(2).pow(64)
 Cannot convert 1.23E29 to Int: it's too big (Int goes up to about 9.22E18)
 caught: true

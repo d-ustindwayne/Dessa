@@ -1,4 +1,4 @@
-// $(<sys>)
+// $("sys")
 #pragma once
 #include "dessa_runtime.hpp"
 

@@ -1,4 +1,4 @@
-// webutils.js -- the JavaScript part of $(<webutils>) (see webutils.dm).
+// webutils.js -- the JavaScript part of $("webutils") (see webutils.dm).
 // Added to programs built with --target web that import webutils. Values
 // arrive as Dessa represents them (Int = BigInt, nil = null).
 $.webutils = (() => {

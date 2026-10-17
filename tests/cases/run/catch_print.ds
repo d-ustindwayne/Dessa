@@ -3,7 +3,7 @@
 class AppError {
     var[Str] message = "";
     init(message[Str]) {
-        self.message = message;
+        this.message = message;
     }
 }
 class NotFound(AppError) {

@@ -1,4 +1,4 @@
-// macOS implementation of $(<ashwee>), with AppKit (Cocoa). Compiled once as
+// macOS implementation of $("ashwee"), with AppKit (Cocoa). Compiled once as
 // Objective-C++ (ARC) and linked into programs that import ashwee.
 // The runtime first: Objective-C defines a macro Nil, which is a type in Dessa
 #include "ashwee.hpp"

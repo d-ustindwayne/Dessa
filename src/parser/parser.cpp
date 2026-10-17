@@ -397,7 +397,7 @@ bool Parser::isImportAhead() const {
     return peekAt(i).type == TokenType::R_BRACE && peekAt(i + 1).type == TokenType::FROM;
 }
 
-// $("a.b", "c")  /  $(<math>)  /  $(<ds.utils>)
+// $("a.b", "c")  /  $("math")
 std::vector<ModuleSpec> Parser::parseModuleSpecs() {
     consume(TokenType::DOLLAR, "Expect '$' before module list.");
     consume(TokenType::L_PAREN, "Expect '(' after '$'.");
@@ -406,15 +406,17 @@ std::vector<ModuleSpec> Parser::parseModuleSpecs() {
         ModuleSpec spec;
         spec.line = peek().line;
         spec.column = peek().column;
-        if (match({TokenType::L_ANGLE})) {
-            spec.isBuiltin = true;
-            spec.path = consume(TokenType::IDENTIFIER, "Expect builtin library name after '<'.").lexeme;
+        if (check(TokenType::L_ANGLE)) {
+            // The old $(<math>): reported, but still understood
+            Token angle = advance();
+            spec.path = consume(TokenType::IDENTIFIER, "Expect library name after '<'.").lexeme;
             while (match({TokenType::DOT})) {
                 spec.path += "." + consume(TokenType::IDENTIFIER, "Expect name after '.' in library path.").lexeme;
             }
-            consume(TokenType::R_ANGLE, "Expect '>' after builtin library name.");
+            consume(TokenType::R_ANGLE, "Expect '>' after library name.");
+            error(angle, "Libraries are imported by name without < >: $(\"" + spec.path + "\")");
         } else {
-            Token path = consume(TokenType::STRING, "Expect module path string or <builtin>.");
+            Token path = consume(TokenType::STRING, "Expect a module or library name in quotes, e.g. $(\"math\").");
             if (path.lexeme.empty()) throw error(path, "Module path cannot be empty.");
             spec.path = path.lexeme;
         }
@@ -1162,7 +1164,7 @@ ExprPtr Parser::primary() {
         return parseTemplateString(previous());
     }
 
-    if (match({TokenType::IDENTIFIER, TokenType::SELF, TokenType::SUPER})) {
+    if (match({TokenType::IDENTIFIER, TokenType::THIS, TokenType::SUPER})) {
         return place(std::make_unique<IdentifierExpr>(previous()), previous());
     }
 

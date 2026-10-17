@@ -10,7 +10,7 @@ enum class TokenType {
     // ---- Literals ----
     IDENTIFIER,         // name, age, MyClass, add
     STRING,             // "Hello World"
-    TEMPLATE_STRING,    // $"Hello, I am {self.name}."
+    TEMPLATE_STRING,    // $"Hello, I am {this.name}."
     INT_LITERAL,        // 21, 20
     FLOAT_LITERAL,      // 9.23f (explicit Flt suffix)
     DOUBLE_LITERAL,     // 9.23 / 95.6d (unsuffixed decimals are Dbl, but may
@@ -36,7 +36,7 @@ enum class TokenType {
     FROM, AS,
 
     // ---- Keywords: OOP / misc ----
-    NEW, SELF, TRUE, FALSE, NIL, INIT, SUPER,
+    NEW, THIS, TRUE, FALSE, NIL, INIT, SUPER,
 
     // ---- Punctuation: grouping ----
     L_PAREN, R_PAREN,       // ( )

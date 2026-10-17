@@ -1,8 +1,8 @@
 // Builtin methods and libraries
 
-{ sqrt, floor, round, abs, max, min, clamp, PI } from $(<math>);
-$(<sys>);
-{ fileExists, writeFile, readFile, deleteFile } from $(<os>);
+{ sqrt, floor, round, abs, max, min, clamp, PI } from $("math");
+$("sys");
+{ fileExists, writeFile, readFile, deleteFile } from $("os");
 
 print(sqrt(16), floor(2.7), round(2.5), abs(-3), abs(-2.5), max(3, 9), min(2, 1.5), clamp(15, 0, 10));
 print(round(PI * 100));

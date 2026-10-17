@@ -13,11 +13,11 @@ class Shape {
     var[Str] name = "";
     var[Int] sides = 0;
     init(name[Str]="shape", sides[Int]=0) {
-        self.name = name;
-        self.sides = sides;
+        this.name = name;
+        this.sides = sides;
     }
     func[Str] describe(prefix[Str]="A") {
-        return $"{prefix} {self.name} with {self.sides} sides";
+        return $"{prefix} {this.name} with {this.sides} sides";
     }
 }
 class Square(Shape) {
@@ -53,13 +53,13 @@ const[Str] safe = (text[Str]) := {
 };
 print(safe("41"), safe("x"));
 
-// Closures stored in fields that use self
+// Closures stored in fields that use this
 class Counter {
     var[Int] count = 0;
     var[Func[Emp]] bump = () := print("not set yet");
     init() {
-        self.bump = () := {
-            self.count++;
+        this.bump = () := {
+            this.count++;
         };
     }
 }
@@ -104,7 +104,7 @@ class Tree {
     var[Map[Str, Tree]] children = {:};
     var[Int] value = 0;
     init(value[Int]) {
-        self.value = value;
+        this.value = value;
     }
 }
 var[Tree] root = new Tree(1);

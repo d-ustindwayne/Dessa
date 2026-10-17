@@ -3,9 +3,10 @@
 { Circle, area } from $("lib.geo.shapes");
 { Circle as C2 } from $("lib.geo.shapes");
 { Square } from $("lib.geo.shapes");          // error: Module does not export 'Square'
-{ thing } from $("lib.geo.missing");          // error: Cannot find module 'lib.geo.missing'
-{ sqrt, PI } from $(<math>);
-{ foo } from $(<nosuchlib>);                  // error: Unknown library '<nosuchlib>'; if it's a riv package
+{ thing } from $("lib.geo.missing");          // error: Cannot find module or library 'lib.geo.missing'
+{ sqrt, PI } from $("math");
+{ foo } from $("nosuchlib");                  // error: Cannot find module or library 'nosuchlib'
+{ cbrt } from $(<math>);                      // error: Libraries are imported by name without < >: $("math")
 $("lib.geo.shapes", "lib.geo.other");         // error: exported by more than one imported module
 { area as area2 } from $("lib.geo.other");
 

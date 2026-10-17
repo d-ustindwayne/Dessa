@@ -1,7 +1,7 @@
 # Libraries
 
 Every library documents itself: hover over a name in VS Code, or ctrl+click an
-import such as `$(<math>)` to open the library's file.
+import such as `$("math")` to open the library's file.
 
 ## Always available
 
@@ -12,7 +12,7 @@ in `runtime/decl/methods.ds`.
 
 ## Core libraries
 
-These come with Dessa: `$(<name>)`.
+These come with Dessa: `$("name")`.
 
 ### math
 
@@ -25,7 +25,7 @@ Statistics on a `Dbl<>`: `sum`, `mean`, `median`, `mode`, `stdev`.
 `Big` holds whole numbers of any size:
 
 ```dessa
-{ Big } from $(<math>);
+{ Big } from $("math");
 var[Big] f = new Big(1);
 for (var[Int] i = 1; i <= 30; i++) f = f.mul(i);
 print(f, f.sci());        // 265252859812191058636308480000000 2.65E32
@@ -36,7 +36,7 @@ print(f, f.sci());        // 265252859812191058636308480000000 2.65E32
 `now()` (seconds), `millis()`, `sleep(ms)`, `date()`, and `DateTime`:
 
 ```dessa
-{ DateTime, dateNow, dateOf, parseDate } from $(<time>);
+{ DateTime, dateNow, dateOf, parseDate } from $("time");
 var[DateTime] now = dateNow();                                // this computer's time zone
 print(now.format("EEEE, d MMMM yyyy HH:mm"));
 print(now.toZone("America/New_York").format("HH:mm z"));
@@ -71,7 +71,7 @@ Install these with `riv add <name>` (see [riv.md](riv.md)).
 ### json
 
 ```dessa
-{ Json, parseJson, stringify, jsonObject } from $(<json>);
+{ Json, parseJson, stringify, jsonObject } from $("json");
 var[Json] data = parseJson("{\"name\": \"Ann\", \"tags\": [1, 2]}");
 print(data.get("name").asStr(), data.get("tags").at(1).asInt());
 print(stringify(data, 2));      // indented
@@ -85,7 +85,7 @@ PHL is a readable data format (a separate project). `parsePhl(text)` gives a
 ### sql
 
 ```dessa
-$(<sql>);
+$("sql");
 var[Database] db = openSqlite("shop.db");           // or connectMssql("Server=...;Database=...;Trusted_Connection=yes")
 db.execute("CREATE TABLE IF NOT EXISTS items (name TEXT, price REAL)");
 db.execute("INSERT INTO items VALUES (?, ?)", "Mouse", 25.99);
@@ -96,6 +96,7 @@ for (var[Json] row in db.query("SELECT * FROM items WHERE price < ?", 50)) {
 
 Values passed after the SQL fill the `?` places safely. `connect(...)` takes any
 ODBC connection string, and `drivers()` lists the installed ODBC drivers.
+Both accept `TrustCertificate=yes` as a shorter `TrustServerCertificate=yes`.
 
 ### request
 
@@ -109,7 +110,7 @@ systems have.
 Desktop windows on Windows (Win32), Linux (GTK 3) and macOS (AppKit):
 
 ```dessa
-{ Window, Label, TextBox } from $(<ashwee>);
+{ Window, Label, TextBox } from $("ashwee");
 var[Window] win = new Window("Greeter", 360, 140);
 var[TextBox] name = win.input(20, 20, 200);
 var[Label] greeting = win.label("", 20, 64, 320);

@@ -35,10 +35,15 @@ HTML pages.
 the exact spot. In `.dhtml` pages every script is checked, with positions in
 the page itself.
 
+**Unused imports** are faded, like in TypeScript. Set `dessa.unusedImports` to
+`warning` to see them as warnings, or `off`.
+
 **Completion from the real types.** `customer.` lists the members of
 customer's class, inherited ones included. It also works after `is` checks,
 inside lambdas, through `?.` and along call chains such as
-`win.button("OK").onClick(...)`. Library imports complete too.
+`win.button("OK").onClick(...)`. Library imports complete too. Only names are
+suggested (no keywords), and picking a function doesn't add `()`. Snippets
+are in **Insert Snippet**.
 
 **Hover** shows the type at that spot, the documentation comment, and a
 "Defined in" link.
@@ -47,7 +52,7 @@ inside lambdas, through `?.` and along call chains such as
 fields, methods, constructors (`new Window`), type names (`var[Window]`),
 builtins (`"text".upper`) and library functions.
 
-**Links on imports.** Ctrl+click `$(<webutils>)` or `$("utils.strings")` to
+**Links on imports.** Ctrl+click `$("webutils")` or `$("utils.strings")` to
 open the module.
 
 **Parameter hints** while you type a call, with the default values.
@@ -75,7 +80,8 @@ as native programs; `.dhtml` pages are served locally (`dessa run page.dhtml`).
 |---|---|---|
 | `dessa.compilerPath` | `dessa` | the `dessa` executable, if it isn't on PATH |
 | `dessa.checkOnType` | `true` | check while typing (otherwise on open and save) |
-| `dessa.packageFolders` | `[]` | extra folders with riv packages for `$(<lib>)` imports (like `DESSA_PACKAGES`) |
+| `dessa.unusedImports` | `dim` | imports the file never uses: `dim` (faded), `warning`, or `off` |
+| `dessa.packageFolders` | `[]` | extra folders with riv packages for `$("lib")` imports (like `DESSA_PACKAGES`) |
 
 ## More
 

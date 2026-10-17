@@ -9,8 +9,8 @@ class Item {
     var[Str] name = "";
     var[Dbl] price = 0;
     init(name[Str], price[Dbl]) {
-        self.name = name;
-        self.price = price;
+        this.name = name;
+        this.price = price;
     }
 }
 

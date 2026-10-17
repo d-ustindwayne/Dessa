@@ -14,7 +14,7 @@
 class BankError {
     var[Str] message = "";
     init(message[Str]) {
-        self.message = message;
+        this.message = message;
     }
 }
 
@@ -96,15 +96,15 @@ class Transaction {
     var[Str] note = "";
 
     init(kind[TxKind], amount[Int], balanceAfter[Int], note[Str]) {
-        self.kind = kind;
-        self.amount = amount;
-        self.balanceAfter = balanceAfter;
-        self.note = note;
+        this.kind = kind;
+        this.amount = amount;
+        this.balanceAfter = balanceAfter;
+        this.note = note;
     }
 
     func[Str] toStr() {
-        var[Str] sign = self.kind == TxKind.WITHDRAWAL || self.kind == TxKind.TRANSFER_OUT ? "-" : "+";
-        return $"{self.kind.name()}  {sign}{money(self.amount)}  -> {money(self.balanceAfter)}  ({self.note})";
+        var[Str] sign = this.kind == TxKind.WITHDRAWAL || this.kind == TxKind.TRANSFER_OUT ? "-" : "+";
+        return $"{this.kind.name()}  {sign}{money(this.amount)}  -> {money(this.balanceAfter)}  ({this.note})";
     }
 }
 
@@ -119,9 +119,9 @@ class[Describable] Account {
     var[Transaction<>] history = [];
 
     init(owner[Str], bank[Bank]) {
-        self.owner = owner;
-        self.number = bank.nextNumber();
-        bank.register(self);                  // self works inside init
+        this.owner = owner;
+        this.number = bank.nextNumber();
+        bank.register(this);                  // this works inside init
     }
 
     func[Str] kindName() {
@@ -129,24 +129,24 @@ class[Describable] Account {
     }
 
     func[Emp] record(kind[TxKind], amount[Int], note[Str]) {
-        self.history.push(new Transaction(kind, amount, self.balance, note));
+        this.history.push(new Transaction(kind, amount, this.balance, note));
     }
 
     func[Emp] deposit(amount[Int], note[Str]="Deposit", kind[TxKind]=TxKind.DEPOSIT) {
-        self.balance += amount;
-        self.record(kind, amount, note);
+        this.balance += amount;
+        this.record(kind, amount, note);
     }
 
     func[Emp] withdraw(amount[Int], note[Str]="Withdrawal", kind[TxKind]=TxKind.WITHDRAWAL) {
-        if (amount > self.balance) {
-            throw new InsufficientFunds(self.balance, amount);
+        if (amount > this.balance) {
+            throw new InsufficientFunds(this.balance, amount);
         }
-        self.balance -= amount;
-        self.record(kind, amount, note);
+        this.balance -= amount;
+        this.record(kind, amount, note);
     }
 
     func[Str] summary() {
-        return $"#{self.number}  {self.owner}  {self.kindName()}  {money(self.balance)}";
+        return $"#{this.number}  {this.owner}  {this.kindName()}  {money(this.balance)}";
     }
 }
 
@@ -157,7 +157,7 @@ class SavingsAccount(Account) {
 
     init(owner[Str], bank[Bank], rate[Int]=250) {
         super.init(owner, bank);
-        self.rate = rate;
+        this.rate = rate;
     }
 
     func[Str] kindName() {
@@ -165,17 +165,17 @@ class SavingsAccount(Account) {
     }
 
     func[Emp] withdraw(amount[Int], note[Str]="Withdrawal", kind[TxKind]=TxKind.WITHDRAWAL) {
-        if (self.withdrawalsLeft == 0) {
+        if (this.withdrawalsLeft == 0) {
             throw new BankError("Savings accounts allow only 2 withdrawals per month");
         }
         super.withdraw(amount, note, kind);
-        self.withdrawalsLeft--;
+        this.withdrawalsLeft--;
     }
 
     func[Int] payInterest() {
-        var[Int] interest = self.balance * self.rate / 10000;
+        var[Int] interest = this.balance * this.rate / 10000;
         if (interest > 0) {
-            self.deposit(interest, $"Interest {self.rate / 100}%", TxKind.INTEREST);
+            this.deposit(interest, $"Interest {this.rate / 100}%", TxKind.INTEREST);
         }
         return interest;
     }
@@ -191,20 +191,20 @@ class Bank {
     var[Int] lastNumber = 1000;
 
     init(name[Str]) {
-        self.name = name;
+        this.name = name;
     }
 
     func[Int] nextNumber() {
-        self.lastNumber++;
-        return self.lastNumber;
+        this.lastNumber++;
+        return this.lastNumber;
     }
 
     func[Emp] register(account[Account]) {
-        self.accounts.push(account);
+        this.accounts.push(account);
     }
 
     func[Account] find(number[Int]) {
-        for (var[Account] account in self.accounts) {
+        for (var[Account] account in this.accounts) {
             if (account.number == number) {
                 return account;
             }
@@ -213,8 +213,8 @@ class Bank {
     }
 
     func[Emp] transfer(fromNumber[Int], toNumber[Int], amount[Int]) {
-        var[Account] source = self.find(fromNumber);
-        var[Account] target = self.find(toNumber);
+        var[Account] source = this.find(fromNumber);
+        var[Account] target = this.find(toNumber);
         if (source == target) {
             throw new BankError("Cannot transfer to the same account");
         }
@@ -224,7 +224,7 @@ class Bank {
 
     func[Int] total() {
         var[Int] sum = 0;
-        for (var[Account] account in self.accounts) {
+        for (var[Account] account in this.accounts) {
             sum += account.balance;
         }
         return sum;
@@ -232,7 +232,7 @@ class Bank {
 
     // Accounts matching any condition you pass in
     func[Account<>] where(matches[Func[Bul, [Account]]]) {
-        return self.accounts.filter(matches);
+        return this.accounts.filter(matches);
     }
 }
 

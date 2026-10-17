@@ -3,7 +3,7 @@
 class Animal {
     var[Str] name = "";
     init(name[Str]) {
-        self.name = name;
+        this.name = name;
     }
     func[Str] sound() {
         return "...";
@@ -14,7 +14,7 @@ class Dog(Animal) {
         return "Woof";
     }
     func[Str] fetch() {
-        return $"{self.name} fetches the ball";
+        return $"{this.name} fetches the ball";
     }
 }
 class Cat(Animal) {

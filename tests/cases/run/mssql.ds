@@ -1,13 +1,13 @@
 // needs: mssql   (skipped unless a local SQL Server accepts Windows login; uses only a #temp table)
-// $(<sql>) with Microsoft SQL Server through ODBC
+// $("sql") with Microsoft SQL Server through ODBC
 
-{ connectMssql, drivers, Database, SqlError } from $(<sql>);
-{ Json } from $(<json>);
+{ connectMssql, drivers, Database, SqlError } from $("sql");
+{ Json } from $("json");
 
 print(drivers().includes("ODBC Driver 17 for SQL Server") || drivers().includes("ODBC Driver 18 for SQL Server"));
 
 var[Database] db = connectMssql("Server=localhost;Database=tempdb;Trusted_Connection=yes;");
-var[Database] csharpStyle = connectMssql("Data Source=localhost;Initial Catalog=tempdb;Integrated Security=true");
+var[Database] csharpStyle = connectMssql("Data Source=localhost;Initial Catalog=tempdb;Integrated Security=true;TrustCertificate=true");
 print(csharpStyle.queryOne("SELECT DB_NAME() AS db"));
 csharpStyle.close();
 print(db);

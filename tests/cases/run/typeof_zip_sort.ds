@@ -3,7 +3,7 @@
 class Animal {
     var[Str] name = "";
     init(name[Str]) {
-        self.name = name;
+        this.name = name;
     }
 }
 class Dog(Animal) {}

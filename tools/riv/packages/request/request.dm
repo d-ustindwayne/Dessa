@@ -1,7 +1,7 @@
 /***
- * $(<request>) -- HTTP requests, like Python's requests library.
+ * $("request") -- HTTP requests, like Python's requests library.
  *
- *     { get, post } from $(<request>);
+ *     { get, post } from $("request");
  *
  *     var[Response] r = get("https://api.github.com/repos/python/cpython");
  *     print(r.status, r.ok);                      // 200 true
@@ -17,16 +17,16 @@
  * Uses the `curl` program, which comes with Windows 10+, macOS and Linux.
  */
 
-{ _send } from $(<request>);            // native part (request.hpp)
-{ Json, parseJson, stringify } from $(<json>);
+{ _send } from $("request");            // native part (request.hpp)
+{ Json, parseJson, stringify } from $("json");
 
 class RequestError {
     var[Str] message = "";
     init(message[Str]) {
-        self.message = message;
+        this.message = message;
     }
     func[Str] toStr() {
-        return $"RequestError: {self.message}";
+        return $"RequestError: {this.message}";
     }
 }
 
@@ -37,25 +37,25 @@ class Response {
     var[Str] text = "";                    // the body
     var[Map[Str, Str]] headers = {:};      // header names in lower case
 
-    // The body parsed as JSON (see $(<json>)).
+    // The body parsed as JSON (see $("json")).
     func[Json] json() {
-        return parseJson(self.text);
+        return parseJson(this.text);
     }
 
     // A header by name (any case), or nil.
     func[Str | Nil] header(name[Str]) {
-        return self.headers.get(name.lower());
+        return this.headers.get(name.lower());
     }
 
     // Throws a RequestError if the status isn't 2xx.
     func[Emp] raiseForStatus() {
-        if (!self.ok) {
-            throw new RequestError($"HTTP {self.status} for {self.url}");
+        if (!this.ok) {
+            throw new RequestError($"HTTP {this.status} for {this.url}");
         }
     }
 
     func[Str] toStr() {
-        return $"<Response [{self.status}]>";
+        return $"<Response [{this.status}]>";
     }
 }
 

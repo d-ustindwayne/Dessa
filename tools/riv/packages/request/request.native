@@ -1,4 +1,4 @@
-// Native part of $(<request>): one HTTP request, done by curl. The API is in request.dm
+// Native part of $("request"): one HTTP request, done by curl. The API is in request.dm
 header request.hpp
 
 func[Str<>] _send(method[Str], url[Str], headers[Str], body[Str], timeout[Int])

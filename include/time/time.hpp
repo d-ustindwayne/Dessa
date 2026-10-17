@@ -1,4 +1,4 @@
-// $(<time>)
+// $("time")
 #pragma once
 #include "dessa_runtime.hpp"
 #include <chrono>

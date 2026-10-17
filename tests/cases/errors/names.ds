@@ -29,4 +29,5 @@ print(scoped);                 // error: Undefined name 'scoped'
 
 break;                         // error: 'break' can only be used inside a loop
 return;                        // error: 'return' can only be used inside a function
-print(self);                   // error: 'self' can only be used inside a class
+print(this);                   // error: 'this' can only be used inside a class
+print(self);                   // error: Undefined name 'self' (Dessa uses 'this')

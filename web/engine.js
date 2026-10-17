@@ -4,7 +4,7 @@
 //     <script src="dessa.js"></script>
 //     <script type="text/dessa" src="app.ds"></script>
 //     <script type="text/dessa">
-//         { document } from $(<webutils>);
+//         { document } from $("webutils");
 //         document.body.textContent = "Hello from Dessa!";
 //     </script>
 //
@@ -35,7 +35,7 @@
         onErrorLine: (line) => { console.error(line); show(line, true); },
     };
 
-    // The $("a.b") user modules a source imports (libraries $(<x>) are built in)
+    // The $("a.b") user modules a source imports (libraries $("x") are built in)
     function importsOf(source) {
         const found = [];
         const pattern = /\$\(([^()]*)\)/g;

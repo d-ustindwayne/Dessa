@@ -1,4 +1,4 @@
-// $(<request>) -- native part: one HTTP request, done by the `curl` program
+// $("request") -- native part: one HTTP request, done by the `curl` program
 // (shipped with Windows 10+, macOS and Linux). The friendly API (get, post,
 // Response, ...) is written in Dessa in request.dm.
 #pragma once

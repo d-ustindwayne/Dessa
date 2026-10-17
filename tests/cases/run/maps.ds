@@ -46,8 +46,8 @@ class Point {
     var[Int] x = 0;
     var[Int] y = 0;
     init(x[Int], y[Int]) {
-        self.x = x;
-        self.y = y;
+        this.x = x;
+        this.y = y;
     }
 }
 var[Map[Str, Point]] places = {"home": new Point(1, 2)};

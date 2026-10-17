@@ -15,7 +15,7 @@ bool isNilLiteral(const Expr* e) {
 }
 
 bool isSelf(const Expr* e) {
-    return e && e->kind == ExprKind::Identifier && static_cast<const IdentifierExpr*>(e)->name.type == TokenType::SELF;
+    return e && e->kind == ExprKind::Identifier && static_cast<const IdentifierExpr*>(e)->name.type == TokenType::THIS;
 }
 
 bool isSuper(const Expr* e) {
@@ -311,7 +311,7 @@ void Codegen::emitClass(const ClassInfo& info) {
         line(cppType(info.fields.at(field).type) + " " + mangle(field) + "{};");
     }
     // `init` runs as ds_construct_X after the object already lives in a
-    // dessa::Ref (see dessa::create), so `self` can be used inside init.
+    // dessa::Ref (see dessa::create), so `this` can be used inside init.
     if (const Symbol* ctor = nearestConstructor(info)) {
         line(signature(*ctor, "ds_construct_" + name) + ";");
     } else {
@@ -1051,7 +1051,7 @@ std::string Codegen::literal(const LiteralExpr* e) {
 }
 
 std::string Codegen::identifier(const IdentifierExpr* e) {
-    if (e->name.type == TokenType::SELF) {
+    if (e->name.type == TokenType::THIS) {
         return currentClass ? "dessa::self_ref(this)" : "nullptr";
     }
     const Symbol* symbol = analyser.symbolOf(e);

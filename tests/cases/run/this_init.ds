@@ -1,19 +1,19 @@
-// self can be used as a value inside init (objects exist before init runs)
+// this can be used as a value inside init (objects exist before init runs)
 class Registry {
     var[Node<>] all = [];
 }
 class Node {
     var[Str] name = "";
     init(name[Str], registry[Registry]) {
-        self.name = name;
-        registry.all.push(self);
+        this.name = name;
+        registry.all.push(this);
     }
 }
 class Child(Node) {
     var[Int] extra = 7;
     init(registry[Registry]) {
         super.init("child", registry);
-        print($"child sees extra={self.extra}");
+        print($"child sees extra={this.extra}");
     }
 }
 var[Registry] r = new Registry();

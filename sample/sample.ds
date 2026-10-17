@@ -236,15 +236,15 @@ class Person {
     var[Int] personAge;
 
     func[Str] getName() {
-        return self.personName;
+        return this.personName;
     }
 
     func[Int] getAge() {
-        return self.personAge;
+        return this.personAge;
     }
 
     func[Emp] greeting() {
-        print($"Hello, I am {self.personName}. nice to meet you.");
+        print($"Hello, I am {this.personName}. nice to meet you.");
     }
 }
 
@@ -260,8 +260,8 @@ class[IClass] MyClass(SecondClass) {
 
     // Constructor
     init(v3[Bul], v4[Int]) {
-        self.variable3 = v3;
-        self.variable4 = v4;
+        this.variable3 = v3;
+        this.variable4 = v4;
     }
 
     // Implementing interface method with empty body
@@ -292,7 +292,7 @@ interface IClass {
 // Imports
 // ============================================================
 
-$(<math>, <time>);                              // builtin libraries, everything
+$("math", "time");                              // builtin libraries, everything
 $("my.other");                                  // my/other.ds, everything
 { Greeter } from $("my.other.directory");       // my/other/directory.ds, by name
 { Greeter as G } from $("my.other.directory");  // ... with an alias
@@ -304,7 +304,7 @@ $("my.other");                                  // my/other.ds, everything
 class NotFound {
     var[Str] what = "";
     init(what[Str]) {
-        self.what = what;
+        this.what = what;
     }
 }
 

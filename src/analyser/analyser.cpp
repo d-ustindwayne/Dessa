@@ -5,6 +5,8 @@
 #include "builtins.hpp"
 
 #include <algorithm>
+#include <sstream>
+#include <unordered_map>
 #include <functional>
 #include <string>
 #include <utility>
@@ -30,6 +32,7 @@ void Analyser::analyse(const Program& prog) {
     exprTypes.clear(); expectedTypes.clear(); identSymbols.clear(); memberSymbols.clear();
     optionalChains.clear(); argOrders.clear(); declTypes.clear(); functionSymbols.clear(); catchTypes.clear(); isTargets.clear();
     recursiveLambdas.clear(); recursiveRefs.clear(); definingLambda = nullptr; enumCases.clear();
+    importRecords.clear();
 
     builtinScope = std::make_unique<Scope>(ScopeKind::Module);
     for (const auto& fn : globalBuiltins()) {
@@ -70,6 +73,10 @@ void Analyser::analyse(const Program& prog) {
         currentModule = module->id;
         currentScope = modules[currentModule].scope.get();
         analyseModuleBody(*module);
+    }
+    if (!prog.modules.empty()) {
+        currentModule = prog.entry().id;
+        reportUnusedImports(prog.entry());
     }
 
     // Order classes so that a parent always precedes its children.
@@ -234,10 +241,11 @@ void Analyser::declareTypeNames(const Module& module) {
     }
 }
 
-void Analyser::importSymbol(const Symbol& exported, const std::string& localName, int line, int column) {
+void Analyser::importSymbol(const Symbol& exported, const std::string& localName, int line, int column, int importId) {
     Symbol symbol = exported;
     if (symbol.originalName.empty()) symbol.originalName = symbol.name;
     symbol.name = localName;
+    symbol.importId = importId;
     if (Symbol* existing = currentScope->resolveLocal(localName)) {
         if (existing->moduleId == symbol.moduleId && existing->originalName == symbol.originalName) return; // same thing twice
         error(line, column, "Imported name '" + localName + "' conflicts with an existing declaration");
@@ -262,7 +270,7 @@ void Analyser::processImports(const Module& module) {
                 const BuiltinLibrary* lib = findBuiltinLibrary(spec.path);
                 auto dessaPart = module.resolvedImports.find(&spec);
                 if (!lib && dessaPart == module.resolvedImports.end()) {
-                    error(spec.line, spec.column, "Unknown library '<" + spec.path + ">'; if it's a riv package, install it with: riv add " + spec.path);
+                    error(spec.line, spec.column, "Unknown library '" + spec.path + "'; if it's a riv package, install it with: riv add " + spec.path);
                     continue;
                 }
                 anyResolved = true;
@@ -314,6 +322,8 @@ void Analyser::processImports(const Module& module) {
         if (!anyResolved) continue;
 
         if (import->importAll) {
+            const int importId = static_cast<int>(importRecords.size());
+            importRecords.push_back({module.id, statement.get(), "", statement->line, statement->column, 0, false});
             for (const auto& [name, candidates] : available) {
                 // _helpers of a library are only imported by name
                 if (!name.empty() && name[0] == '_') continue;
@@ -321,7 +331,7 @@ void Analyser::processImports(const Module& module) {
                     error(statement.get(), "'" + name + "' is exported by more than one imported module; import it by name from one of them");
                     continue;
                 }
-                importSymbol(candidates.front(), name, statement->line, statement->column);
+                importSymbol(candidates.front(), name, statement->line, statement->column, importId);
             }
             continue;
         }
@@ -336,7 +346,10 @@ void Analyser::processImports(const Module& module) {
                 error(item.line, item.column, "'" + item.name + "' is exported by more than one of the listed modules");
                 continue;
             }
-            importSymbol(it->second.front(), item.alias.value_or(item.name), item.line, item.column);
+            const int importId = static_cast<int>(importRecords.size());
+            const int length = static_cast<int>(item.name.size() + (item.alias ? 4 + item.alias->size() : 0));   // "name as alias"
+            importRecords.push_back({module.id, statement.get(), item.alias.value_or(item.name), item.line, item.column, length, false});
+            importSymbol(it->second.front(), item.alias.value_or(item.name), item.line, item.column, importId);
         }
     }
 }
@@ -801,7 +814,54 @@ bool Analyser::declareSymbol(Symbol symbol, int line, int column) {
 }
 
 Symbol* Analyser::resolveSymbol(const std::string& name) {
-    return currentScope ? currentScope->resolve(name) : nullptr;
+    Symbol* symbol = currentScope ? currentScope->resolve(name) : nullptr;
+    if (symbol && symbol->importId >= 0 && static_cast<size_t>(symbol->importId) < importRecords.size()) {
+        importRecords[static_cast<size_t>(symbol->importId)].used = true;
+    }
+    return symbol;
+}
+
+// Imports the file never uses, for editors to show faded (like TypeScript's
+// noUnusedLocals). Hints only: `dessa build` doesn't print them.
+void Analyser::reportUnusedImports(const Module& module) {
+    std::vector<std::string> lines;
+    {
+        std::stringstream text(module.source);
+        std::string l;
+        while (std::getline(text, l)) lines.push_back(l);
+    }
+    // From the statement's start to its `;`
+    auto statementLength = [&](const Stmt* s) {
+        if (s->line < 1 || static_cast<size_t>(s->line) > lines.size()) return 0;
+        const std::string& l = lines[static_cast<size_t>(s->line - 1)];
+        size_t start = static_cast<size_t>(s->column > 0 ? s->column - 1 : 0);
+        size_t end = l.find(';', start);
+        return static_cast<int>((end == std::string::npos ? l.size() : end + 1) - std::min(start, l.size()));
+    };
+    auto hint = [&](int line, int column, int length, const std::string& message) {
+        diagnostics.push_back({DiagnosticSeverity::Hint, message, module.displayPath, line, column, "unused", length});
+    };
+    // Grouped by statement: all unused -> the whole import
+    std::vector<const Stmt*> order;
+    std::unordered_map<const Stmt*, std::vector<const ImportRecord*>> byStatement;
+    for (const auto& record : importRecords) {
+        if (record.moduleId != module.id) continue;
+        if (!byStatement.count(record.statement)) order.push_back(record.statement);
+        byStatement[record.statement].push_back(&record);
+    }
+    for (const Stmt* statement : order) {
+        const auto& records = byStatement[statement];
+        const bool noneUsed = std::none_of(records.begin(), records.end(), [](const ImportRecord* r) { return r->used; });
+        if (noneUsed) {
+            hint(statement->line, statement->column, statementLength(statement),
+                 records.size() == 1 && !records.front()->name.empty() ? "'" + records.front()->name + "' is imported but never used"
+                                                                      : "Unused import");
+            continue;
+        }
+        for (const ImportRecord* r : records) {
+            if (!r->used) hint(r->line, r->column, r->length, "'" + r->name + "' is imported but never used");
+        }
+    }
 }
 
 void Analyser::narrowAfterAssignment(const std::string& name, const SemanticType& valueType) {

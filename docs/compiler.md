@@ -6,7 +6,7 @@
 
 ```
 dessa run app.ds                     compile and run (the result is cached, so the second run starts at once)
-dessa run app.ds -- one two          pass arguments to the program (read them with args() from $(<sys>))
+dessa run app.ds -- one two          pass arguments to the program (read them with args() from $("sys"))
 dessa build app.ds                   make a program: app.exe on Windows, app elsewhere
 dessa build app.ds -o tools/app.exe  choose the output file
 dessa check app.ds                   only look for errors
@@ -107,7 +107,7 @@ of a log file to report. `DESSA_VERBOSE=1` shows the details.
 
 ## Where libraries come from
 
-`$(<name>)` looks in three places, in this order:
+`$("name")` looks in three places, in this order:
 
 1. the core libraries that come with Dessa (`math`, `os`, `sys`, `time`, `webutils`),
 2. `riv_modules/<name>` in the program's folder or any folder above it (installed with `riv add`),

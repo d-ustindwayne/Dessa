@@ -1,7 +1,7 @@
-// $(<sql>) with SQLite (an in-memory database)
+// $("sql") with SQLite (an in-memory database)
 
-{ openSqlite, Database, SqlError } from $(<sql>);
-{ Json } from $(<json>);
+{ openSqlite, Database, SqlError } from $("sql");
+{ Json } from $("json");
 
 var[Database] db = openSqlite(":memory:");
 print(db);

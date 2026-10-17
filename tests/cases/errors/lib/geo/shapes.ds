@@ -2,7 +2,7 @@
 class Circle {
     var[Dbl] radius = 1.0;
     init(radius[Dbl]) {
-        self.radius = radius;
+        this.radius = radius;
     }
 }
 

@@ -1,4 +1,4 @@
-// $(<sql>) -- native part: talking to databases. The friendly API
+// $("sql") -- native part: talking to databases. The friendly API
 // (Database, connect, openSqlite, ...) is written in Dessa in sql.dm.
 //
 // The implementation lives in sql.cpp, which is compiled once and linked in,

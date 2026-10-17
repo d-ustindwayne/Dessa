@@ -1,4 +1,4 @@
-// $(<math>)
+// $("math")
 #pragma once
 #include "dessa_runtime.hpp"
 #include <random>

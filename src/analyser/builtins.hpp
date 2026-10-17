@@ -32,7 +32,7 @@ struct BuiltinConstant {
 };
 
 struct BuiltinLibrary {
-    std::string name;                 // "math" in $(<math>)
+    std::string name;                 // "math" in $("math")
     std::string header;               // "math/math.hpp", relative to include/ (absolute for a package)
     std::vector<BuiltinFunction> functions;
     std::vector<BuiltinConstant> constants;
@@ -44,7 +44,7 @@ struct BuiltinLibrary {
 // Functions available everywhere without an import: print, input, ...
 const std::vector<BuiltinFunction>& globalBuiltins();
 
-// $(<name>) libraries; nullptr if there's no such library.
+// $("name") libraries; nullptr if there's no such library.
 const BuiltinLibrary* findBuiltinLibrary(const std::string& name);
 // The libraries compiled into dessa (math, os, sys, time).
 const std::vector<BuiltinLibrary>& builtinLibraries();

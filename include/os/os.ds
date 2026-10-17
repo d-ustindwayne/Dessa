@@ -1,7 +1,7 @@
 /***
- * $(<os>) -- files, folders, environment and shell commands.
+ * $("os") -- files, folders, environment and shell commands.
  *
- *     { readFile, writeFile } from $(<os>);
+ *     { readFile, writeFile } from $("os");
  *
  * Declaration file: documentation only. Bodies are `...`; the real
  * implementation is C++ in runtime/lib/os.hpp.

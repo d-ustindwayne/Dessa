@@ -8,7 +8,7 @@
 ├── 📄 CMakeLists.txt              build: cmake -S . -B build && cmake --build build
 ├── 📁 runtime                     C++ support library used by generated code
 │   ├── ⚡ dessa_runtime.hpp        core types, print, errors, nil helpers, builtin methods
-│   └── 📁 lib                     builtin libraries, imported with $(<name>)
+│   └── 📁 lib                     builtin libraries, imported with $("name")
 │       ├── ⚡ math.hpp
 │       ├── ⚡ os.hpp
 │       ├── ⚡ sys.hpp

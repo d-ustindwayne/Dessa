@@ -1,8 +1,8 @@
 /***
- * $(<sql>) -- databases: Microsoft SQL Server (and anything else with an
+ * $("sql") -- databases: Microsoft SQL Server (and anything else with an
  * ODBC driver: MySQL, PostgreSQL, ...) and SQLite.
  *
- *     { connectMssql, openSqlite } from $(<sql>);
+ *     { connectMssql, openSqlite } from $("sql");
  *
  *     var[Database] db = connectMssql("Server=localhost;Database=shop;Trusted_Connection=yes;");
  *     var[Database] db2 = connectMssql("Server=school;Database=shop;User Id=student;Password=secret;");
@@ -16,19 +16,19 @@
  *
  * `?` in the SQL is filled from the extra arguments, in order. Values are
  * sent separately from the SQL text, so they can't break the query (no SQL
- * injection). Rows come back as Json objects (see $(<json>)).
+ * injection). Rows come back as Json objects (see $("json")).
  */
 
-{ _odbcDrivers, _odbcOpen, _sqliteOpen, _query, _execute, _close } from $(<sql>);   // native part
-{ Json, jsonObject, jsonNull, jsonNum, jsonStr, jsonBool } from $(<json>);
+{ _odbcDrivers, _odbcOpen, _sqliteOpen, _query, _execute, _close } from $("sql");   // native part
+{ Json, jsonObject, jsonNull, jsonNum, jsonStr, jsonBool } from $("json");
 
 class SqlError {
     var[Str] message = "";
     init(message[Str]) {
-        self.message = message;
+        this.message = message;
     }
     func[Str] toStr() {
-        return $"SqlError: {self.message}";
+        return $"SqlError: {this.message}";
     }
 }
 
@@ -67,7 +67,7 @@ class Database {
     func[Json<>] query(sql[Str], params[(Int | Dbl | Str | Bul | Nil)*]) {
         var[Str<>] raw = [];
         try {
-            raw = _query(self.handle, sql, self._params(params));
+            raw = _query(this.handle, sql, this._params(params));
         } catch (e[Str]) {
             throw new SqlError(e);
         }
@@ -88,7 +88,7 @@ class Database {
 
     // The first row, or nil if there is none.
     func[Json | Nil] queryOne(sql[Str], params[(Int | Dbl | Str | Bul | Nil)*]) {
-        var[Json<>] rows = self.query(sql, ...params);
+        var[Json<>] rows = this.query(sql, ...params);
         if (rows.isEmpty()) return nil;
         return rows<0>;
     }
@@ -97,28 +97,43 @@ class Database {
     // With SQLite, several statements separated by ; can run at once.
     func[Int] execute(sql[Str], params[(Int | Dbl | Str | Bul | Nil)*]) {
         try {
-            return _execute(self.handle, sql, self._params(params));
+            return _execute(this.handle, sql, this._params(params));
         } catch (e[Str]) {
             throw new SqlError(e);
         }
     }
 
     func[Emp] close() {
-        if (self.handle >= 0) _close(self.handle);
-        self.handle = -1;
+        if (this.handle >= 0) _close(this.handle);
+        this.handle = -1;
     }
 
     func[Str] toStr() {
-        return $"<Database {self.kind}{self.handle < 0 ? " (closed)" : ""}>";
+        return $"<Database {this.kind}{this.handle < 0 ? " (closed)" : ""}>";
     }
+}
+
+// true / 1 / yes -> "yes" (ODBC only knows yes and no)
+func[Str] yesNo(value[Str]) {
+    return ["true", "yes", "1"].includes(value.trim().lower()) ? "yes" : "no";
 }
 
 // Any database through an ODBC connection string, e.g.
 //   "Driver={ODBC Driver 18 for SQL Server};Server=localhost;Database=shop;Trusted_Connection=yes;TrustServerCertificate=yes;"
 func[Database] connect(connection[Str]) {
+    // TrustCertificate=yes is accepted for TrustServerCertificate=yes
+    var[Str<>] pieces = connection.split(";");
+    for (var[Int] i = 0; i < pieces.length(); i++) {
+        var[Int] equals = pieces<i>.indexOf("=");
+        if (equals <= 0) continue;
+        var[Str] key = pieces<i>.substr(0, equals).trim().lower();
+        if (key == "trustcertificate" || key == "trust certificate") {
+            pieces<i> = "TrustServerCertificate=" + yesNo(pieces<i>.substr(equals + 1, pieces<i>.length() - equals - 1));
+        }
+    }
     var[Database] db = new Database();
     try {
-        db.handle = _odbcOpen(connection);
+        db.handle = _odbcOpen(pieces.join(";"));
     } catch (e[Str]) {
         throw new SqlError(e);
     }
@@ -139,7 +154,7 @@ func[Str<>] drivers() {
 //
 // The newest installed SQL Server driver is picked automatically, and the
 // server's certificate is trusted unless the string says otherwise (school
-// and local servers usually have self-signed ones).
+// and local servers usually have this-signed ones).
 func[Database] connectMssql(connection[Str]) {
     // key=value; pairs, keeping their order. Values may be wrapped in { }.
     var[Map[Str, Str]] parts = {:};
@@ -162,6 +177,9 @@ func[Database] connectMssql(connection[Str]) {
             case "pwd" := { key = "PWD"; }
             case "driver" := { key = "Driver"; }
             case "trustservercertificate" := { key = "TrustServerCertificate"; }
+            case "trust server certificate" := { key = "TrustServerCertificate"; }
+            case "trustcertificate" := { key = "TrustServerCertificate"; }
+            case "trust certificate" := { key = "TrustServerCertificate"; }
             case "trusted_connection" := { key = "Trusted_Connection"; }
             case "integrated security" := {
                 key = "Trusted_Connection";
@@ -169,6 +187,7 @@ func[Database] connectMssql(connection[Str]) {
             }
             default := {}
         }
+        if (key == "TrustServerCertificate") value = yesNo(value);
         parts<key> = value;
     }
 

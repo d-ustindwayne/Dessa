@@ -10,12 +10,12 @@ class[Named] Person {
     var[Int] age = 0;
 
     init(name[Str], age[Int]) {
-        self.name = name;
-        self.age = age;
+        this.name = name;
+        this.age = age;
     }
 
     func[Str] describe() {
-        return $"{self.name} ({self.age})";
+        return $"{this.name} ({this.age})";
     }
 }
 
@@ -24,11 +24,11 @@ class Student(Person) {
 
     init(name[Str], age[Int], school[Str]) {
         super.init(name, age);
-        self.school = school;
+        this.school = school;
     }
 
     func[Str] describe() {
-        return $"{super.describe()} at {self.school}";
+        return $"{super.describe()} at {this.school}";
     }
 }
 

@@ -1,9 +1,9 @@
 /***
- * $(<math>) -- the Dessa part: class Big, a helper for whole numbers of any
+ * $("math") -- the Dessa part: class Big, a helper for whole numbers of any
  * size (like Java's BigInteger). The native functions are in math.hpp and
  * declared in math.ds.
  *
- *     { Big } from $(<math>);
+ *     { Big } from $("math");
  *     var[Big] f = new Big(1);
  *     for (var[Int] i = 1; i <= 30; i++) f = f.mul(i);
  *     print(f);           // 265252859812191058636308480000000
@@ -13,7 +13,7 @@
  * another number accept a Big or an Int.
  */
 
-{ _bigNormalize, _bigAdd, _bigSub, _bigMul, _bigDiv, _bigMod, _bigPow, _bigCompare, _bigSci, _bigToInt, _bigToDbl, sqrt } from $(<math>);
+{ _bigNormalize, _bigAdd, _bigSub, _bigMul, _bigDiv, _bigMod, _bigPow, _bigCompare, _bigSci, _bigToInt, _bigToDbl, sqrt } from $("math");
 
 class Big {
     var[Str] digits = "0";
@@ -21,9 +21,9 @@ class Big {
     // new Big(42), new Big("123456789012345678901234567890")
     init(value[Int | Str]=0) {
         if (value is Int) {
-            self.digits = Str(value);
+            this.digits = Str(value);
         } else if (value is Str) {
-            self.digits = _bigNormalize(value);
+            this.digits = _bigNormalize(value);
         }
     }
 
@@ -38,44 +38,44 @@ class Big {
     }
 
     // ---- Arithmetic ----
-    func[Big] add(other[Big | Int]) { return self._make(_bigAdd(self.digits, self._of(other))); }
-    func[Big] sub(other[Big | Int]) { return self._make(_bigSub(self.digits, self._of(other))); }
-    func[Big] mul(other[Big | Int]) { return self._make(_bigMul(self.digits, self._of(other))); }
+    func[Big] add(other[Big | Int]) { return this._make(_bigAdd(this.digits, this._of(other))); }
+    func[Big] sub(other[Big | Int]) { return this._make(_bigSub(this.digits, this._of(other))); }
+    func[Big] mul(other[Big | Int]) { return this._make(_bigMul(this.digits, this._of(other))); }
 
     // The whole part of the division: new Big(7).div(2) is 3.
-    func[Big] div(other[Big | Int]) { return self._make(_bigDiv(self.digits, self._of(other))); }
+    func[Big] div(other[Big | Int]) { return this._make(_bigDiv(this.digits, this._of(other))); }
 
     // The remainder, never negative (same rule as %).
-    func[Big] mod(other[Big | Int]) { return self._make(_bigMod(self.digits, self._of(other))); }
+    func[Big] mod(other[Big | Int]) { return this._make(_bigMod(this.digits, this._of(other))); }
 
-    func[Big] pow(exponent[Int]) { return self._make(_bigPow(self.digits, exponent)); }
+    func[Big] pow(exponent[Int]) { return this._make(_bigPow(this.digits, exponent)); }
 
-    func[Big] negate() { return self._make(_bigSub("0", self.digits)); }
+    func[Big] negate() { return this._make(_bigSub("0", this.digits)); }
 
-    func[Big] abs() { return self.isNegative() ? self.negate() : self; }
+    func[Big] abs() { return this.isNegative() ? this.negate() : this; }
 
     // ---- Comparing ----
     // -1 if smaller than `other`, 0 if equal, 1 if bigger.
-    func[Int] compare(other[Big | Int]) { return _bigCompare(self.digits, self._of(other)); }
-    func[Bul] equals(other[Big | Int]) { return self.compare(other) == 0; }
-    func[Bul] isNegative() { return self.digits.startsWith("-"); }
-    func[Bul] isZero() { return self.digits == "0"; }
+    func[Int] compare(other[Big | Int]) { return _bigCompare(this.digits, this._of(other)); }
+    func[Bul] equals(other[Big | Int]) { return this.compare(other) == 0; }
+    func[Bul] isNegative() { return this.digits.startsWith("-"); }
+    func[Bul] isZero() { return this.digits == "0"; }
 
     // ---- Showing and converting ----
     // Scientific notation: 265252859812191058636308480000000 -> "2.65E32"
-    func[Str] sci(digits[Int]=2) { return _bigSci(self.digits, digits); }
+    func[Str] sci(digits[Int]=2) { return _bigSci(this.digits, digits); }
 
     // Number of digits.
-    func[Int] length() { return self.isNegative() ? self.digits.length() - 1 : self.digits.length(); }
+    func[Int] length() { return this.isNegative() ? this.digits.length() - 1 : this.digits.length(); }
 
     // Error if it's too big for an Int.
-    func[Int] toInt() { return _bigToInt(self.digits); }
+    func[Int] toInt() { return _bigToInt(this.digits); }
 
     // May lose digits.
-    func[Dbl] toDbl() { return _bigToDbl(self.digits); }
+    func[Dbl] toDbl() { return _bigToDbl(this.digits); }
 
     // All the digits; print(big) shows these.
-    func[Str] toStr() { return self.digits; }
+    func[Str] toStr() { return this.digits; }
 }
 
 // ============================================================

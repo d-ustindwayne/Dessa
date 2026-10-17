@@ -1,6 +1,6 @@
-# Libraries - `$(<name>)`
+# Libraries - `$("name")`
 
-`$(<name>)` loads a library. It looks in three places, in this order:
+`$("name")` loads a library. It looks in three places, in this order:
 
 1. **`include/<name>/`**: the core libraries that ship inside Dessa.
 2. **`riv_modules/<name>/`**: a riv package installed with `riv add <name>`. riv looks in the
@@ -57,7 +57,7 @@ const[Dbl] PI                         a constant
 ```
 
 Functions whose names start with `_` are helpers for the package's own `.dm` file.
-`$(<sql>);` doesn't import them.
+`$("sql");` doesn't import them.
 
 ## Adding a library
 

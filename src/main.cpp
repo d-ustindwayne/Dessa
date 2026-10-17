@@ -64,6 +64,7 @@ std::string severityName(DiagnosticSeverity s) {
         case DiagnosticSeverity::Error: return "error";
         case DiagnosticSeverity::Warning: return "warning";
         case DiagnosticSeverity::Note: return "note";
+        case DiagnosticSeverity::Hint: return "hint";
     }
     return "error";
 }
@@ -76,12 +77,15 @@ void printDiagnostics(const std::vector<Diagnostic>& diagnostics, bool asJson, s
             out << (i ? "," : "") << "\n  {\"file\":" << json::quote(d.file)
                 << ",\"line\":" << d.line << ",\"column\":" << d.column
                 << ",\"severity\":" << json::quote(severityName(d.severity))
-                << ",\"message\":" << json::quote(d.message) << "}";
+                << ",\"message\":" << json::quote(d.message);
+            if (!d.tag.empty()) out << ",\"tag\":" << json::quote(d.tag) << ",\"length\":" << d.length;
+            out << "}";
         }
         out << (diagnostics.empty() ? "]\n" : "\n]\n");
         return;
     }
     for (const auto& d : diagnostics) {
+        if (d.severity == DiagnosticSeverity::Hint) continue;
         out << d.file;
         if (d.line > 0) out << ":" << d.line << ":" << d.column;
         out << ": " << severityName(d.severity) << ": " << d.message << "\n";
@@ -205,7 +209,7 @@ int cmdCheck(const std::string& path, bool asJson, bool fromStdin) {
     }
     printDiagnostics(diagnostics, asJson, std::cout);
     if (!asJson && !hasError(diagnostics)) {
-        size_t warnings = diagnostics.size();
+        size_t warnings = std::count_if(diagnostics.begin(), diagnostics.end(), [](const Diagnostic& d) { return d.severity != DiagnosticSeverity::Hint; });
         std::cout << "No errors" << (warnings ? " (" + std::to_string(warnings) + " warning(s))" : std::string()) << ".\n";
     }
     return hasError(diagnostics) ? 1 : 0;
@@ -232,7 +236,7 @@ std::string javascriptFor(Compilation& c, std::string& errors) {
     static const std::set<std::string> withJs = {"math", "os", "sys", "time"};
     for (const auto& lib : c.analyser.builtinLibrariesUsed()) {
         if (!withJs.count(lib)) {
-            errors += "dessa: the library <" + lib + "> has a C++ part, so it can't run in JavaScript or a browser "
+            errors += "dessa: the library '" + lib + "' has a C++ part, so it can't run in JavaScript or a browser "
                       "(only libraries written in Dessa, or with a .js part, can)\n";
             return "";
         }
@@ -774,8 +778,8 @@ int cmdComplete(const std::string& path, bool fromStdin, const std::string& at) 
     bool first = true;
     for (const auto& s : items) {
         if (s.name == kCompletionPlaceholder || s.name.empty()) continue;
-        // _helpers are private to their class: only offered after `self.`
-        if (probe.isMember && !probe.objectIsSelf && s.name[0] == '_') continue;
+        // _helpers are private to their class: only offered after `this.`
+        if (probe.isMember && !probe.objectIsThis && s.name[0] == '_') continue;
         out << (first ? "\n  " : ",\n  ");
         writeSymbol(out, s.name, s, declaringFile(c, s));
         first = false;

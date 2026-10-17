@@ -1,4 +1,4 @@
-// $(<os>)
+// $("os")
 #pragma once
 #include "dessa_runtime.hpp"
 #include <filesystem>

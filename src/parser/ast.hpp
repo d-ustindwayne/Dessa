@@ -100,11 +100,12 @@ struct ImportName {
 
 // One module named inside `$(...)`:
 //   $("my.other.directory") -> {path: "my.other.directory", isBuiltin: false}
-//   $(<math>)               -> {path: "math",               isBuiltin: true}
-// User modules map dots to folders: my/other/directory.ds
+//   $("math")               -> {path: "math",               isBuiltin: true}
+// User modules map dots to folders: my/other/directory.ds. A file wins over a
+// library of the same name; the loader decides and sets isBuiltin.
 struct ModuleSpec {
     std::string path;
-    bool isBuiltin = false;
+    mutable bool isBuiltin = false;
     int line = 0;
     int column = 0;
 };
@@ -149,7 +150,7 @@ struct LiteralExpr : Expr {
         : Expr(ExprKind::Literal), token(std::move(token)) {}
 };
 
-// $"Hello, I am {self.name}. nice to meet you."
+// $"Hello, I am {this.name}. nice to meet you."
 // Holds the raw interpolated text as the lexer captured it (braces
 // included), PLUS the split-out pieces once the parser has separated
 // them. See parseTemplateString() in parser.cpp.
@@ -237,7 +238,7 @@ struct IndexExpr : Expr {
         : Expr(ExprKind::Index), object(std::move(object)), index(std::move(index)) {}
 };
 
-// self.name, p.name, Database.parseKey, stng?.config (isOptional=true)
+// this.name, p.name, Database.parseKey, stng?.config (isOptional=true)
 struct MemberExpr : Expr {
     ExprPtr object;
     Token name;
@@ -421,7 +422,7 @@ struct InterfaceDeclStmt : Stmt {
 // { MyClass as MC } from $("my.other.directory");
 // $("java.util", "java.sql", "my.other");   -> importAll, every top-level
 //                                              declaration of each module
-// { sqrt } from $(<math>);                   -> builtin library
+// { sqrt } from $("math");                   -> builtin library
 struct ImportStmt : Stmt {
     std::vector<ImportName> names; // empty when importAll
     std::vector<ModuleSpec> modules;

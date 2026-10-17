@@ -1,9 +1,9 @@
 /***
- * $(<webutils>) -- the web page, from Dessa. Only for programs that run in a
+ * $("webutils") -- the web page, from Dessa. Only for programs that run in a
  * browser: <script type="text/dessa"> with web/dessa.js, or
  * `dessa build app.ds --target web`.
  *
- *     { document, alert, log } from $(<webutils>);
+ *     { document, alert, log } from $("webutils");
  *
  *     var[Element] button = document.createElement("button");
  *     button.textContent = "Click me";
@@ -203,6 +203,6 @@ func[Emp] clearTimer(id[Int]) { ... }
 
 // Downloads a text file (same site, or one that allows it) and returns its
 // text. Error if it fails. Waits until it's done.
-//     { parseJson } from $(<json>);
+//     { parseJson } from $("json");
 //     var[Json] data = parseJson(fetchText("data.json"));
 func[Str] fetchText(url[Str]) { ... }

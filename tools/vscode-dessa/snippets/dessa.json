@@ -26,7 +26,7 @@
       "\tvar[${2:Str}] ${3:field};",
       "",
       "\tinit(${3:field}[${2:Str}]) {",
-      "\t\tself.${3:field} = ${3:field};",
+      "\t\tthis.${3:field} = ${3:field};",
       "\t}",
       "",
       "\t$0",

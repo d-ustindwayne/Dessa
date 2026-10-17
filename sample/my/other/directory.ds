@@ -4,6 +4,6 @@ class Greeter {
     var[Str] greeting = "Hello";
 
     func[Str] greet(name[Str]) {
-        return $"{self.greeting}, {name}";
+        return $"{this.greeting}, {name}";
     }
 }

@@ -1,5 +1,5 @@
 /***
- * $(<phl>) -- read and write PHL, Dessa's data format. Written in Dessa.
+ * $("phl") -- read and write PHL, Dessa's data format. Written in Dessa.
  *
  *     name: "Dustin Dwayne"
  *     Services: [Database: [ServerName: "Server", Port: 1341]]
@@ -16,24 +16,24 @@
  *   - every value needs a key: a value on its own is a syntax error
  *   - // starts a comment
  *
- * Values are read into the same Json type as $(<json>), so PHL and JSON
+ * Values are read into the same Json type as $("json"), so PHL and JSON
  * convert into each other:
  *
- *     $(<phl>);
+ *     $("phl");
  *     var[Json] doc = parsePhl(readFile("config.phl"));
  *     print(doc.get("product").at(3).get("ID").asInt());   // 104
  *     print(toPhl(doc));                                   // back to PHL text
  */
 
-{ Json, JsonKind, jsonNull, jsonBool, jsonNum, jsonStr, jsonArray, jsonObject } from $(<json>);
+{ Json, JsonKind, jsonNull, jsonBool, jsonNum, jsonStr, jsonArray, jsonObject } from $("json");
 
 class PhlError {
     var[Str] message = "";
     init(message[Str]) {
-        self.message = message;
+        this.message = message;
     }
     func[Str] toStr() {
-        return $"PhlError: {self.message}";
+        return $"PhlError: {this.message}";
     }
 }
 
@@ -43,20 +43,20 @@ class PhlParser {
     var[Int] pos = 0;
 
     init(text[Str]) {
-        self.text = text;
-        self.chars = text.chars();
+        this.text = text;
+        this.chars = text.chars();
     }
 
     // Characters start..end (not included) as text
     func[Str] slice(start[Int], end[Int]) {
-        return self.chars.slice(start, end).join("");
+        return this.chars.slice(start, end).join("");
     }
 
     func[Emp] fail(message[Str]) {
         var[Int] line = 1;
         var[Int] column = 1;
-        for (var[Int] i = 0; i < self.pos && i < self.chars.length(); i++) {
-            if (self.chars<i> == '\n') {
+        for (var[Int] i = 0; i < this.pos && i < this.chars.length(); i++) {
+            if (this.chars<i> == '\n') {
                 line++;
                 column = 1;
             } else {
@@ -67,22 +67,22 @@ class PhlParser {
     }
 
     func[Bul] atEnd() {
-        return self.pos >= self.chars.length();
+        return this.pos >= this.chars.length();
     }
 
     func[Chr] peek() {
-        if (self.atEnd()) return '\0';
-        return self.chars<self.pos>;
+        if (this.atEnd()) return '\0';
+        return this.chars<this.pos>;
     }
 
     // Skips spaces, newlines and // comments.
     func[Emp] skip() {
-        while (!self.atEnd()) {
-            var[Chr] c = self.peek();
+        while (!this.atEnd()) {
+            var[Chr] c = this.peek();
             if (c.isSpace()) {
-                self.pos++;
-            } else if (c == '/' && self.pos + 1 < self.chars.length() && self.chars<self.pos + 1> == '/') {
-                while (!self.atEnd() && self.peek() != '\n') self.pos++;
+                this.pos++;
+            } else if (c == '/' && this.pos + 1 < this.chars.length() && this.chars<this.pos + 1> == '/') {
+                while (!this.atEnd() && this.peek() != '\n') this.pos++;
             } else {
                 return;
             }
@@ -90,11 +90,11 @@ class PhlParser {
     }
 
     func[Emp] expectChar(c[Chr]) {
-        self.skip();
-        if (self.peek() != c) {
-            self.fail(self.atEnd() ? $"expected '{c}' but the text ended" : $"expected '{c}', found '{self.peek()}'");
+        this.skip();
+        if (this.peek() != c) {
+            this.fail(this.atEnd() ? $"expected '{c}' but the text ended" : $"expected '{c}', found '{this.peek()}'");
         }
-        self.pos++;
+        this.pos++;
     }
 
     func[Bul] isKeyChar(c[Chr]) {
@@ -103,146 +103,146 @@ class PhlParser {
 
     // A key: Name, server_name, or "any text"
     func[Str] key() {
-        self.skip();
-        if (self.peek() == '"') return self.string();
-        var[Int] start = self.pos;
-        while (!self.atEnd() && self.isKeyChar(self.peek())) self.pos++;
-        if (self.pos == start) {
-            self.fail(self.atEnd() ? "expected a key but the text ended"
-                                   : $"expected a key, found '{self.peek()}' (every value needs a key: name: value)");
+        this.skip();
+        if (this.peek() == '"') return this.string();
+        var[Int] start = this.pos;
+        while (!this.atEnd() && this.isKeyChar(this.peek())) this.pos++;
+        if (this.pos == start) {
+            this.fail(this.atEnd() ? "expected a key but the text ended"
+                                   : $"expected a key, found '{this.peek()}' (every value needs a key: name: value)");
         }
-        return self.slice(start, self.pos);
+        return this.slice(start, this.pos);
     }
 
     // key: value, key: value ...  until `close` ('\0' = end of the text)
     func[Json] entries(close[Chr]) {
         var[Json] result = jsonObject();
         loop {
-            self.skip();
-            if (close == '\0' && self.atEnd()) return result;
-            if (close != '\0' && self.peek() == close) {
-                self.pos++;
+            this.skip();
+            if (close == '\0' && this.atEnd()) return result;
+            if (close != '\0' && this.peek() == close) {
+                this.pos++;
                 return result;
             }
-            if (self.atEnd()) self.fail($"expected '{close}' but the text ended");
-            var[Str] name = self.key();
-            if (result.has(name)) self.fail($"key '{name}' is used twice");
-            self.skip();
-            if (self.peek() != ':') {
-                self.fail($"'{name}' needs a key and a colon: every value is written as key: value");
+            if (this.atEnd()) this.fail($"expected '{close}' but the text ended");
+            var[Str] name = this.key();
+            if (result.has(name)) this.fail($"key '{name}' is used twice");
+            this.skip();
+            if (this.peek() != ':') {
+                this.fail($"'{name}' needs a key and a colon: every value is written as key: value");
             }
-            self.pos++;
-            result.set(name, self.value());
-            self.skip();
-            if (self.peek() == ',') self.pos++;   // optional between entries, allowed at the end
+            this.pos++;
+            result.set(name, this.value());
+            this.skip();
+            if (this.peek() == ',') this.pos++;   // optional between entries, allowed at the end
         }
     }
 
     func[Json] value() {
-        self.skip();
-        if (self.atEnd()) self.fail("expected a value but the text ended");
-        var[Chr] c = self.peek();
-        if (c == '"') return jsonStr(self.string());
+        this.skip();
+        if (this.atEnd()) this.fail("expected a value but the text ended");
+        var[Chr] c = this.peek();
+        if (c == '"') return jsonStr(this.string());
         if (c == '[') {
-            self.pos++;
-            return self.entries(']');
+            this.pos++;
+            return this.entries(']');
         }
-        if (c == '{') return self.table();
-        if (c == '-' || c.isDigit()) return self.number();
-        var[Int] start = self.pos;
-        while (!self.atEnd() && self.isKeyChar(self.peek())) self.pos++;
-        var[Str] word = self.slice(start, self.pos);
+        if (c == '{') return this.table();
+        if (c == '-' || c.isDigit()) return this.number();
+        var[Int] start = this.pos;
+        while (!this.atEnd() && this.isKeyChar(this.peek())) this.pos++;
+        var[Str] word = this.slice(start, this.pos);
         if (word == "true") return jsonBool(true);
         if (word == "false") return jsonBool(false);
         if (word == "nil") return jsonNull();
-        self.pos = start;
-        self.fail(word.isEmpty() ? $"unexpected '{c}'" : $"unexpected '{word}' (text values need quotes: \"{word}\")");
+        this.pos = start;
+        this.fail(word.isEmpty() ? $"unexpected '{c}'" : $"unexpected '{word}' (text values need quotes: \"{word}\")");
         return jsonNull();
     }
 
     // {Col, Col} [ v, v; v, v; ]  ->  a list of objects
     func[Json] table() {
-        self.expectChar('{');
+        this.expectChar('{');
         var[Str<>] columns = [];
         loop {
-            self.skip();
-            if (self.peek() == '}') {
-                self.pos++;
+            this.skip();
+            if (this.peek() == '}') {
+                this.pos++;
                 break;
             }
-            columns.push(self.key());
-            self.skip();
-            if (self.peek() == ',') self.pos++;
+            columns.push(this.key());
+            this.skip();
+            if (this.peek() == ',') this.pos++;
         }
-        if (columns.isEmpty()) self.fail("a table needs at least one column");
+        if (columns.isEmpty()) this.fail("a table needs at least one column");
 
-        self.expectChar('[');
+        this.expectChar('[');
         var[Json] rows = jsonArray();
         var[Json] row = jsonObject();
         var[Int] column = 0;
         loop {
-            self.skip();
-            if (self.peek() == ']') {
-                self.pos++;
-                if (column != 0) self.fail($"the last row has {column} value(s) but the table has {columns.length()} column(s); end rows with ';'");
+            this.skip();
+            if (this.peek() == ']') {
+                this.pos++;
+                if (column != 0) this.fail($"the last row has {column} value(s) but the table has {columns.length()} column(s); end rows with ';'");
                 return rows;
             }
-            if (self.atEnd()) self.fail("expected ']' to close the table");
-            if (column >= columns.length()) self.fail($"this row has more values than the {columns.length()} column(s)");
-            row.set(columns<column>, self.value());
+            if (this.atEnd()) this.fail("expected ']' to close the table");
+            if (column >= columns.length()) this.fail($"this row has more values than the {columns.length()} column(s)");
+            row.set(columns<column>, this.value());
             column++;
-            self.skip();
-            if (self.peek() == ',') {
-                self.pos++;
-            } else if (self.peek() == ';') {
-                self.pos++;
+            this.skip();
+            if (this.peek() == ',') {
+                this.pos++;
+            } else if (this.peek() == ';') {
+                this.pos++;
                 if (column != columns.length()) {
-                    self.fail($"this row has {column} value(s) but the table has {columns.length()} column(s)");
+                    this.fail($"this row has {column} value(s) but the table has {columns.length()} column(s)");
                 }
                 rows.push(row);
                 row = jsonObject();
                 column = 0;
-            } else if (self.peek() != ']') {
-                self.fail($"expected ',' or ';' in the table, found '{self.peek()}'");
+            } else if (this.peek() != ']') {
+                this.fail($"expected ',' or ';' in the table, found '{this.peek()}'");
             }
         }
         return rows;
     }
 
     func[Json] number() {
-        var[Int] start = self.pos;
-        if (self.peek() == '-') self.pos++;
-        while (!self.atEnd() && (self.peek().isDigit() || self.peek() == '.')) self.pos++;
-        var[Str] digits = self.slice(start, self.pos);
+        var[Int] start = this.pos;
+        if (this.peek() == '-') this.pos++;
+        while (!this.atEnd() && (this.peek().isDigit() || this.peek() == '.')) this.pos++;
+        var[Str] digits = this.slice(start, this.pos);
         try {
             return jsonNum(Dbl(digits));
         } catch (e[Str]) {
-            self.pos = start;
-            self.fail($"'{digits}' is not a valid number");
+            this.pos = start;
+            this.fail($"'{digits}' is not a valid number");
         }
         return jsonNull();
     }
 
     func[Str] string() {
-        self.expectChar('"');
+        this.expectChar('"');
         var[Str] out = "";
         loop {
-            if (self.atEnd() || self.peek() == '\n') self.fail("unfinished string");
-            var[Chr] c = self.peek();
-            self.pos++;
+            if (this.atEnd() || this.peek() == '\n') this.fail("unfinished string");
+            var[Chr] c = this.peek();
+            this.pos++;
             if (c == '"') return out;
             if (c != '\\') {
                 out += c;
                 continue;
             }
-            var[Chr] e = self.peek();
-            self.pos++;
+            var[Chr] e = this.peek();
+            this.pos++;
             switch (e) {
                 case 'n' := { out += "\n"; }
                 case 't' := { out += "\t"; }
                 case '"' := { out += "\""; }
                 case '\\' := { out += "\\"; }
-                default := { self.fail($"unknown escape '\\{e}'"); }
+                default := { this.fail($"unknown escape '\\{e}'"); }
             }
         }
     }

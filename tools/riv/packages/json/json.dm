@@ -1,7 +1,7 @@
 /***
- * $(<json>) -- read and write JSON. Written in Dessa.
+ * $("json") -- read and write JSON. Written in Dessa.
  *
- *     $(<json>);
+ *     $("json");
  *     var[Json] data = parseJson("{\"name\": \"Ann\", \"scores\": [90, 85]}");
  *     print(data.get("name").asStr());           // Ann
  *     print(data.get("scores").at(1).asInt());   // 85
@@ -31,10 +31,10 @@ enum JsonKind {
 class JsonError {
     var[Str] message = "";
     init(message[Str]) {
-        self.message = message;
+        this.message = message;
     }
     func[Str] toStr() {
-        return $"JsonError: {self.message}";
+        return $"JsonError: {this.message}";
     }
 }
 
@@ -47,106 +47,106 @@ class Json {
     var[Map[Str, Json]] fields = {:};
 
     // ---- What is it? ----
-    func[Bul] isNull() { return self.kind == JsonKind.NULL; }
-    func[Bul] isBool() { return self.kind == JsonKind.BOOL; }
-    func[Bul] isNumber() { return self.kind == JsonKind.NUMBER; }
-    func[Bul] isString() { return self.kind == JsonKind.STRING; }
-    func[Bul] isArray() { return self.kind == JsonKind.ARRAY; }
-    func[Bul] isObject() { return self.kind == JsonKind.OBJECT; }
+    func[Bul] isNull() { return this.kind == JsonKind.NULL; }
+    func[Bul] isBool() { return this.kind == JsonKind.BOOL; }
+    func[Bul] isNumber() { return this.kind == JsonKind.NUMBER; }
+    func[Bul] isString() { return this.kind == JsonKind.STRING; }
+    func[Bul] isArray() { return this.kind == JsonKind.ARRAY; }
+    func[Bul] isObject() { return this.kind == JsonKind.OBJECT; }
 
     func[Str] kindName() {
-        return self.kind.name().lower();
+        return this.kind.name().lower();
     }
 
     func[Emp] expect(kind[JsonKind], wanted[Str]) {
-        if (self.kind != kind) {
-            throw new JsonError($"expected {wanted}, found {self.kindName()}");
+        if (this.kind != kind) {
+            throw new JsonError($"expected {wanted}, found {this.kindName()}");
         }
     }
 
     // ---- Reading values ----
     func[Str] asStr() {
-        self.expect(JsonKind.STRING, "a string");
-        return self.stringValue;
+        this.expect(JsonKind.STRING, "a string");
+        return this.stringValue;
     }
 
     func[Dbl] asDbl() {
-        self.expect(JsonKind.NUMBER, "a number");
-        return self.numberValue;
+        this.expect(JsonKind.NUMBER, "a number");
+        return this.numberValue;
     }
 
     func[Int] asInt() {
-        self.expect(JsonKind.NUMBER, "a number");
-        return Int(self.numberValue);
+        this.expect(JsonKind.NUMBER, "a number");
+        return Int(this.numberValue);
     }
 
     func[Bul] asBul() {
-        self.expect(JsonKind.BOOL, "true or false");
-        return self.boolValue;
+        this.expect(JsonKind.BOOL, "true or false");
+        return this.boolValue;
     }
 
     // An object's field; a JSON null if the key isn't there, so lookups can
     // be chained: data.get("user").get("name").asStr()
     func[Json] get(key[Str]) {
-        if (self.isNull()) return self;
-        self.expect(JsonKind.OBJECT, $"an object (looking up \"{key}\")");
-        return self.fields.get(key) ?? jsonNull();
+        if (this.isNull()) return this;
+        this.expect(JsonKind.OBJECT, $"an object (looking up \"{key}\")");
+        return this.fields.get(key) ?? jsonNull();
     }
 
     func[Bul] has(key[Str]) {
-        return self.isObject() && self.fields.has(key);
+        return this.isObject() && this.fields.has(key);
     }
 
     // An array's item.
     func[Json] at(index[Int]) {
-        self.expect(JsonKind.ARRAY, "an array");
-        if (index < 0 || index >= self.items.length()) {
-            throw new JsonError($"index {index} is out of range for an array of length {self.items.length()}");
+        this.expect(JsonKind.ARRAY, "an array");
+        if (index < 0 || index >= this.items.length()) {
+            throw new JsonError($"index {index} is out of range for an array of length {this.items.length()}");
         }
-        return self.items<index>;
+        return this.items<index>;
     }
 
     // Items of an array, characters of a string, or fields of an object.
     func[Int] length() {
-        if (self.isArray()) return self.items.length();
-        if (self.isObject()) return self.fields.length();
-        if (self.isString()) return self.stringValue.length();
-        throw new JsonError($"{self.kindName()} has no length");
+        if (this.isArray()) return this.items.length();
+        if (this.isObject()) return this.fields.length();
+        if (this.isString()) return this.stringValue.length();
+        throw new JsonError($"{this.kindName()} has no length");
     }
 
     func[Str<>] keys() {
-        self.expect(JsonKind.OBJECT, "an object");
-        return self.fields.keys();
+        this.expect(JsonKind.OBJECT, "an object");
+        return this.fields.keys();
     }
 
     // ---- Changing values (each returns the value itself, for chaining) ----
     func[Json] set(key[Str], value[Json]) {
-        self.expect(JsonKind.OBJECT, "an object");
-        self.fields<key> = value;
-        return self;
+        this.expect(JsonKind.OBJECT, "an object");
+        this.fields<key> = value;
+        return this;
     }
 
     func[Json] remove(key[Str]) {
-        self.expect(JsonKind.OBJECT, "an object");
-        self.fields.remove(key);
-        return self;
+        this.expect(JsonKind.OBJECT, "an object");
+        this.fields.remove(key);
+        return this;
     }
 
     func[Json] push(value[Json]) {
-        self.expect(JsonKind.ARRAY, "an array");
-        self.items.push(value);
-        return self;
+        this.expect(JsonKind.ARRAY, "an array");
+        this.items.push(value);
+        return this;
     }
 
     // ---- Writing JSON ----
     // Compact JSON text. print(json) uses this.
     func[Str] toStr() {
-        return writeJson(self, 0, 0);
+        return writeJson(this, 0, 0);
     }
 
     // JSON text spread over lines, indented by `indent` spaces per level.
     func[Str] pretty(indent[Int]=2) {
-        return writeJson(self, indent, 0);
+        return writeJson(this, indent, 0);
     }
 }
 
@@ -272,21 +272,21 @@ class JsonParser {
     var[Int] pos = 0;
 
     init(text[Str]) {
-        self.text = text;
-        self.chars = text.chars();
+        this.text = text;
+        this.chars = text.chars();
     }
 
     // Characters start..end (not included) as text
     func[Str] slice(start[Int], end[Int]) {
-        return self.chars.slice(start, end).join("");
+        return this.chars.slice(start, end).join("");
     }
 
     func[Emp] fail(message[Str]) {
         // line and column of `pos`, counting from 1
         var[Int] line = 1;
         var[Int] column = 1;
-        for (var[Int] i = 0; i < self.pos && i < self.chars.length(); i++) {
-            if (self.chars<i> == '\n') {
+        for (var[Int] i = 0; i < this.pos && i < this.chars.length(); i++) {
+            if (this.chars<i> == '\n') {
                 line++;
                 column = 1;
             } else {
@@ -297,110 +297,110 @@ class JsonParser {
     }
 
     func[Bul] atEnd() {
-        return self.pos >= self.chars.length();
+        return this.pos >= this.chars.length();
     }
 
     func[Chr] peek() {
-        if (self.atEnd()) return '\0';
-        return self.chars<self.pos>;
+        if (this.atEnd()) return '\0';
+        return this.chars<this.pos>;
     }
 
     func[Emp] skipSpace() {
-        while (!self.atEnd() && self.peek().isSpace()) self.pos++;
+        while (!this.atEnd() && this.peek().isSpace()) this.pos++;
     }
 
     func[Emp] expectChar(c[Chr]) {
-        self.skipSpace();
-        if (self.peek() != c) {
-            self.fail(self.atEnd() ? $"expected '{c}' but the text ended" : $"expected '{c}', found '{self.peek()}'");
+        this.skipSpace();
+        if (this.peek() != c) {
+            this.fail(this.atEnd() ? $"expected '{c}' but the text ended" : $"expected '{c}', found '{this.peek()}'");
         }
-        self.pos++;
+        this.pos++;
     }
 
     func[Bul] tryWord(word[Str]) {
-        if (self.pos + word.length() <= self.chars.length() && self.slice(self.pos, self.pos + word.length()) == word) {
-            self.pos += word.length();
+        if (this.pos + word.length() <= this.chars.length() && this.slice(this.pos, this.pos + word.length()) == word) {
+            this.pos += word.length();
             return true;
         }
         return false;
     }
 
     func[Json] value() {
-        self.skipSpace();
-        if (self.atEnd()) self.fail("expected a value but the text ended");
-        var[Chr] c = self.peek();
-        if (c == '{') return self.object();
-        if (c == '[') return self.array();
-        if (c == '"') return jsonStr(self.string());
-        if (c == '-' || c.isDigit()) return self.number();
-        if (self.tryWord("true")) return jsonBool(true);
-        if (self.tryWord("false")) return jsonBool(false);
-        if (self.tryWord("null")) return jsonNull();
-        self.fail($"unexpected character '{c}'");
+        this.skipSpace();
+        if (this.atEnd()) this.fail("expected a value but the text ended");
+        var[Chr] c = this.peek();
+        if (c == '{') return this.object();
+        if (c == '[') return this.array();
+        if (c == '"') return jsonStr(this.string());
+        if (c == '-' || c.isDigit()) return this.number();
+        if (this.tryWord("true")) return jsonBool(true);
+        if (this.tryWord("false")) return jsonBool(false);
+        if (this.tryWord("null")) return jsonNull();
+        this.fail($"unexpected character '{c}'");
         return jsonNull();
     }
 
     func[Json] object() {
         var[Json] result = jsonObject();
-        self.expectChar('{');
-        self.skipSpace();
-        if (self.peek() == '}') {
-            self.pos++;
+        this.expectChar('{');
+        this.skipSpace();
+        if (this.peek() == '}') {
+            this.pos++;
             return result;
         }
         loop {
-            self.skipSpace();
-            if (self.peek() != '"') self.fail("expected a \"key\" in the object");
-            var[Str] key = self.string();
-            self.expectChar(':');
-            result.fields<key> = self.value();
-            self.skipSpace();
-            if (self.peek() == ',') {
-                self.pos++;
+            this.skipSpace();
+            if (this.peek() != '"') this.fail("expected a \"key\" in the object");
+            var[Str] key = this.string();
+            this.expectChar(':');
+            result.fields<key> = this.value();
+            this.skipSpace();
+            if (this.peek() == ',') {
+                this.pos++;
                 continue;
             }
-            self.expectChar('}');
+            this.expectChar('}');
             return result;
         }
     }
 
     func[Json] array() {
         var[Json] result = jsonArray();
-        self.expectChar('[');
-        self.skipSpace();
-        if (self.peek() == ']') {
-            self.pos++;
+        this.expectChar('[');
+        this.skipSpace();
+        if (this.peek() == ']') {
+            this.pos++;
             return result;
         }
         loop {
-            result.items.push(self.value());
-            self.skipSpace();
-            if (self.peek() == ',') {
-                self.pos++;
+            result.items.push(this.value());
+            this.skipSpace();
+            if (this.peek() == ',') {
+                this.pos++;
                 continue;
             }
-            self.expectChar(']');
+            this.expectChar(']');
             return result;
         }
     }
 
     func[Json] number() {
-        var[Int] start = self.pos;
-        if (self.peek() == '-') self.pos++;
-        while (!self.atEnd()) {
-            var[Chr] c = self.peek();
+        var[Int] start = this.pos;
+        if (this.peek() == '-') this.pos++;
+        while (!this.atEnd()) {
+            var[Chr] c = this.peek();
             if (c.isDigit() || c == '.' || c == 'e' || c == 'E' || c == '+' || c == '-') {
-                self.pos++;
+                this.pos++;
             } else {
                 break;
             }
         }
-        var[Str] digits = self.slice(start, self.pos);
+        var[Str] digits = this.slice(start, this.pos);
         try {
             return jsonNum(Dbl(digits));
         } catch (e[Str]) {
-            self.pos = start;
-            self.fail($"'{digits}' is not a valid number");
+            this.pos = start;
+            this.fail($"'{digits}' is not a valid number");
         }
         return jsonNull();
     }
@@ -409,36 +409,36 @@ class JsonParser {
         if (c.isDigit()) return c.code() - 48;
         var[Chr] lower = c.lower();
         if (lower >= 'a' && lower <= 'f') return lower.code() - 87;
-        self.fail($"'{c}' is not a hex digit");
+        this.fail($"'{c}' is not a hex digit");
         return 0;
     }
 
     func[Int] hex4() {
         var[Int] value = 0;
         for (var[Int] i = 0; i < 4; i++) {
-            if (self.atEnd()) self.fail("unfinished \\u escape");
-            value = value * 16 + self.hexValue(self.peek());
-            self.pos++;
+            if (this.atEnd()) this.fail("unfinished \\u escape");
+            value = value * 16 + this.hexValue(this.peek());
+            this.pos++;
         }
         return value;
     }
 
 
     func[Str] string() {
-        self.expectChar('"');
+        this.expectChar('"');
         var[Str] out = "";
         loop {
-            if (self.atEnd()) self.fail("unfinished string");
-            var[Chr] c = self.peek();
-            self.pos++;
+            if (this.atEnd()) this.fail("unfinished string");
+            var[Chr] c = this.peek();
+            this.pos++;
             if (c == '"') return out;
             if (c != '\\') {
                 out += c;
                 continue;
             }
-            if (self.atEnd()) self.fail("unfinished escape");
-            var[Chr] e = self.peek();
-            self.pos++;
+            if (this.atEnd()) this.fail("unfinished escape");
+            var[Chr] e = this.peek();
+            this.pos++;
             switch (e) {
                 case '"' := { out += "\""; }
                 case '\\' := { out += "\\"; }
@@ -449,15 +449,15 @@ class JsonParser {
                 case 'r' := { out += "\r"; }
                 case 't' := { out += "\t"; }
                 case 'u' := {
-                    var[Int] code = self.hex4();
+                    var[Int] code = this.hex4();
                     // a surrogate pair encodes one character above U+FFFF
-                    if (code >= 55296 && code <= 56319 && self.tryWord("\\u")) {
-                        var[Int] low = self.hex4();
+                    if (code >= 55296 && code <= 56319 && this.tryWord("\\u")) {
+                        var[Int] low = this.hex4();
                         code = 65536 + (code - 55296) * 1024 + (low - 56320);
                     }
                     out += Chr(code);
                 }
-                default := { self.fail($"unknown escape '\\{e}'"); }
+                default := { this.fail($"unknown escape '\\{e}'"); }
             }
         }
     }

@@ -74,11 +74,11 @@ class Box {
     var[Int] width = 0;
     var[Int] height = 0;
     init(width[Int]=1, height[Int]=1) {
-        self.width = width;
-        self.height = height;
+        this.width = width;
+        this.height = height;
     }
     func[Int] area(scale[Int]=1) {
-        return self.width * self.height * scale;
+        return this.width * this.height * scale;
     }
 }
 print(new Box().area(), new Box(3).area(), new Box(2, 5).area(10));

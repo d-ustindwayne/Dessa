@@ -32,7 +32,7 @@ func[Int] orZero(x[Int | Nil]) {
 class Box {
     var[Int] size = 1;
     func[Int] getSize() {
-        return self.size;
+        return this.size;
     }
 }
 

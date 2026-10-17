@@ -21,7 +21,7 @@ bool isNilLiteral(const Expr* e) {
 }
 
 bool isSelf(const Expr* e) {
-    return e && e->kind == ExprKind::Identifier && static_cast<const IdentifierExpr*>(e)->name.type == TokenType::SELF;
+    return e && e->kind == ExprKind::Identifier && static_cast<const IdentifierExpr*>(e)->name.type == TokenType::THIS;
 }
 
 bool isSuper(const Expr* e) {
@@ -990,7 +990,7 @@ std::string JsCodegen::literal(const LiteralExpr* e) {
 }
 
 std::string JsCodegen::identifier(const IdentifierExpr* e) {
-    if (e->name.type == TokenType::SELF) return "this";
+    if (e->name.type == TokenType::THIS) return "this";
     const Symbol* symbol = analyser.symbolOf(e);
     if (!symbol) return jsName(e->name.lexeme);
     switch (symbol->kind) {

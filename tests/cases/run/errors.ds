@@ -16,7 +16,7 @@ validateAge(21);
 class NotFound {
     var[Str] what = "";
     init(what[Str]) {
-        self.what = what;
+        this.what = what;
     }
 }
 

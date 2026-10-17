@@ -1,6 +1,6 @@
-// $(<sql>) implementation: ODBC (MSSQL and any database with an ODBC
+// $("sql") implementation: ODBC (MSSQL and any database with an ODBC
 // driver) and SQLite. Compiled once by dessa and linked into programs that
-// import $(<sql>).
+// import $("sql").
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX

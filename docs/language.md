@@ -56,7 +56,7 @@ Nested types work as you would expect: `Int<><>` is a list of lists,
 to lists.
 
 `Int` arithmetic never wraps around silently: going past the 64-bit range is
-an error. For bigger numbers use `Big` from `$(<math>)`.
+an error. For bigger numbers use `Big` from `$("math")`.
 
 `/` between two Ints gives a decimal (`7 / 2` is `3.5`). Stored into an `Int`
 it is cut to a whole number (`var[Int] x = 7 / 2;` gives 3). `%` never gives a
@@ -84,10 +84,13 @@ var[Str] sql = """
 ```
 
 Text counts characters, not bytes: `"héllo".length()` is 5 and `"héllo"<1>`
-is `'é'`. Useful methods: `length`, `upper`, `lower`, `trim`, `includes`,
+is `'é'`. Useful methods: `length`, `upper`, `lower`, `title`, `trim`, `includes`,
 `startsWith`, `endsWith`, `indexOf`, `replace` (first match), `replaceAll`,
 `split`, `substr(start, length)`, `repeat`, `chars`, `compare`, `toInt`,
 `toDbl`. Decimals: `3.14159.toFixed(2)` is `"3.14"`.
+
+`"Café Niño".plain()` removes accents (`"Cafe Nino"`). `==` is exact, so to
+compare without case use `caseless`: `name.caseless() == "ANN".caseless()`.
 
 ## Conversions
 
@@ -236,7 +239,7 @@ class Animal {
     var[Str] name = "";
 
     init(name[Str]) {
-        self.name = name;
+        this.name = name;
     }
 
     func[Str] speak() {
@@ -245,7 +248,7 @@ class Animal {
 
     // print(animal) uses toStr() when the class has one
     func[Str] toStr() {
-        return $"{self.name} says {self.speak()}";
+        return $"{this.name} says {this.speak()}";
     }
 }
 
@@ -254,7 +257,7 @@ class Dog(Animal) {                     // Dog is an Animal
 
     init(name[Str], age[Int]) {
         super.init(name);               // must come first
-        self.age = age;
+        this.age = age;
     }
 
     func[Str] speak() {
@@ -283,7 +286,7 @@ interface Describable {
 
 class[Describable] Product {
     var[Str] name = "";
-    func[Str] summary() { return $"Product {self.name}"; }
+    func[Str] summary() { return $"Product {this.name}"; }
 }
 
 class[Describable] Account(BaseAccount) { ... }    // interface and parent together
@@ -308,7 +311,7 @@ switch (c) {
 ```dessa
 class NotFound {
     var[Str] what = "";
-    init(what[Str]) { self.what = what; }
+    init(what[Str]) { this.what = what; }
 }
 
 try {
@@ -334,14 +337,19 @@ nobody catches stops the program and shows where it happened:
 ```dessa
 $("utils.strings");                         // everything from utils/strings.ds
 { slugify, trim as clean } from $("utils.strings");   // only these (with a new name)
-$(<math>);                                  // a library
-{ sqrt, PI } from $(<math>);
-$(<math>, <time>);                          // several at once
+$("math");                                  // a library
+{ sqrt, PI } from $("math");
+$("math", "time");                          // several at once
 ```
 
 A dotted path maps to folders: `$("a.b.c")` is `a/b/c.ds`, looked up next to
-the importing file and then in the project folder. Packages installed with riv
-are found in `riv_modules/` (see [riv.md](riv.md)).
+the importing file and then in the project folder. When there is no such file,
+the name is a library: one that comes with Dessa (`math`, `time`, `os`, ...) or
+a package installed with riv into `riv_modules/` (see [riv.md](riv.md)).
+
+Your own file wins over a library with the same name, and the compiler warns
+about it: with a `json.ds` in your project, `$("json")` is that file, not the
+json library.
 
 Dessa files can end in `.ds` (also `.dx`, `.dz`, `.dsx`, `.dxx`, `.dzx`, `.dds`,
 `.dss`). A `.dm` file is a module: declarations only, it can be imported but

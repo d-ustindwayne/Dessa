@@ -1,4 +1,4 @@
-// Win32 implementation of $(<ashwee>). Compiled once per machine and linked
+// Win32 implementation of $("ashwee"). Compiled once per machine and linked
 // into programs that import ashwee.
 #include "ashwee.hpp"
 

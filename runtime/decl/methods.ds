@@ -39,6 +39,16 @@ class StrMethods {
     // A copy without spaces, tabs or newlines at either end.
     func[Str] trim() { ... }
 
+    // Each word starting with a capital: "hello wORLD".title() is "Hello World".
+    func[Str] title() { ... }
+
+    // A copy without accents: "Café Niño".plain() is "Cafe Nino".
+    func[Str] plain() { ... }
+
+    // A copy for comparing without case: a.caseless() == b.caseless().
+    // "Straße".caseless() == "STRASSE".caseless() is true.
+    func[Str] caseless() { ... }
+
     // true if `text` appears anywhere in this Str.
     func[Bul] includes(text[Str]) { ... }
 

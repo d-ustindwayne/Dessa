@@ -196,40 +196,45 @@
     "module-ref": {
       "patterns": [
         {
-          "match": "\\$\\(\\s*(<)([\\w.]+)(>)",
-          "captures": {
+          "comment": "$(\"math\", \"utils.strings\"): module and library names",
+          "begin": "(\\$)(\\()",
+          "beginCaptures": {
             "1": {
-              "name": "punctuation.definition.tag.dessa"
+              "name": "keyword.other.import.dessa"
             },
             "2": {
-              "name": "entity.name.namespace.dessa"
-            },
-            "3": {
-              "name": "punctuation.definition.tag.dessa"
+              "name": "punctuation.parenthesis.dessa"
             }
-          }
-        },
-        {
-          "name": "keyword.other.import.dessa",
-          "match": "\\$(?=\\()"
+          },
+          "end": "\\)",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.parenthesis.dessa"
+            }
+          },
+          "patterns": [
+            {
+              "match": "(\")([^\"]*)(\")",
+              "captures": {
+                "1": {
+                  "name": "punctuation.definition.string.begin.dessa"
+                },
+                "2": {
+                  "name": "entity.name.namespace.dessa"
+                },
+                "3": {
+                  "name": "punctuation.definition.string.end.dessa"
+                }
+              }
+            },
+            {
+              "include": "#comments"
+            }
+          ]
         },
         {
           "name": "keyword.control.import.dessa",
-          "match": "\\b(from|as)\\b"
-        },
-        {
-          "match": "(<)([\\w.]+)(>)(?=\\s*[,)])",
-          "captures": {
-            "1": {
-              "name": "punctuation.definition.tag.dessa"
-            },
-            "2": {
-              "name": "entity.name.namespace.dessa"
-            },
-            "3": {
-              "name": "punctuation.definition.tag.dessa"
-            }
-          }
+          "match": "\b(from|as)\b"
         }
       ]
     },
@@ -436,8 +441,8 @@
           "match": "\\bnil\\b"
         },
         {
-          "name": "variable.language.self.dessa",
-          "match": "\\b(self|super)\\b"
+          "name": "variable.language.this.dessa",
+          "match": "\\b(this|super)\\b"
         },
         {
           "name": "constant.other.enum.dessa",

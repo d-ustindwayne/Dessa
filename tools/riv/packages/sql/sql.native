@@ -1,4 +1,4 @@
-// Native part of $(<sql>); the API (Database, connect, openSqlite, ...) is in sql.dm
+// Native part of $("sql"); the API (Database, connect, openSqlite, ...) is in sql.dm
 header sql.hpp
 source sqlite/sqlite3.c
 source sql.cpp

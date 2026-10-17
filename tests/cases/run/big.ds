@@ -1,6 +1,6 @@
-// Int overflow is an error, never a silent wrap-around; Big from $(<math>) holds any whole number
+// Int overflow is an error, never a silent wrap-around; Big from $("math") holds any whole number
 
-{ Big } from $(<math>);
+{ Big } from $("math");
 
 var[Big] f = new Big(1);
 for (var[Int] i = 1; i <= 30; i++) {

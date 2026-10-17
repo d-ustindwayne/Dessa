@@ -16,7 +16,7 @@
  * `riv install` puts the packages a project needs into
  * <project>/riv_modules/<name>/, where imports find them:
  *
- *     $(<sql>);                           // riv_modules/sql/sql.dm (+ its native part)
+ *     $("sql");                           // riv_modules/sql/sql.dm (+ its native part)
  *     { red } from $("colors");           // riv_modules/colors/lib.ds
  *
  * ---- The network (simulated) ----
@@ -33,9 +33,9 @@
  *     offline, `riv network heal` brings them all back.
  */
 
-$(<os>, <sys>, <math>);
-{ Database, openSqlite } from $(<sql>);
-{ Json } from $(<json>);
+$("os", "sys", "math");
+{ Database, openSqlite } from $("sql");
+{ Json } from $("json");
 
 const[Str] MANIFEST = "riv.pkg";
 const[Str] MODULES = "riv_modules";
@@ -49,7 +49,7 @@ const[Int] REPLICAS = 4;          // peers that get a copy of each piece
 class RivError {
     var[Str] message = "";
     init(message[Str]) {
-        self.message = message;
+        this.message = message;
     }
 }
 
@@ -65,19 +65,19 @@ class Manifest {
     var[Map[Str, Str]] dependencies = {:};
 
     func[Str] toText() {
-        var[Str] text = $"name = {self.name}\nversion = {self.version}\nentry = {self.entry}\n";
-        if (!self.description.isEmpty()) {
-            text += $"description = {self.description}\n";
+        var[Str] text = $"name = {this.name}\nversion = {this.version}\nentry = {this.entry}\n";
+        if (!this.description.isEmpty()) {
+            text += $"description = {this.description}\n";
         }
         text += "\n[dependencies]\n";
-        for (var[Str] dep in self.dependencies) {
-            text += $"{dep} = {self.dependencies<dep>}\n";
+        for (var[Str] dep in this.dependencies) {
+            text += $"{dep} = {this.dependencies<dep>}\n";
         }
         return text;
     }
 
     func[Emp] save(path[Str]="riv.pkg") {
-        writeFile(path, self.toText());
+        writeFile(path, this.toText());
     }
 }
 
@@ -282,11 +282,11 @@ class PieceFetcher {
     var[Map[Str, Int]] fromPeer = {:};  // peer -> pieces received
 
     init(db[Database]) {
-        self.db = db;
+        this.db = db;
     }
 
     func[Str] fetch(hash[Str], label[Str]) {
-        var[Json<>] holders = self.db.query("""
+        var[Json<>] holders = this.db.query("""
             SELECT p.name AS peer, p.reliability AS reliability, pp.data AS data
             FROM peer_pieces pp JOIN peers p ON p.id = pp.peer
             WHERE pp.hash = ? AND p.online = 1
@@ -305,10 +305,10 @@ class PieceFetcher {
                     data = data + "?";
                 }
                 if (hashText(data) == hash) {
-                    self.fromPeer<peer> = self.fromPeer.getOr(peer, 0) + 1;
+                    this.fromPeer<peer> = this.fromPeer.getOr(peer, 0) + 1;
                     return data;
                 }
-                self.bad++;   // failed the hash check: ask the next peer
+                this.bad++;   // failed the hash check: ask the next peer
             }
         }
         throw new RivError($"every peer kept sending a damaged copy of {label}");
@@ -363,13 +363,13 @@ class Installer {
     var[Map[Str, Str]] installed = {:};   // name -> version
 
     init(db[Database]) {
-        self.db = db;
+        this.db = db;
     }
 
     func[Emp] install(name[Str], version[Str]) {
-        if (self.installed.has(name)) {
-            if (self.installed<name> != version) {
-                print($"  ! {name}@{version} also wanted; keeping {name}@{self.installed<name>}");
+        if (this.installed.has(name)) {
+            if (this.installed<name> != version) {
+                print($"  ! {name}@{version} also wanted; keeping {name}@{this.installed<name>}");
             }
             return;
         }
@@ -378,29 +378,29 @@ class Installer {
         if (fileExists($"{target}/{MANIFEST}")) {
             var[Manifest] here = readManifest($"{target}/{MANIFEST}");
             if (here.version == version) {
-                self.installed<name> = version;
+                this.installed<name> = version;
                 print($"  = {name}@{version} (already installed)");
                 for (var[Str] dep in here.dependencies) {
-                    self.install(dep, here.dependencies<dep>);
+                    this.install(dep, here.dependencies<dep>);
                 }
                 return;
             }
         }
-        var[Json | Nil] package = self.db.queryOne("SELECT manifest FROM packages WHERE name = ? AND version = ?", name, version);
+        var[Json | Nil] package = this.db.queryOne("SELECT manifest FROM packages WHERE name = ? AND version = ?", name, version);
         if (package == nil) {
-            var[Str<>] available = publishedVersions(self.db, name);
+            var[Str<>] available = publishedVersions(this.db, name);
             var[Str] hint = available.isEmpty() ? "it is not on the network" : $"available: {available.join(", ")}";
             throw new RivError($"{name}@{version} not found ({hint})");
         }
         deleteAll(target);
         makeDir(target);
-        var[PieceFetcher] fetcher = new PieceFetcher(self.db);
-        var[Json<>] files = self.db.query("SELECT path, hash FROM files WHERE name = ? AND version = ? ORDER BY path", name, version);
+        var[PieceFetcher] fetcher = new PieceFetcher(this.db);
+        var[Json<>] files = this.db.query("SELECT path, hash FROM files WHERE name = ? AND version = ? ORDER BY path", name, version);
         var[Int] pieces = 0;
         for (var[Json] file in files) {
             var[Str] path = file.get("path").asStr();
             var[Str] text = "";
-            for (var[Json] piece in self.db.query(
+            for (var[Json] piece in this.db.query(
                     "SELECT piece, hash FROM file_pieces WHERE name = ? AND version = ? AND path = ? ORDER BY piece",
                     name, version, path)) {
                 text += fetcher.fetch(piece.get("hash").asStr(), $"{path} piece {piece.get("piece").asInt() + 1}");
@@ -413,14 +413,14 @@ class Installer {
             if (!folder.isEmpty()) makeDir($"{target}/{folder}");
             writeFile($"{target}/{path}", text);
         }
-        self.installed<name> = version;
+        this.installed<name> = version;
         var[Str] repaired = fetcher.bad > 0 ? $", {fetcher.bad} damaged piece(s) caught by the hash check and fetched again" : "";
         print($"  + {name}@{version}: {files.length()} file(s), {pieces} piece(s) from {fetcher.fromPeer.length()} peer(s){repaired}");
 
         var[Json | Nil] row = package;
         var[Manifest] manifest = parseManifest(row.get("manifest").asStr(), $"{name}/{MANIFEST}");
         for (var[Str] dep in manifest.dependencies) {
-            self.install(dep, manifest.dependencies<dep>);
+            this.install(dep, manifest.dependencies<dep>);
         }
     }
 }

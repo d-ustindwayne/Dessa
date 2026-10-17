@@ -10,13 +10,13 @@ print(empty, doubles, floats, words, maybe, maybeList);
 maybeList = [3, 4];
 print(maybeList);
 
-// Lambdas inside methods can use self
+// Lambdas inside methods can use this
 class Counter {
     var[Int] count = 0;
     func[Int<>] stepsTo(n[Int]) {
         var[Int<>] out = [];
         const[Int] step = (i[Int]) := {
-            self.count++;
+            this.count++;
             return i * 10;
         };
         for (var[Int] i = 0; i < n; i++) out.push(step(i));
@@ -40,19 +40,19 @@ interface Shape {
 class[Shape] Square {
     var[Dbl] side = 1.0;
     init(side[Dbl]) {
-        self.side = side;
+        this.side = side;
     }
     func[Dbl] area() {
-        return self.side ^ 2;
+        return this.side ^ 2;
     }
 }
 class[Shape] Circle {
     var[Dbl] r = 1.0;
     init(r[Dbl]) {
-        self.r = r;
+        this.r = r;
     }
     func[Dbl] area() {
-        return 3.0 * self.r * self.r;
+        return 3.0 * this.r * this.r;
     }
 }
 var[Shape<>] shapes = [new Square(2.0), new Circle(1.0)];

@@ -14,7 +14,7 @@ const cases = [
 class Point {
     var[Int] x = 0;
     init(x[Int]) {
-        self.x = x;
+        this.x = x;
     }
 }
 print([new Point(1), new Point(2)].map((p[Point]) := p.x * 10), 7 / 2, 2 ^ 62, "é".length());`,
@@ -25,8 +25,8 @@ print([new Point(1), new Point(2)].map((p[Point]) := p.x * 10), 7 / 2, 2 ^ 62, "
         files: { "lib/util.ds": "func[Int] twice(n[Int]) { return n * 2; }\n" },
         source: `
 { twice } from $("lib.util");
-{ parseJson } from $(<json>);
-{ dateOf } from $(<time>);
+{ parseJson } from $("json");
+{ dateOf } from $("time");
 print(twice(21), parseJson("[1, 2]"), dateOf(2026, 1, 1, zone: "UTC").format("EEEE", "fil"));`,
         expect: "42 [1,2] Huwebes",
     },

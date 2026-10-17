@@ -163,14 +163,35 @@
           "default": true,
           "description": "Check the file for errors while typing (otherwise only on open and save)."
         },
+        "dessa.unusedImports": {
+          "type": "string",
+          "enum": [
+            "dim",
+            "warning",
+            "off"
+          ],
+          "default": "dim",
+          "enumDescriptions": [
+            "Show unused imports faded",
+            "Show unused imports as warnings (faded too)",
+            "Don't mark unused imports"
+          ],
+          "description": "How to show imports the file never uses (like TypeScript's noUnusedLocals)."
+        },
         "dessa.packageFolders": {
           "type": "array",
           "items": {
             "type": "string"
           },
           "default": [],
-          "description": "Extra folders with riv packages for $(<lib>) imports (besides riv_modules). The Dessa repository's tools/riv/packages is added automatically."
+          "description": "Extra folders with riv packages for $(\"lib\") imports (besides riv_modules). The Dessa repository's tools/riv/packages is added automatically."
         }
+      }
+    },
+    "configurationDefaults": {
+      "[dessa]": {
+        "editor.snippetSuggestions": "none",
+        "editor.wordBasedSuggestions": "off"
       }
     }
   }

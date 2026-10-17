@@ -26,7 +26,7 @@ class Node {
     var[Int] value = 0;
     var[Node | Nil] next = nil;
     init(value[Int]) {
-        self.value = value;
+        this.value = value;
     }
 }
 

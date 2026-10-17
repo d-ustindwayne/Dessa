@@ -1,8 +1,8 @@
 /***
- * $(<math>) -- numbers and randomness.
+ * $("math") -- numbers and randomness.
  *
- *     $(<math>);                       // import everything
- *     { sqrt, PI } from $(<math>);     // or just some names
+ *     $("math");                       // import everything
+ *     { sqrt, PI } from $("math");     // or just some names
  *
  * Declaration file: documentation only. Bodies are `...`; the real
  * implementation is C++ in runtime/lib/math.hpp.

@@ -51,7 +51,7 @@ var[Int] safeVal = nullableVal ?? 0;
 class Config {
     var[Int] timeout;
     func[Int] getTimeout() {
-        return self.timeout;
+        return this.timeout;
     }
 }
 
@@ -96,4 +96,4 @@ func[Emp] testControlFlow(val[Int]) {
 const[Int] doubleLambda = (x[Int]) := x * 2;
 
 // --- 8. Module Reference Keyword ($) ---
-$(<sys>, <math>);
+$("sys", "math");

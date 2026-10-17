@@ -1,4 +1,4 @@
-// $(<ashwee>) -- native part: windows and controls (Win32 for now).
+// $("ashwee") -- native part: windows and controls (Win32 for now).
 // The friendly API (Window, Button, run, ...) is written in Dessa in ashwee.dm.
 //
 // The implementation lives in ashwee.cpp, compiled once and linked in, so

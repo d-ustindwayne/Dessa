@@ -32,6 +32,7 @@ const char* severityName(DiagnosticSeverity s) {
         case DiagnosticSeverity::Error: return "error";
         case DiagnosticSeverity::Warning: return "warning";
         case DiagnosticSeverity::Note: return "note";
+        case DiagnosticSeverity::Hint: return "hint";
     }
     return "error";
 }
@@ -64,6 +65,7 @@ EMSCRIPTEN_KEEPALIVE const char* dessa_compile(const char* entryPath) {
     if (!program.modules.empty()) {
         analyser.analyse(program);
         for (const auto& d : analyser.getDiagnostics()) {
+            if (d.severity == DiagnosticSeverity::Hint) continue;   // editor-only
             diagnostics.push_back(d);
             if (d.severity == DiagnosticSeverity::Error) ok = false;
         }
@@ -73,7 +75,7 @@ EMSCRIPTEN_KEEPALIVE const char* dessa_compile(const char* entryPath) {
         for (const auto& lib : analyser.builtinLibrariesUsed()) {
             if (!withJs.count(lib)) {
                 diagnostics.push_back({DiagnosticSeverity::Error,
-                                       "The library <" + lib + "> has a C++ part, so it can't run in the browser", "", 0, 0});
+                                       "The library '" + lib + "' has a C++ part, so it can't run in the browser", "", 0, 0});
                 ok = false;
             }
         }
