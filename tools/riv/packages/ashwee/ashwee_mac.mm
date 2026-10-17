@@ -1,14 +1,16 @@
 // macOS implementation of $(<ashwee>), with AppKit (Cocoa). Compiled once as
 // Objective-C++ (ARC) and linked into programs that import ashwee.
-#import <Cocoa/Cocoa.h>
+// The runtime first: Objective-C defines a macro Nil, which is a type in Dessa
+#include "ashwee.hpp"
 
 #include <deque>
 #include <vector>
 
-#include "ashwee.hpp"
+#import <Cocoa/Cocoa.h>
+#undef Nil
 
 namespace dessa::ashwee {
-void ashweePush(const char* kind, Int id);
+void ashweePush(const char* kind, Int itemId);
 }
 
 // Top-left coordinates, like on Windows and Linux
@@ -59,11 +61,11 @@ bool started = false;
 NSString* ns(const Str& text) { return [NSString stringWithUTF8String:text.c_str()] ?: @""; }
 Str str(NSString* text) { return text ? Str([text UTF8String]) : Str(); }
 
-Item& item(Int id, const char* what) {
-    if (id < 0 || id >= static_cast<Int>(items.size()) || !items[static_cast<size_t>(id)].open) {
-        fail(std::string("ashwee: ") + what + ": no such window or control (" + std::to_string(id) + ")");
+Item& item(Int itemId, const char* what) {
+    if (itemId < 0 || itemId >= static_cast<Int>(items.size()) || !items[static_cast<size_t>(itemId)].open) {
+        fail(std::string("ashwee: ") + what + ": no such window or control (" + std::to_string(itemId) + ")");
     }
-    return items[static_cast<size_t>(id)];
+    return items[static_cast<size_t>(itemId)];
 }
 
 void start() {
@@ -74,17 +76,17 @@ void start() {
     started = true;
 }
 
-DessaTarget* targetFor(Int id) {
+DessaTarget* targetFor(Int itemId) {
     DessaTarget* target = [[DessaTarget alloc] init];
-    target.itemId = id;
+    target.itemId = itemId;
     return target;
 }
 
 } // namespace
 
-void ashweePush(const char* kind, Int id) {
-    if (id >= 0 && id < static_cast<Int>(items.size()) && items[static_cast<size_t>(id)].open) {
-        events.push_back({kind, std::to_string(id)});
+void ashweePush(const char* kind, Int itemId) {
+    if (itemId >= 0 && itemId < static_cast<Int>(items.size()) && items[static_cast<size_t>(itemId)].open) {
+        events.push_back({kind, std::to_string(itemId)});
     }
 }
 
@@ -99,25 +101,25 @@ Int _window(const Str& title, Int width, Int height) {
         win.releasedWhenClosed = NO;
         win.title = ns(title);
         win.contentView = [[DessaFlippedView alloc] initWithFrame:frame];
-        Int id = static_cast<Int>(items.size());
-        DessaTarget* target = targetFor(id);
+        Int newId = static_cast<Int>(items.size());   // (not "id": that's the Objective-C type)
+        DessaTarget* target = targetFor(newId);
         win.delegate = target;
         Item it;
         it.view = win;
         it.outer = win.contentView;
         it.target = target;
-        it.window = id;
+        it.window = newId;
         it.kind = "window";
         items.push_back(it);
-        return id;
+        return newId;
     }
 }
 
 Int _control(Int window, const Str& kind, const Str& text, Int x, Int y, Int width, Int height) {
     @autoreleasepool {
         NSView* content = item(window, "add a control").outer;
-        Int id = static_cast<Int>(items.size());
-        DessaTarget* target = targetFor(id);
+        Int newId = static_cast<Int>(items.size());   // (not "id": that's the Objective-C type)
+        DessaTarget* target = targetFor(newId);
         NSRect frame = NSMakeRect((CGFloat)x, (CGFloat)y, (CGFloat)width, (CGFloat)height);
         id view = nil;
         NSView* outer = nil;
@@ -175,7 +177,7 @@ Int _control(Int window, const Str& kind, const Str& text, Int x, Int y, Int wid
         it.window = window;
         it.kind = kind;
         items.push_back(it);
-        return id;
+        return newId;
     }
 }
 
@@ -195,16 +197,16 @@ void _close(Int window) {
     }
 }
 
-void _setText(Int id, const Str& text) {
-    Item& i = item(id, "setText");
+void _setText(Int itemId, const Str& text) {
+    Item& i = item(itemId, "setText");
     if (i.kind == "window") ((NSWindow*)i.view).title = ns(text);
     else if (i.kind == "button" || i.kind == "checkbox") ((NSButton*)i.view).title = ns(text);
     else if (i.kind == "textarea") ((NSTextView*)i.view).string = ns(text);
     else if (i.kind != "list") ((NSTextField*)i.view).stringValue = ns(text);
 }
 
-Str _getText(Int id) {
-    Item& i = item(id, "text");
+Str _getText(Int itemId) {
+    Item& i = item(itemId, "text");
     if (i.kind == "window") return str(((NSWindow*)i.view).title);
     if (i.kind == "button" || i.kind == "checkbox") return str(((NSButton*)i.view).title);
     if (i.kind == "textarea") return str(((NSTextView*)i.view).string);
@@ -212,35 +214,35 @@ Str _getText(Int id) {
     return str(((NSTextField*)i.view).stringValue);
 }
 
-void _setEnabled(Int id, Bul enabled) {
-    Item& i = item(id, "setEnabled");
+void _setEnabled(Int itemId, Bul enabled) {
+    Item& i = item(itemId, "setEnabled");
     if (i.kind == "textarea") ((NSTextView*)i.view).editable = enabled;
     else if (i.kind == "list") ((NSTableView*)i.view).enabled = enabled;
     else if (i.kind != "window") ((NSControl*)i.view).enabled = enabled;
 }
 
-void _setChecked(Int id, Bul checked) {
-    ((NSButton*)item(id, "setChecked").view).state = checked ? NSControlStateValueOn : NSControlStateValueOff;
+void _setChecked(Int itemId, Bul checked) {
+    ((NSButton*)item(itemId, "setChecked").view).state = checked ? NSControlStateValueOn : NSControlStateValueOff;
 }
 
-Bul _isChecked(Int id) {
-    return ((NSButton*)item(id, "checked").view).state == NSControlStateValueOn;
+Bul _isChecked(Int itemId) {
+    return ((NSButton*)item(itemId, "checked").view).state == NSControlStateValueOn;
 }
 
-void _listAdd(Int id, const Str& entry) {
-    Item& i = item(id, "add");
+void _listAdd(Int itemId, const Str& entry) {
+    Item& i = item(itemId, "add");
     [i.target.rows addObject:ns(entry)];
     [(NSTableView*)i.view reloadData];
 }
 
-void _listClear(Int id) {
-    Item& i = item(id, "clear");
+void _listClear(Int itemId) {
+    Item& i = item(itemId, "clear");
     [i.target.rows removeAllObjects];
     [(NSTableView*)i.view reloadData];
 }
 
-Int _listSelected(Int id) {
-    NSInteger row = ((NSTableView*)item(id, "selected").view).selectedRow;
+Int _listSelected(Int itemId) {
+    NSInteger row = ((NSTableView*)item(itemId, "selected").view).selectedRow;
     return row < 0 ? -1 : (Int)row;
 }
 
