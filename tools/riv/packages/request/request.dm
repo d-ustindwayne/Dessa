@@ -1,7 +1,7 @@
 /***
  * $("request") -- HTTP requests, like Python's requests library.
  *
- *     { get, post } from $("request");
+ *     $("request") { get, post }
  *
  *     var[Response] r = get("https://api.github.com/repos/python/cpython");
  *     print(r.status, r.ok);                      // 200 true
@@ -17,8 +17,8 @@
  * Uses the `curl` program, which comes with Windows 10+, macOS and Linux.
  */
 
-{ _send } from $("request");            // native part (request.hpp)
-{ Json, parseJson, stringify } from $("json");
+$("request") { _send }            // native part (request.hpp)
+$("json") { Json, parseJson, stringify }
 
 class RequestError {
     var[Str] message = "";

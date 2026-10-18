@@ -8,6 +8,13 @@
       "manifest": "name = colors\nversion = 1.1.0\nentry = lib.ds\ndescription = Terminal colours, backgrounds and colour codes (hex, RGB)\n\n[dependencies]\ntextfx = 0.3.0\n",
       "files": 3,
       "bytes": 4446
+    },
+    "1.2.0": {
+      "infohash": "846e3748221cfe3c2286200c3265739f0f7774ad",
+      "torrent": "ZDg6YW5ub3VuY2U0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2UxMzphbm5vdW5jZS1saXN0bGw0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2VlbDMzOnVkcDovL29wZW4uc3RlYWx0aC5zaTo4MC9hbm5vdW5jZWVsNDE6dWRwOi8vdHJhY2tlci50b3JyZW50LmV1Lm9yZzo0NTEvYW5ub3VuY2VlbDM3OnVkcDovL2V4b2R1cy5kZXN5bmMuY29tOjY5NjkvYW5ub3VuY2VlZTEwOmNyZWF0ZWQgYnkxMTpyaXYgKERlc3NhKTQ6aW5mb2Q1OmZpbGVzbGQ2Omxlbmd0aGk0MTY4ZTQ6cGF0aGw2OmxpYi5kc2VlZDY6bGVuZ3RoaTE0OGU0OnBhdGhsNzpyaXYucGtnZWVkNjpsZW5ndGhpMTE4ZTQ6cGF0aGw5OnN0eWxlcy5kc2VlZTQ6bmFtZTY6Y29sb3JzMTI6cGllY2UgbGVuZ3RoaTE2Mzg0ZTY6cGllY2VzMjA6rYoqi+hpzNwhS2NkuhcXQB056vRlODp1cmwtbGlzdGw3ODpodHRwczovL3Jhdy5naXRodWJ1c2VyY29udGVudC5jb20vZC11c3RpbmR3YXluZS9EZXNzYS9tYWluL3Rvb2xzL3Jpdi9wYWNrYWdlcy9lZQ==",
+      "manifest": "name = colors\nversion = 1.2.0\nentry = lib.ds\ndescription = Terminal colours, backgrounds and colour codes (hex, RGB)\n\n[dependencies]\ntextfx = 0.4.0\n",
+      "files": 3,
+      "bytes": 4434
     }
   }
 }

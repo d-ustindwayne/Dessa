@@ -1,5 +1,5 @@
 // $("dsds"): data structures holding any value
-{ Stack, Queue, Deque, LinkedList, PriorityQueue, SearchTree, Graph, compareValues } from $("dsds");
+$("dsds") { Stack, Queue, Deque, LinkedList, PriorityQueue, SearchTree, Graph, compareValues }
 
 var[Stack] s = new Stack();
 s.push(1); s.push("two"); s.push(3.5);

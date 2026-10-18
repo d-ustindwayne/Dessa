@@ -8,6 +8,13 @@
       "manifest": "name = codes\nversion = 1.0.0\nentry = lib.ds\ndescription = Check digits (UPC, ISBN, USPS, Luhn credit cards) and simple ciphers (ROT13, Caesar)\n\n[dependencies]\n",
       "files": 2,
       "bytes": 5650
+    },
+    "1.1.0": {
+      "infohash": "9fc720a2ed22a1174c5f0a95b197b0b9099abc67",
+      "torrent": "ZDg6YW5ub3VuY2U0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2UxMzphbm5vdW5jZS1saXN0bGw0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2VlbDMzOnVkcDovL29wZW4uc3RlYWx0aC5zaTo4MC9hbm5vdW5jZWVsNDE6dWRwOi8vdHJhY2tlci50b3JyZW50LmV1Lm9yZzo0NTEvYW5ub3VuY2VlbDM3OnVkcDovL2V4b2R1cy5kZXN5bmMuY29tOjY5NjkvYW5ub3VuY2VlZTEwOmNyZWF0ZWQgYnkxMTpyaXYgKERlc3NhKTQ6aW5mb2Q1OmZpbGVzbGQ2Omxlbmd0aGk1NTAxZTQ6cGF0aGw2OmxpYi5kc2VlZDY6bGVuZ3RoaTE0M2U0OnBhdGhsNzpyaXYucGtnZWVlNDpuYW1lNTpjb2RlczEyOnBpZWNlIGxlbmd0aGkxNjM4NGU2OnBpZWNlczIwOqOR7/2hl1BnSo8HPRBfM/tv19dOZTg6dXJsLWxpc3RsNzg6aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2QtdXN0aW5kd2F5bmUvRGVzc2EvbWFpbi90b29scy9yaXYvcGFja2FnZXMvZWU=",
+      "manifest": "name = codes\nversion = 1.1.0\nentry = lib.ds\ndescription = Check digits (UPC, ISBN, USPS, Luhn credit cards) and simple ciphers (ROT13, Caesar)\n\n[dependencies]\n",
+      "files": 2,
+      "bytes": 5644
     }
   }
 }

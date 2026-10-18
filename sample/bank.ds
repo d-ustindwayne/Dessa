@@ -20,19 +20,19 @@ class BankError {
 
 class InvalidAmount(BankError) {
     init(text[Str]) {
-        super.init($"'{text}' is not a valid amount (use e.g. 25 or 12.50)");
+        super($"'{text}' is not a valid amount (use e.g. 25 or 12.50)");
     }
 }
 
 class InsufficientFunds(BankError) {
     init(balance[Int], wanted[Int]) {
-        super.init($"Insufficient funds: balance is {money(balance)}, tried to take {money(wanted)}");
+        super($"Insufficient funds: balance is {money(balance)}, tried to take {money(wanted)}");
     }
 }
 
 class AccountNotFound(BankError) {
     init(number[Int]) {
-        super.init($"No account with number {number}");
+        super($"No account with number {number}");
     }
 }
 
@@ -156,7 +156,7 @@ class SavingsAccount(Account) {
     var[Int] withdrawalsLeft = 2;
 
     init(owner[Str], bank[Bank], rate[Int]=250) {
-        super.init(owner, bank);
+        super(owner, bank);
         this.rate = rate;
     }
 

@@ -1,7 +1,7 @@
 /***
  * $("random") -- random numbers, choices and shuffles.
  *
- *     { randInt, pick, shuffle, seed } from $("random");
+ *     $("random") { randInt, pick, shuffle, seed }
  *
  *     print(randInt(1, 6));                     // a dice roll
  *     print(pick(["rock", "paper", "scissors"]));

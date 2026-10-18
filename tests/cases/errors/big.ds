@@ -1,6 +1,6 @@
 // Big is a class from $("math"), not a built-in type
 
-{ Big } from $("math");
+$("math") { Big }
 
 var[Big] b = new Big(10);
 var[Int] tooBig = 99999999999999999999;   // error: too large for Int

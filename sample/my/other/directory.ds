@@ -1,4 +1,4 @@
-// Example user module, imported by sample.ds with { Greeter } from $("my.other.directory")
+// Example user module, imported by sample.ds with $("my.other.directory") { Greeter }
 
 class Greeter {
     var[Str] greeting = "Hello";

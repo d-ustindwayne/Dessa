@@ -398,6 +398,7 @@ std::string symbolKindName(SymbolKind k) {
         case SymbolKind::Field: return "field";
         case SymbolKind::Method: return "method";
         case SymbolKind::Builtin: return "builtin";
+        case SymbolKind::Module: return "module";
     }
     return "variable";
 }

@@ -8,12 +8,12 @@ class AppError {
 }
 class NotFound(AppError) {
     init(what[Str]) {
-        super.init($"{what} not found");
+        super($"{what} not found");
     }
 }
 class Timeout(AppError) {
     init() {
-        super.init("timed out");
+        super("timed out");
     }
 }
 class Other {}

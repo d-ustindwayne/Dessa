@@ -1,8 +1,8 @@
 // needs: mssql   (skipped unless a local SQL Server accepts Windows login; uses only a #temp table)
 // $("sql") with Microsoft SQL Server through ODBC
 
-{ connectMssql, drivers, Database, SqlError } from $("sql");
-{ Json } from $("json");
+$("sql") { connectMssql, drivers, Database, SqlError }
+$("json") { Json }
 
 class Person {
     var[Int] id = 0;

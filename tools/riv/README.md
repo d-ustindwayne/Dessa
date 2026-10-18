@@ -62,8 +62,8 @@ A package with C++ code also has a `<name>.native` file (see `include/README.md`
 
 ```dessa
 $("sql");                              // riv_modules/sql/sql.dm, plus its C++ part
-{ Window, Button } from $("ashwee");
-{ red, banner } from $("colors");      // riv_modules/colors/lib.ds
+$("ashwee") { Window, Button }
+$("colors") { red, banner }      // riv_modules/colors/lib.ds
 ```
 
 The compiler finds `riv_modules/` in the program's folder or any folder above it, so files in

@@ -3,7 +3,7 @@
  * size (like Java's BigInteger). The native functions are in math.hpp and
  * declared in math.ds.
  *
- *     { Big } from $("math");
+ *     $("math") { Big }
  *     var[Big] f = new Big(1);
  *     for (var[Int] i = 1; i <= 30; i++) f = f.mul(i);
  *     print(f);           // 265252859812191058636308480000000
@@ -13,7 +13,7 @@
  * another number accept a Big or an Int.
  */
 
-{ _bigNormalize, _bigAdd, _bigSub, _bigMul, _bigDiv, _bigMod, _bigPow, _bigCompare, _bigSci, _bigToInt, _bigToDbl, sqrt } from $("math");
+$("math") { _bigNormalize, _bigAdd, _bigSub, _bigMul, _bigDiv, _bigMod, _bigPow, _bigCompare, _bigSci, _bigToInt, _bigToDbl, sqrt }
 
 class Big {
     var[Str] digits = "0";

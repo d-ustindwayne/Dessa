@@ -5,8 +5,8 @@
 //     dessa build bench.ds --target js -o bench_ds.js && node bench_ds.js
 //     add "quick" for smaller sizes
 
-{ millis } from $("time");
-{ args } from $("sys");
+$("time") { millis }
+$("sys") { args }
 
 var[Bul] quick = !args().isEmpty() && args()<0> == "quick";
 var[Int] LOOP = quick ? 100000000 : 1000000000;

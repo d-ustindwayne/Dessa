@@ -1,8 +1,8 @@
 // $("phl") -- PHL, Dessa's data format (tools/riv/packages/phl/phl.dm)
 
-{ parsePhl, toPhl, PhlError } from $("phl");
-{ Json, stringify } from $("json");
-{ readFile } from $("os");
+$("phl") { parsePhl, toPhl, PhlError }
+$("json") { Json, stringify }
+$("os") { readFile }
 
 // The example document from sample/sample.phl
 var[Json] doc = parsePhl(readFile("sample/sample.phl"));

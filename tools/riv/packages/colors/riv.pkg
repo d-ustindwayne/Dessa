@@ -1,7 +1,7 @@
 name = colors
-version = 1.1.0
+version = 1.2.0
 entry = lib.ds
 description = Terminal colours, backgrounds and colour codes (hex, RGB)
 
 [dependencies]
-textfx = 0.3.0
+textfx = 0.4.0

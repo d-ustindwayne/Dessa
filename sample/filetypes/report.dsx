@@ -4,8 +4,8 @@
  * Compiles exactly like a .ds file for now.
  */
 
-{ Shape } from $("geometry");
-{ round } from $("math");
+$("geometry") { Shape }
+$("math") { round }
 
 // Rounds to 2 decimal places for display: 3.14159 -> 3.14
 func[Dbl] twoDecimals(x[Dbl]) {

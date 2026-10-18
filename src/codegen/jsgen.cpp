@@ -1342,7 +1342,8 @@ std::string JsCodegen::fromExtern(const std::string& code, const SemanticType& t
 std::string JsCodegen::call(const CallExpr* e) {
     const Expr* callee = e->callee.get();
 
-    if (callee->kind == ExprKind::Identifier) {
+    // sqrt(2), or m.sqrt(2) with $("math" as m)
+    if (callee->kind == ExprKind::Identifier || analyser.isAliasRef(callee)) {
         const Symbol* symbol = analyser.symbolOf(callee);
         if (symbol && symbol->kind == SymbolKind::Builtin && symbol->variadic) {
             // print(a, b, sep: ", ", end: "")
@@ -1418,6 +1419,11 @@ std::string JsCodegen::member(const MemberExpr* e) {
     const Expr* object = e->object.get();
     const SemanticType& objectType = typeOf(object);
     if (analyser.isDynamicMember(e)) return "$.objGet(" + expr(object) + ", " + jsString(e->name.lexeme) + ")";
+    // m.PI / m.sqrt with $("math" as m)
+    if (analyser.isAliasRef(e)) {
+        const Symbol* target = analyser.symbolOf(e);
+        return target ? globalName(*target) : "undefined";
+    }
     if (!symbol) return "undefined";
 
     // Enum value

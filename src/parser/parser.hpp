@@ -59,6 +59,7 @@ private:
     StmtPtr enumDeclaration();
     StmtPtr interfaceDeclaration();
     StmtPtr importStatement();
+    std::vector<ImportName> parseImportNames();
     bool isImportAhead() const;
     std::vector<ModuleSpec> parseModuleSpecs();
 

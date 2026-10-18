@@ -2,7 +2,7 @@
  * $("os") -- the Dessa part: open files that are read or written a piece at
  * a time.
  *
- *     { open, File } from $("os");
+ *     $("os") { open, File }
  *
  *     var[File] out = open("notes.txt", "w");      // "w" write, "a" add to the end
  *     out.writeLine("first");
@@ -17,7 +17,7 @@
  * The native helpers are in os.hpp (declared in os.ds).
  */
 
-{ _fileOpen, _fileReadLine, _fileRead, _fileAtEnd, _fileWrite, _fileFlush, _fileClose } from $("os");
+$("os") { _fileOpen, _fileReadLine, _fileRead, _fileAtEnd, _fileWrite, _fileFlush, _fileClose }
 
 // An open file. Close it when done (writes are saved by then at the latest).
 class File {

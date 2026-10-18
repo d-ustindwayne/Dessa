@@ -1,7 +1,7 @@
 /***
  * codes -- check digits and simple ciphers.
  *
- *     { isValidIsbn13, isValidCard, rot13 } from $("codes");   (after `riv add codes`)
+ *     $("codes") { isValidIsbn13, isValidCard, rot13 }   (after `riv add codes`)
  *
  * A check digit is the last digit of a code, worked out from the others, so
  * a typo is noticed. Spaces and dashes in codes are ignored.

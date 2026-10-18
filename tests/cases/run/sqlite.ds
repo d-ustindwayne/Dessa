@@ -1,7 +1,7 @@
 // $("sql") with SQLite (an in-memory database)
 
-{ openSqlite, Database, SqlError } from $("sql");
-{ Json } from $("json");
+$("sql") { openSqlite, Database, SqlError }
+$("json") { Json }
 
 class Staff {
     var[Int] staffId = 0;

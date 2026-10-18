@@ -1,5 +1,5 @@
 name = textfx
-version = 0.3.0
+version = 0.4.0
 entry = lib.ds
 description = Text helpers: boxes, padding, palindromes, anagrams, camelCase, vowel counts
 

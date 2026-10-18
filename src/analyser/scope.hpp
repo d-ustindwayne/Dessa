@@ -21,7 +21,8 @@ enum class SymbolKind {
     Parameter,
     Field,
     Method,
-    Builtin     // a builtin library function or constant
+    Builtin,    // a builtin library function or constant
+    Module      // $("math" as m): a module under a name
 };
 
 struct FunctionParameterSymbol {
@@ -56,6 +57,8 @@ struct Symbol {
     // Imported: which import brought it in (Analyser::importRecords), so
     // unused imports can be found
     int importId = -1;
+    // Module: which Analyser::aliasTables holds its names
+    int aliasTable = -1;
 };
 
 enum class ScopeKind {

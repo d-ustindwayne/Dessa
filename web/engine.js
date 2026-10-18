@@ -4,7 +4,7 @@
 //     <script src="dessa.js"></script>
 //     <script type="text/dessa" src="app.ds"></script>
 //     <script type="text/dessa">
-//         { document } from $("webutils");
+//         $("webutils") { document }
 //         document.body.textContent = "Hello from Dessa!";
 //     </script>
 //

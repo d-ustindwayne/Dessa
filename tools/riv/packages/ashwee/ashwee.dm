@@ -1,7 +1,7 @@
 /***
  * $("ashwee") -- desktop windows and controls on Windows, Linux and macOS.
  *
- *     { Window, Label, TextBox } from $("ashwee");
+ *     $("ashwee") { Window, Label, TextBox }
  *
  *     var[Window] win = new Window("Greeter", 360, 140);
  *     var[TextBox] name = win.input(20, 20, 200);
@@ -16,8 +16,8 @@
  * ashwee_gtk.inc) and ashwee_mac.mm (AppKit), described by ashwee.native.
  */
 
-{ _window, _control, _show, _close, _setText, _getText, _setEnabled, _setChecked, _isChecked,
-  _listAdd, _listClear, _listSelected, _message, _nextEvent } from $("ashwee");
+$("ashwee") { _window, _control, _show, _close, _setText, _getText, _setEnabled, _setChecked, _isChecked,
+  _listAdd, _listClear, _listSelected, _message, _nextEvent }
 
 // What to do when something happens, by control number. Shared by a window
 // and its controls (a class, so it isn't copied).

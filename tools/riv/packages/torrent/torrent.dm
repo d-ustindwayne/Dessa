@@ -1,7 +1,7 @@
 /***
  * $("torrent") -- share folders with the BitTorrent protocol, without a server.
  *
- *     { makeTorrent, Torrent, download, seed } from $("torrent");
+ *     $("torrent") { makeTorrent, Torrent, download, seed }
  *
  *     var[Torrent] t = makeTorrent("my-folder", "my-folder", DEFAULT_TRACKERS, []);
  *     print(t.infoHash);                       // what peers ask for
@@ -19,7 +19,7 @@
  * The engine is C++ (torrent.cpp); riv uses it to share packages.
  */
 
-{ _create, _infoHash, _matches, _download, _seed } from $("torrent");
+$("torrent") { _create, _infoHash, _matches, _download, _seed }
 
 // Free public trackers (UDP)
 const[Str<>] DEFAULT_TRACKERS = [

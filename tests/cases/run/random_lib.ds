@@ -1,5 +1,5 @@
 // $("random"): the same numbers for the same seed, in C++ and JavaScript
-{ seed, rand, randInt, randDbl, chance, pick, shuffle, sample, randStr, uuid } from $("random");
+$("random") { seed, rand, randInt, randDbl, chance, pick, shuffle, sample, randStr, uuid }
 
 seed(42);
 print(randInt(1, 6), randInt(1, 6), randInt(1, 6), randInt(-1000000, 1000000));

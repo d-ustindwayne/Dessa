@@ -1,6 +1,6 @@
 // Used by webutils.html (browser test of $("webutils")).
-{ document, window, Element, Event, alert, prompt, confirm, log, warn, setTimeout, setInterval, clearTimer, fetchText } from $("webutils");
-{ Json, parseJson } from $("json");
+$("webutils") { document, window, Element, Event, alert, prompt, confirm, log, warn, setTimeout, setInterval, clearTimer, fetchText }
+$("json") { Json, parseJson }
 
 func[Element] need(id[Str]) {
     var[Element | Nil] element = document.getElementById(id);

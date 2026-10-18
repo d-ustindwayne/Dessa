@@ -1,0 +1,13 @@
+// Imports: only some names, names under another name, a whole module under a name, super(...)
+$("math" as m)
+$("lib.geometry") { Circle, area as circleArea }
+$("lib.geometry" as shapes);
+$("time") { millis }
+
+print(m.sqrt(16), m.PI > 3, m.max(2, 7));
+var[shapes.Circle] c = new shapes.Circle(2);
+print(c.describe(), circleArea(c), shapes.area(c), shapes.SIDES);
+var[Circle] same = c;
+print(same.kind() == shapes.Kind.ROUND, shapes.Kind.SQUARE);
+var[Func[Dbl, [Dbl]]] root = m.sqrt;
+print(root(81), millis() > 0);

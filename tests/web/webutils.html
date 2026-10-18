@@ -15,7 +15,7 @@
 
     <!-- Run in order: an inline script, then a file -->
     <script type="text/dessa">
-        { document, window } from $("webutils");
+        $("webutils") { document, window }
         window.localStorage.setItem("greeting", "hello from the inline script");
         print("inline script ran, page title:", document.title);
     </script>

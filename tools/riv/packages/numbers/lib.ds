@@ -1,7 +1,7 @@
 /***
  * numbers -- number conversions and digit helpers.
  *
- *     { toRoman, toWords, excelColumn } from $("numbers");     (after `riv add numbers`)
+ *     $("numbers") { toRoman, toWords, excelColumn }     (after `riv add numbers`)
  *
  *     toRoman(2026)                 "MMXXVI"
  *     fromRoman("XLII")             42

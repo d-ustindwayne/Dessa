@@ -2,9 +2,9 @@
 //
 //     dessa run selfhost/main.ds tokens file.ds     the tokens, like `dessa tokens file.ds`
 
-{ Lexer, Token, TokenType } from $("lexer");
-{ readFile } from $("os");
-{ args, exit } from $("sys");
+$("lexer") { Lexer, Token, TokenType }
+$("os") { readFile }
+$("sys") { args, exit }
 
 var[Str<>] given = args();
 if (given.length() != 2 || given<0> != "tokens") {

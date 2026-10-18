@@ -1,5 +1,5 @@
 // $("time"): DateTime, time zones and month / day names in several languages
-{ DateTime, Locale, dateOf, dateNow, parseDate, fromMillis, addLocale, isLeapYear, daysInMonth, localeCodes } from $("time");
+$("time") { DateTime, Locale, dateOf, dateNow, parseDate, fromMillis, addLocale, isLeapYear, daysInMonth, localeCodes }
 
 var[DateTime] t = dateOf(2026, 10, 17, 15, 45, 30, zone: "Asia/Manila");
 print(t);

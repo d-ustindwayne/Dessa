@@ -106,6 +106,7 @@ struct ImportName {
 struct ModuleSpec {
     std::string path;
     mutable bool isBuiltin = false;
+    std::optional<std::string> alias;   // $("math" as m): used as m.sqrt(2)
     int line = 0;
     int column = 0;
 };
@@ -421,11 +422,11 @@ struct InterfaceDeclStmt : Stmt {
           members(std::move(members)) {}
 };
 
-// { MyClass } from $("my.other.directory");
-// { MyClass as MC } from $("my.other.directory");
+// $("my.other.directory") { MyClass }
+// $("my.other.directory") { MyClass as MC }
 // $("java.util", "java.sql", "my.other");   -> importAll, every top-level
 //                                              declaration of each module
-// { sqrt } from $("math");                   -> builtin library
+// $("math") { sqrt }                   -> builtin library
 struct ImportStmt : Stmt {
     std::vector<ImportName> names; // empty when importAll
     std::vector<ModuleSpec> modules;

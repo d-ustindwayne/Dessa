@@ -1,7 +1,7 @@
 /***
  * $("dcrypto") -- hashes, passwords, and encrypting text with a password.
  *
- *     { sha256, hashPassword, verifyPassword, encrypt, decrypt } from $("dcrypto");
+ *     $("dcrypto") { sha256, hashPassword, verifyPassword, encrypt, decrypt }
  *
  *     print(sha256("hello"));                         // 2cf24dba5fb0a30e...
  *

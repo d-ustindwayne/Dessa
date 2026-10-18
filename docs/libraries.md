@@ -25,7 +25,7 @@ Statistics on a `Dbl<>`: `sum`, `mean`, `median`, `mode`, `stdev`.
 `Big` holds whole numbers of any size:
 
 ```dessa
-{ Big } from $("math");
+$("math") { Big }
 var[Big] f = new Big(1);
 for (var[Int] i = 1; i <= 30; i++) f = f.mul(i);
 print(f, f.sci());        // 265252859812191058636308480000000 2.65E32
@@ -36,7 +36,7 @@ print(f, f.sci());        // 265252859812191058636308480000000 2.65E32
 `now()` (seconds), `millis()`, `sleep(ms)`, `date()`, and `DateTime`:
 
 ```dessa
-{ DateTime, dateNow, dateOf, parseDate } from $("time");
+$("time") { DateTime, dateNow, dateOf, parseDate }
 var[DateTime] now = dateNow();                                // this computer's time zone
 print(now.format("EEEE, d MMMM yyyy HH:mm"));
 print(now.toZone("America/New_York").format("HH:mm z"));
@@ -61,7 +61,7 @@ is `"r"` to read (the default), `"w"` to write (replacing what was there) or
 `"a"` to add to the end:
 
 ```dessa
-{ open, File } from $("os");
+$("os") { open, File }
 var[File] log = open("log.txt", "a");
 log.writeLine("started");
 log.close();
@@ -78,7 +78,7 @@ A `File` has `readLine()` (nil at the end), `lines()`, `read()` (the rest),
 ### random
 
 ```dessa
-{ randInt, pick, shuffle, seed } from $("random");
+$("random") { randInt, pick, shuffle, seed }
 print(randInt(1, 6));                          // 1 to 6
 print(pick(["rock", "paper", "scissors"]));
 print(shuffle([1, 2, 3, 4, 5]));
@@ -95,7 +95,7 @@ program and in JavaScript. For passwords and keys use `dcrypto` instead.
 Data structures, written in Dessa. They hold `Obj` values, so anything fits:
 
 ```dessa
-{ Stack, Queue, PriorityQueue, Graph } from $("dsds");
+$("dsds") { Stack, Queue, PriorityQueue, Graph }
 var[Stack] undo = new Stack();
 undo.push("typed a");
 print(undo.pop());
@@ -127,7 +127,7 @@ alphabetically.
 ### dcrypto
 
 ```dessa
-{ sha256, hashPassword, verifyPassword, encrypt, decrypt } from $("dcrypto");
+$("dcrypto") { sha256, hashPassword, verifyPassword, encrypt, decrypt }
 print(sha256("hello"));
 
 var[Str] stored = hashPassword("s3cret");       // save this, not the password
@@ -159,7 +159,7 @@ Install these with `riv add <name>` (see [riv.md](riv.md)).
 ### json
 
 ```dessa
-{ Json, parseJson, stringify, jsonObject } from $("json");
+$("json") { Json, parseJson, stringify, jsonObject }
 var[Json] data = parseJson("{\"name\": \"Ann\", \"tags\": [1, 2]}");
 print(data.get("name").asStr(), data.get("tags").at(1).asInt());
 print(stringify(data, 2));      // indented
@@ -227,7 +227,7 @@ systems have.
 Desktop windows on Windows (Win32), Linux (GTK 3) and macOS (AppKit):
 
 ```dessa
-{ Window, Label, TextBox } from $("ashwee");
+$("ashwee") { Window, Label, TextBox }
 var[Window] win = new Window("Greeter", 360, 140);
 var[TextBox] name = win.input(20, 20, 200);
 var[Label] greeting = win.label("", 20, 64, 320);

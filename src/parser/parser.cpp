@@ -14,6 +14,7 @@ bool isReserved(TokenType type) {
         case TokenType::AT:
         case TokenType::FUNC_PIPE:
         case TokenType::WITH:
+        case TokenType::FROM:
             return true;
         default:
             return false;
@@ -380,7 +381,7 @@ StmtPtr Parser::interfaceDeclaration() {
     return std::make_unique<InterfaceDeclStmt>(std::move(name), std::move(members));
 }
 
-// Pure lookahead: `{ Name (as Alias)? (, Name (as Alias)?)* } from`
+// Pure lookahead for the old form `{ Name (as Alias)? (, ...)* } from` (reported)
 bool Parser::isImportAhead() const {
     if (!check(TokenType::L_BRACE)) return false;
     size_t i = 1;
@@ -420,19 +421,22 @@ std::vector<ModuleSpec> Parser::parseModuleSpecs() {
             if (path.lexeme.empty()) throw error(path, "Module path cannot be empty.");
             spec.path = path.lexeme;
         }
+        if (match({TokenType::AS})) {
+            spec.alias = consume(TokenType::IDENTIFIER, "Expect a name after 'as', e.g. $(\"math\" as m).").lexeme;
+        }
         specs.push_back(std::move(spec));
     } while (match({TokenType::COMMA}));
     consume(TokenType::R_PAREN, "Expect ')' after module list.");
     return specs;
 }
 
-StmtPtr Parser::importStatement() {
+// { a, b as c }
+std::vector<ImportName> Parser::parseImportNames() {
     std::vector<ImportName> names;
-    bool importAll = true;
-
-    if (match({TokenType::L_BRACE})) {
-        importAll = false;
+    consume(TokenType::L_BRACE, "Expect '{' before imported names.");
+    if (!check(TokenType::R_BRACE)) {
         do {
+            if (check(TokenType::R_BRACE)) break;   // trailing comma
             ImportName item;
             const Token& nameToken = consume(TokenType::IDENTIFIER, "Expect imported name.");
             item.name = nameToken.lexeme;
@@ -443,12 +447,39 @@ StmtPtr Parser::importStatement() {
             }
             names.push_back(std::move(item));
         } while (match({TokenType::COMMA}));
-        consume(TokenType::R_BRACE, "Expect '}' after imported names.");
+    }
+    consume(TokenType::R_BRACE, "Expect '}' after imported names.");
+    return names;
+}
+
+//   $("math");                    everything
+//   $("sql") { Database, x as y }  only these
+//   $("math" as m)                 the module under a name: m.sqrt(2)
+StmtPtr Parser::importStatement() {
+    std::vector<ImportName> names;
+    bool importAll = true;
+
+    // The old form: { a } from $("x"); -- understood, but reported
+    if (check(TokenType::L_BRACE)) {
+        Token start = peek();
+        names = parseImportNames();
         consume(TokenType::FROM, "Expect 'from' after imported names.");
+        std::vector<ModuleSpec> modules = parseModuleSpecs();
+        match({TokenType::SEMICOLON});
+        std::string list;
+        for (const auto& n : names) list += (list.empty() ? "" : ", ") + n.name + (n.alias ? " as " + *n.alias : "");
+        std::string specs;
+        for (const auto& m : modules) specs += (specs.empty() ? "" : ", ") + std::string("\"") + m.path + "\"";
+        error(start, "Imports are written $(" + specs + ") { " + list + " } now");
+        return std::make_unique<ImportStmt>(std::move(names), std::move(modules), false);
     }
 
     std::vector<ModuleSpec> modules = parseModuleSpecs();
-    consume(TokenType::SEMICOLON, "Expect ';' after import.");
+    if (check(TokenType::L_BRACE)) {
+        names = parseImportNames();
+        importAll = false;
+    }
+    match({TokenType::SEMICOLON});   // optional
     return std::make_unique<ImportStmt>(std::move(names), std::move(modules), importAll);
 }
 
@@ -679,6 +710,11 @@ TypeNode Parser::parseType() {
         check(TokenType::TYPE_FLT) || check(TokenType::TYPE_DBL) || check(TokenType::TYPE_CHR) ||
         check(TokenType::TYPE_EMP) || check(TokenType::TYPE_NIL)) {
         node.name = advance().lexeme;
+        // m.Database: a type from a module imported as m
+        while (previous().type == TokenType::IDENTIFIER && check(TokenType::DOT) && checkNext(TokenType::IDENTIFIER)) {
+            advance();
+            node.name += "." + advance().lexeme;
+        }
     } else {
         throw error(peek(), "Expect type name.");
     }
@@ -969,6 +1005,14 @@ ExprPtr Parser::call() {
     for (;;) {
         int line = expr->line, column = expr->column;
         if (match({TokenType::L_PAREN})) {
+            // super(...) is short for super.init(...)
+            if (expr->kind == ExprKind::Identifier && static_cast<const IdentifierExpr*>(expr.get())->name.type == TokenType::SUPER) {
+                const Token& superToken = static_cast<const IdentifierExpr*>(expr.get())->name;
+                Token init(TokenType::INIT, "init", superToken.line, superToken.column);
+                expr = std::make_unique<MemberExpr>(std::move(expr), init, false);
+                expr->line = line;
+                expr->column = column;
+            }
             expr = finishCall(std::move(expr));
         } else if (match({TokenType::DOT, TokenType::QUESTION_DOT})) {
             bool optional = previous().type == TokenType::QUESTION_DOT;
@@ -1188,6 +1232,9 @@ ExprPtr Parser::primary() {
             return place(std::move(anonymous), newToken);
         }
         Token className = consume(TokenType::IDENTIFIER, "Expect class name after 'new'.");
+        while (match({TokenType::DOT})) {   // new m.Database()
+            className.lexeme += "." + consume(TokenType::IDENTIFIER, "Expect class name after '.'.").lexeme;
+        }
         consume(TokenType::L_PAREN, "Expect '(' after class name.");
         std::vector<Argument> args = parseArguments();
         consume(TokenType::R_PAREN, "Expect ')' after constructor arguments.");

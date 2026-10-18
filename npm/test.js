@@ -10,7 +10,7 @@ const dessa = require(".");
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dessa-npm-"));
     fs.mkdirSync(path.join(tmp, "lib"));
     fs.writeFileSync(path.join(tmp, "lib", "util.ds"), "func[Int] twice(n[Int]) { return n * 2; }\n");
-    fs.writeFileSync(path.join(tmp, "app.ds"), '{ twice } from $("lib.util");\nprint(twice(21), 7 / 2);\n');
+    fs.writeFileSync(path.join(tmp, "app.ds"), '$("lib.util") { twice }\nprint(twice(21), 7 / 2);\n');
     fs.writeFileSync(path.join(tmp, "bad.ds"), 'var[Int] x = "no";\n');
     fs.writeFileSync(path.join(tmp, "page.dhtml"), '<p id="x"></p>\n<script>\n    print("page");\n</script>\n<script type="text/javascript">let y = 1;</script>\n');
     fs.writeFileSync(path.join(tmp, "broken.dhtml"), '<p></p>\n<script>\n    var[Int] x = "no";\n</script>\n');

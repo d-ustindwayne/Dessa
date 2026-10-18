@@ -1,6 +1,6 @@
 // A small to-do list made with $("ashwee").
 //   riv add ashwee     (in your project), then:  dessa run todo.ds
-{ Window, Label, Button, TextBox, CheckBox, ListBox, message } from $("ashwee");
+$("ashwee") { Window, Label, Button, TextBox, CheckBox, ListBox, message }
 
 var[Window] win = new Window("To do", 420, 300);
 win.label("New task:", 16, 18, 80);

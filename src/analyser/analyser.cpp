@@ -34,6 +34,8 @@ void Analyser::analyse(const Program& prog) {
     recursiveLambdas.clear(); recursiveRefs.clear(); definingLambda = nullptr; enumCases.clear();
     importRecords.clear();
     dynamicMembers.clear();
+    aliasTables.clear();
+    aliasRefs.clear();
 
     builtinScope = std::make_unique<Scope>(ScopeKind::Module);
     for (const auto& fn : globalBuiltins()) {
@@ -261,10 +263,13 @@ void Analyser::processImports(const Module& module) {
         const auto* import = static_cast<const ImportStmt*>(statement.get());
 
         // name -> symbol, gathered across every module named in $(...)
-        std::unordered_map<std::string, std::vector<Symbol>> available;
+        std::unordered_map<std::string, std::vector<Symbol>> allNames;
         bool anyResolved = false;
 
+        std::vector<std::pair<const ModuleSpec*, std::unordered_map<std::string, std::vector<Symbol>>>> aliased;
         for (const auto& spec : import->modules) {
+            if (spec.alias) aliased.emplace_back(&spec, std::unordered_map<std::string, std::vector<Symbol>>{});
+            auto& available = spec.alias ? aliased.back().second : allNames;
             if (spec.isBuiltin) {
                 // A builtin library has a native (C++) part, a Dessa part
                 // (include/<lib>/<lib>.dm), or both.
@@ -319,6 +324,26 @@ void Analyser::processImports(const Module& module) {
                 }
             }
         }
+
+        // $("math" as m): one name for the whole module
+        for (auto& [spec, names] : aliased) {
+            Symbol alias;
+            alias.kind = SymbolKind::Module;
+            alias.name = *spec->alias;
+            alias.isGlobal = true;
+            alias.moduleId = module.id;
+            alias.line = spec->line;
+            alias.column = spec->column;
+            alias.aliasTable = static_cast<int>(aliasTables.size());
+            aliasTables.emplace_back();
+            for (auto& [name, candidates] : names) {
+                if (!name.empty() && name[0] != '_') aliasTables.back().emplace(name, candidates.front());
+            }
+            const int importId = static_cast<int>(importRecords.size());
+            importRecords.push_back({module.id, statement.get(), alias.name, spec->line, spec->column, 0, false});
+            importSymbol(alias, alias.name, spec->line, spec->column, importId);
+        }
+        auto& available = allNames;
 
         if (!anyResolved) continue;
 
@@ -814,6 +839,24 @@ bool Analyser::declareSymbol(Symbol symbol, int line, int column) {
     return true;
 }
 
+// m.Database with $("sql" as m)
+const Symbol* Analyser::resolveQualified(const std::string& name, int line, int column) {
+    const size_t dot = name.find('.');
+    const std::string prefix = name.substr(0, dot), rest = name.substr(dot + 1);
+    const Symbol* module = resolveSymbol(prefix);
+    if (!module || module->kind != SymbolKind::Module) {
+        error(line, column, module ? "'" + prefix + "' is not a module name" : "Unknown module name '" + prefix + "'; import it with $(\"...\" as " + prefix + ")");
+        return nullptr;
+    }
+    const auto& table = aliasTables[static_cast<size_t>(module->aliasTable)];
+    auto it = table.find(rest);
+    if (it == table.end()) {
+        error(line, column, "Module '" + prefix + "' has no '" + rest + "'");
+        return nullptr;
+    }
+    return &it->second;
+}
+
 Symbol* Analyser::resolveSymbol(const std::string& name) {
     Symbol* symbol = currentScope ? currentScope->resolve(name) : nullptr;
     if (symbol && symbol->importId >= 0 && static_cast<size_t>(symbol->importId) < importRecords.size()) {
@@ -998,6 +1041,16 @@ SemanticType Analyser::resolveTypeName(const std::string& name, int line, int co
     }
     if (name == "Func" && !resolveSymbol(name)) {
         error(line, column, "Func needs its return and parameter types, e.g. Func[Int, [Int, Int]] or Func[Emp]");
+        return SemanticType::unknown();
+    }
+
+    if (name.find('.') != std::string::npos) {
+        const Symbol* symbol = resolveQualified(name, line, column);
+        if (!symbol) return SemanticType::unknown();
+        if (symbol->kind == SymbolKind::Class || symbol->kind == SymbolKind::Interface || symbol->kind == SymbolKind::Enum) {
+            return symbol->type;
+        }
+        error(line, column, "'" + name + "' is not a type");
         return SemanticType::unknown();
     }
 
@@ -1402,11 +1455,11 @@ void Analyser::analyseFunctionBody(const FuncDeclStmt* statement) {
         };
         bool firstIsSuper = !block->statements.empty() && isSuperInit(block->statements.front().get());
         if (parentNeedsArgs && !firstIsSuper) {
-            error(statement, "init must start with super.init(...) because the parent's init takes arguments");
+            error(statement, "init must start with super(...) because the parent's init takes arguments");
         }
         for (size_t i = 1; i < block->statements.size(); ++i) {
             if (isSuperInit(block->statements[i].get())) {
-                error(block->statements[i].get(), "super.init(...) must be the first statement of init");
+                error(block->statements[i].get(), "super(...) must be the first statement of init");
             }
         }
     }

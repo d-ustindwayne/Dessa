@@ -257,7 +257,7 @@ class Dog(Animal) {                     // Dog is an Animal
     var[Int] age = 0;
 
     init(name[Str], age[Int]) {
-        super.init(name);               // must come first
+        super(name);                    // the parent's init; must come first
         this.age = age;
     }
 
@@ -273,6 +273,8 @@ if (pet is Dog) print(pet.age);
 
 - Objects are shared, not copied: two variables can point at the same object.
 - A class without `init` takes its parent's `init`.
+- `super(...)` calls the parent's `init` (`super.init(...)` works too), and
+  `super.method()` calls the parent's version of a method.
 - Without a `toStr()`, an object prints as `Dog(name: "Rex", age: 3)`.
 
 ## Interfaces
@@ -375,11 +377,15 @@ nobody catches stops the program and shows where it happened:
 
 ```dessa
 $("utils.strings");                         // everything from utils/strings.ds
-{ slugify, trim as clean } from $("utils.strings");   // only these (with a new name)
+$("utils.strings") { slugify, trim as clean }   // only these (trim under a new name)
 $("math");                                  // a library
-{ sqrt, PI } from $("math");
+$("math") { sqrt, PI }
 $("math", "time");                          // several at once
+$("math" as m)                              // the whole module under a name:
+print(m.sqrt(2), m.PI);                     //   m.sqrt, m.PI, var[m.Big], new m.Big("12")
 ```
+
+The semicolon after an import is optional.
 
 A dotted path maps to folders: `$("a.b.c")` is `a/b/c.ds`, looked up next to
 the importing file and then in the project folder. When there is no such file,

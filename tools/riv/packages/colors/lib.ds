@@ -1,7 +1,7 @@
 /***
  * colors -- colours in the terminal, and colour codes.
  *
- *     { textColor, background, red, rgbToHex } from $("colors");   (after `riv add colors`)
+ *     $("colors") { textColor, background, red, rgbToHex }   (after `riv add colors`)
  *
  *     print(textColor("Done", "green"));
  *     print(background(" WARNING ", "yellow", bright: false));
@@ -13,7 +13,7 @@
  * Most terminals show these; Windows Terminal and VS Code do.
  */
 
-{ box } from $("textfx");
+$("textfx") { box }
 
 const[Str] ESC = "\x1b";
 

@@ -2,7 +2,7 @@
  * $("time") -- the Dessa part: dates and times in any time zone, with month
  * and day names in several languages.
  *
- *     { DateTime, dateNow, dateOf, parseDate } from $("time");
+ *     $("time") { DateTime, dateNow, dateOf, parseDate }
  *
  *     var[DateTime] now = dateNow();                         // here, now
  *     print(now.format("EEEE, d MMMM yyyy HH:mm"));          // Saturday, 17 October 2026 15:45
@@ -24,7 +24,7 @@
  * The native helpers are in time.hpp (declared in time.ds).
  */
 
-{ _epochMillis, _epochOf, _civil, _offsetMinutes, _isZone } from $("time");
+$("time") { _epochMillis, _epochOf, _civil, _offsetMinutes, _isZone }
 
 // ============================================================
 // Languages

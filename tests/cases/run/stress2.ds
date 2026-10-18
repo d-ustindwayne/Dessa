@@ -1,7 +1,7 @@
 // More feature combinations for the code generator
 
-{ Node as ANode, make as makeA } from $("lib.clash.a");
-{ Node as BNode, make as makeB } from $("lib.clash.b");
+$("lib.clash.a") { Node as ANode, make as makeA }
+$("lib.clash.b") { Node as BNode, make as makeB }
 
 // Same class name in two modules
 var[ANode] a = makeA();

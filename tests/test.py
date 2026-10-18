@@ -302,7 +302,7 @@ def editor_test():
         if expected not in result.stdout:
             problems.append(f"hover {word!r} on line {line + 1}: expected {expected} in {result.stdout.strip()}")
     # Unused imports: hints the editor shows faded
-    source = '{ sqrt, PI, floor } from $("math");\n{ now } from $("time");\n$("os");\nprint(sqrt(PI));\n'
+    source = '$("math") { sqrt, PI, floor }\n$("time") { now }\n$("os");\nprint(sqrt(PI));\n'
     result = subprocess.run([str(EXE), "check", str(EDITOR_FIXTURE), "--json", "--stdin"],
                             input=source, capture_output=True, text=True, encoding="utf-8", timeout=60)
     try:
@@ -342,7 +342,7 @@ def riv_test():
         home1 = {"RIV_HOME": str(tmp / "h1"), "RIV_INDEX": str(index), "DESSA_PACKAGES": str(PACKAGES)}
         riv_run(["init", "app"], app, home1)
         result = riv_run(["add", "colors"], app, home1)
-        if "colors@1.1.0: from the packages that came with Dessa" not in result.stdout or not (app / "riv_modules" / "textfx" / "riv.pkg").exists():
+        if not re.search(r"colors@[0-9.]+: from the packages that came with Dessa", result.stdout) or not (app / "riv_modules" / "textfx" / "riv.pkg").exists():
             problems.append("riv add colors (bundled): " + result.stdout + result.stderr)
         # Old or changed files with the same version number are noticed and replaced
         lib = app / "riv_modules" / "colors" / "lib.ds"
@@ -373,7 +373,7 @@ def riv_test():
             result = riv_run(["add", "greet"], other, theirs)
             if "greet@1.0.0: 1 piece(s): 1 from 1 peer(s)" not in result.stdout:
                 problems.append("riv add greet (by torrent): " + result.stdout + result.stderr)
-            (other / "main.ds").write_text('{ hello } from $("greet");\nprint(hello("riv"));\n', encoding="utf-8")
+            (other / "main.ds").write_text('$("greet") { hello }\nprint(hello("riv"));\n', encoding="utf-8")
             result = subprocess.run([str(EXE), "run", "main.ds"], cwd=other, capture_output=True, text=True, encoding="utf-8", timeout=120)
             if result.stdout.strip() != "Hello, riv!":
                 problems.append("running the downloaded package: " + result.stdout + result.stderr)

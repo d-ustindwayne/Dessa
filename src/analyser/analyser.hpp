@@ -233,8 +233,15 @@ private:
     Symbol* resolveSymbol(const std::string& name);
     // o.name on an Obj: looked up when the program runs
     std::unordered_set<const Expr*> dynamicMembers;
+    // $("math" as m): the names of each aliased module, and m.name expressions
+    std::vector<std::unordered_map<std::string, Symbol>> aliasTables;
+    std::unordered_set<const Expr*> aliasRefs;
+    const Symbol* aliasMember(const MemberExpr* expression, bool report);
+    const Symbol* resolveQualified(const std::string& name, int line, int column);
 public:
     bool isDynamicMember(const Expr* e) const { return dynamicMembers.count(e) != 0; }
+    // m.sqrt with $("math" as m): symbolOf(e) is what it names
+    bool isAliasRef(const Expr* e) const { return aliasRefs.count(e) != 0; }
 private:
     void narrowAfterAssignment(const std::string& name, const SemanticType& valueType);
 

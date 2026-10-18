@@ -1,5 +1,5 @@
 // $("os"): File, open a file and read or write it a piece at a time
-{ open, File, readFile, deleteFile } from $("os");
+$("os") { open, File, readFile, deleteFile }
 
 var[Str] path = "dessa_files_test.txt";
 var[File] out = open(path, "w");

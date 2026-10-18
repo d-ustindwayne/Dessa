@@ -17,7 +17,7 @@
  * <project>/riv_modules/<name>/, where imports find them:
  *
  *     $("sql");                           // riv_modules/sql/sql.dm (+ its native part)
- *     { red } from $("colors");           // riv_modules/colors/lib.ds
+ *     $("colors") { red }           // riv_modules/colors/lib.ds
  *
  * ---- Sharing, like a torrent ----
  * There is no package server. Packages travel with the BitTorrent protocol
@@ -35,12 +35,12 @@
  *   - `riv seed` shares everything you have.
  */
 
-{ readFile, writeFile, fileExists, isDir, listDir, makeDir, deleteAll, cwd, getEnv, run } from $("os");
-{ args, exit, platform } from $("sys");
-{ Json, parseJson, stringify, jsonObject, jsonStr, jsonNum } from $("json");
-{ get as httpGet, Response } from $("request");
-{ makeTorrent, Torrent, download, folderMatches, infoHashOf, DEFAULT_TRACKERS, _seed } from $("torrent");
-{ toBase64 } from $("dcrypto");
+$("os") { readFile, writeFile, fileExists, isDir, listDir, makeDir, deleteAll, cwd, getEnv, run }
+$("sys") { args, exit, platform }
+$("json") { Json, parseJson, stringify, jsonObject, jsonStr, jsonNum }
+$("request") { get as httpGet, Response }
+$("torrent") { makeTorrent, Torrent, download, folderMatches, infoHashOf, DEFAULT_TRACKERS, _seed }
+$("dcrypto") { toBase64 }
 
 const[Str] MANIFEST = "riv.pkg";
 const[Str] MODULES = "riv_modules";

@@ -2,7 +2,7 @@
  * $("sql") -- databases: Microsoft SQL Server (and anything else with an
  * ODBC driver: MySQL, PostgreSQL, ...) and SQLite.
  *
- *     { connectMssql, openSqlite } from $("sql");
+ *     $("sql") { connectMssql, openSqlite }
  *
  *     var[Database] db = connectMssql("Server=localhost;Database=shop;Trusted_Connection=yes;");
  *     var[Database] db2 = connectMssql("Server=school;Database=shop;User Id=student;Password=secret;");
@@ -19,8 +19,8 @@
  * injection). Rows come back as Json objects (see $("json")).
  */
 
-{ _odbcDrivers, _odbcOpen, _sqliteOpen, _query, _execute, _close } from $("sql");   // native part
-{ Json, jsonObject, jsonNull, jsonNum, jsonStr, jsonBool } from $("json");
+$("sql") { _odbcDrivers, _odbcOpen, _sqliteOpen, _query, _execute, _close }   // native part
+$("json") { Json, jsonObject, jsonNull, jsonNum, jsonStr, jsonBool }
 
 class SqlError {
     var[Str] message = "";

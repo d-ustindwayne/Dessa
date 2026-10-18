@@ -3,7 +3,7 @@
  * PriorityQueue, SearchTree and Graph. They hold Obj values, so any value
  * fits (convert or check with `is` when taking one out).
  *
- *     { Stack, Queue, PriorityQueue, Graph } from $("dsds");
+ *     $("dsds") { Stack, Queue, PriorityQueue, Graph }
  *
  *     var[Stack] undo = new Stack();
  *     undo.push("typed a");

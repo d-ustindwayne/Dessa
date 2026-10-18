@@ -13,7 +13,7 @@ holds Dessa code:
 <body>
     <button id="hello">Say hello</button>
     <script>
-        { document, Element, Event, alert } from $("webutils");
+        $("webutils") { document, Element, Event, alert }
         var[Element | Nil] button = document.getElementById("hello");
         if (button != nil) button.addEventListener("click", (e[Event]) := alert("Hello from Dessa!"));
     </script>
@@ -44,7 +44,7 @@ Babel's standalone build, it compiles `.ds` files in the browser:
 <script src="dessa.js"></script>                          <!-- or https://unpkg.com/dessalang -->
 <script type="text/dessa" src="app.ds"></script>
 <script type="text/dessa">
-    { document } from $("webutils");
+    $("webutils") { document }
     document.body.textContent = "Hello from Dessa!";
 </script>
 ```
@@ -71,7 +71,7 @@ dessa run app.ds --target js                  run with Node
 objects, so setting a field changes the page right away:
 
 ```dessa
-{ document, window, Element, Event, alert, prompt, confirm, log, setTimeout, fetchText } from $("webutils");
+$("webutils") { document, window, Element, Event, alert, prompt, confirm, log, setTimeout, fetchText }
 
 var[Element] item = document.createElement("li");
 item.textContent = "New item";

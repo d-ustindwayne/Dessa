@@ -1,6 +1,6 @@
 // needs: display
 // $("ashwee") without showing the window: controls keep and return their state
-{ Window, Label, Button, TextBox, CheckBox, ListBox } from $("ashwee");
+$("ashwee") { Window, Label, Button, TextBox, CheckBox, ListBox }
 
 var[Window] win = new Window("Test", 300, 200);
 var[Label] label = win.label("Hello", 10, 10);

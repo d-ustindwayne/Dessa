@@ -45,7 +45,7 @@ npx -p dessalang dessa-web serve . --port 8080             # .dhtml pages compil
 ```html
 <script src="https://unpkg.com/dessalang"></script>
 <script type="text/dessa">
-    { document } from $("webutils");
+    $("webutils") { document }
     document.body.textContent = "Hello from Dessa";
 </script>
 <script type="text/dessa" src="app.ds"></script>

@@ -251,7 +251,7 @@ SemanticType Analyser::analyseIdentifier(const IdentifierExpr* expression, bool 
             return SemanticType::unknown();
         }
         if (!allowTypeName) {
-            error(expression, "'super' can only be used to call a parent method, e.g. super.init(...) or super.method()");
+            error(expression, "'super' can only be used to call a parent method, e.g. super(...) or super.method()");
         }
         return *klass->parent;
     }
@@ -287,6 +287,10 @@ SemanticType Analyser::analyseIdentifier(const IdentifierExpr* expression, bool 
         return SemanticType::unknown();
     }
 
+    if (symbol->kind == SymbolKind::Module) {
+        error(expression, "'" + name + "' is a module; use one of its names, e.g. " + name + ".something");
+        return SemanticType::unknown();
+    }
     identSymbols[expression] = *symbol;
 
     // fact(n - 1) inside fact's own lambda
@@ -1054,9 +1058,34 @@ std::optional<Symbol> Analyser::builtinMethod(const SemanticType& receiver, cons
     return std::nullopt;
 }
 
+// m.name with $("math" as m): the symbol it names (nullptr if m isn't a module)
+const Symbol* Analyser::aliasMember(const MemberExpr* expression, bool report) {
+    const Expr* object = expression->object.get();
+    if (object->kind != ExprKind::Identifier) return nullptr;
+    const Symbol* module = resolveSymbol(static_cast<const IdentifierExpr*>(object)->name.lexeme);
+    if (!module || module->kind != SymbolKind::Module) return nullptr;
+    const auto& table = aliasTables[static_cast<size_t>(module->aliasTable)];
+    auto it = table.find(expression->name.lexeme);
+    if (it == table.end()) {
+        if (report) error(expression, "Module '" + module->name + "' has no '" + expression->name.lexeme + "'");
+        static const Symbol missing;
+        return &missing;
+    }
+    return &it->second;
+}
+
 SemanticType Analyser::analyseMember(const MemberExpr* expression) {
     const Expr* object = expression->object.get();
     const std::string& name = expression->name.lexeme;
+
+    // m.sqrt, m.PI, m.Color with $("math" as m)
+    if (const Symbol* target = aliasMember(expression, true)) {
+        if (target->name.empty()) return SemanticType::unknown();
+        identSymbols[expression] = *target;
+        aliasRefs.insert(expression);
+        if (hoverHits(expression->name)) recordHover(expression->name, *target, target->type);
+        return target->type;
+    }
     SemanticType objectType = analyseExpression(object, true);
 
     // Editor completion: obj.|
@@ -1076,8 +1105,8 @@ SemanticType Analyser::analyseMember(const MemberExpr* expression) {
     }
     if (objectType.isUnknown()) return objectType;
 
-    // Enum value: Status.ONGOING
-    if (object->kind == ExprKind::Identifier) {
+    // Enum value: Status.ONGOING (or m.Status.ONGOING)
+    if (object->kind == ExprKind::Identifier || aliasRefs.count(object)) {
         const Symbol* objSymbol = symbolOf(object);
         if (objSymbol && objSymbol->kind == SymbolKind::Enum) {
             const EnumInfo* info = findEnum(objectType);
@@ -1143,7 +1172,7 @@ SemanticType Analyser::analyseMember(const MemberExpr* expression) {
         ctor.name = "init";
         ctor.returnType = simple(SemanticTypeKind::Emp);
         ctor.ownerClass = objectType.key();
-        if (!inConstructor) error(expression, "super.init(...) can only be called inside init");
+        if (!inConstructor) error(expression, "super(...) can only be called inside init");
         memberSymbols[expression] = ctor;
         return SemanticType::unknown(); // must be called; analyseCall handles it
     }
@@ -1418,6 +1447,32 @@ SemanticType Analyser::analyseCall(const CallExpr* expression) {
         }
     }
 
+    // m.sqrt(2) with $("math" as m): like calling sqrt
+    if (callee->kind == ExprKind::Member) {
+        if (const Symbol* target = aliasMember(static_cast<const MemberExpr*>(callee), true)) {
+            if (target->name.empty()) {
+                for (const auto& a : expression->args) analyseExpression(a.value.get());
+                return SemanticType::unknown();
+            }
+            identSymbols[callee] = *target;
+            aliasRefs.insert(callee);
+            exprTypes[callee] = target->type;
+            if (target->kind == SymbolKind::Builtin && target->cppName == "dessa::zip") return analyseZip(expression, *target);
+            if (target->kind == SymbolKind::Function || (target->kind == SymbolKind::Builtin && target->type.kind == SemanticTypeKind::Function)) {
+                argOrders[expression] = checkArguments(target->name, target->parameters, expression->args, expression,
+                                                       target->variadic, &argTypes);
+                return callResult(*target, argTypes);
+            }
+            if (target->kind == SymbolKind::Class) {
+                const auto* m = static_cast<const MemberExpr*>(callee);
+                error(expression, "Use 'new " + static_cast<const IdentifierExpr*>(m->object.get())->name.lexeme + "." + m->name.lexeme +
+                                      "(...)' to create an instance of a class");
+                for (const auto& a : expression->args) analyseExpression(a.value.get());
+                return SemanticType::unknown();
+            }
+        }
+    }
+
     // obj.method(...) / obj?.method(...) / super.method(...) / super.init(...)
     if (callee->kind == ExprKind::Member) {
         const auto* member = static_cast<const MemberExpr*>(callee);
@@ -1531,7 +1586,8 @@ SemanticType Analyser::analyseNew(const NewExpr* expression) {
         return simple(SemanticTypeKind::Obj);
     }
     const std::string& className = expression->className.lexeme;
-    const Symbol* symbol = resolveSymbol(className);
+    const Symbol* symbol = className.find('.') != std::string::npos
+        ? resolveQualified(className, expression->line, expression->column) : resolveSymbol(className);
     if (!symbol || symbol->kind != SymbolKind::Class) {
         if (symbol && symbol->kind == SymbolKind::Interface) {
             error(expression, "Cannot create an instance of interface '" + className + "'; create a class that implements it");

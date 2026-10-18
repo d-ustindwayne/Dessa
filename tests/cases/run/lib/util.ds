@@ -1,5 +1,5 @@
 // Second helper module, imported by modules.ds and by nothing else
-{ Circle } from $("lib.shapes.circle");
+$("lib.shapes.circle") { Circle }
 
 func[Circle] unit() {
     return new Circle(1.0);

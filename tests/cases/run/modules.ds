@@ -1,6 +1,6 @@
-// User modules: { names } from $("dotted.path") and bare $("path")
+// User modules: $("dotted.path") { names } and bare $("path")
 
-{ Circle, describe as describeCircle, TAU, created, Kind } from $("lib.shapes.circle");
+$("lib.shapes.circle") { Circle, describe as describeCircle, TAU, created, Kind }
 $("lib.util");
 
 var[Circle] c = new Circle(2.0);

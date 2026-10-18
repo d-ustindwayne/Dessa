@@ -4,19 +4,22 @@
       "description": "Desktop windows and controls (GUI) on Windows, Linux (GTK 3) and macOS",
       "versions": [
         "0.2.0",
-        "0.3.0"
+        "0.3.0",
+        "0.4.0"
       ]
     },
     "codes": {
       "description": "Check digits (UPC, ISBN, USPS, Luhn credit cards) and simple ciphers (ROT13, Caesar)",
       "versions": [
-        "1.0.0"
+        "1.0.0",
+        "1.1.0"
       ]
     },
     "colors": {
       "description": "Terminal colours, backgrounds and colour codes (hex, RGB)",
       "versions": [
-        "1.1.0"
+        "1.1.0",
+        "1.2.0"
       ]
     },
     "json": {
@@ -29,40 +32,46 @@
     "numbers": {
       "description": "Roman numerals, numbers in words, spreadsheet columns, digits, fractions, temperatures",
       "versions": [
-        "1.0.0"
+        "1.0.0",
+        "1.1.0"
       ]
     },
     "phl": {
       "description": "Read and write PHL, the readable data format",
       "versions": [
         "1.0.0",
-        "1.1.0"
+        "1.1.0",
+        "1.2.0"
       ]
     },
     "request": {
       "description": "HTTP requests (get, post, ...) through curl",
       "versions": [
         "1.0.0",
-        "1.1.0"
+        "1.1.0",
+        "1.2.0"
       ]
     },
     "sql": {
       "description": "SQLite and SQL Server / ODBC databases",
       "versions": [
         "1.0.0",
-        "1.1.0"
+        "1.1.0",
+        "1.2.0"
       ]
     },
     "textfx": {
       "description": "Text helpers: boxes, padding, palindromes, anagrams, camelCase, vowel counts",
       "versions": [
-        "0.3.0"
+        "0.3.0",
+        "0.4.0"
       ]
     },
     "torrent": {
       "description": "Share folders with the BitTorrent protocol (trackers, local network, web seeds)",
       "versions": [
-        "1.0.0"
+        "1.0.0",
+        "1.1.0"
       ]
     }
   }

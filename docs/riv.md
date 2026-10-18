@@ -30,7 +30,7 @@ Programs then import the packages like libraries:
 
 ```dessa
 $("sql");
-{ red, banner } from $("colors");
+$("colors") { red, banner }
 ```
 
 ## Commands

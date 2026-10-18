@@ -1,9 +1,9 @@
 // needs: http   (the test runner starts a local server; its address is in DESSA_TEST_HTTP)
 // $("request") -- Dessa part in tools/riv/packages/request/request.dm, native part request.hpp
 
-{ get, post, put, delete, postJson, Response, RequestError } from $("request");
-{ jsonObject, jsonStr } from $("json");
-{ getEnv } from $("os");
+$("request") { get, post, put, delete, postJson, Response, RequestError }
+$("json") { jsonObject, jsonStr }
+$("os") { getEnv }
 
 var[Str] base = getEnv("DESSA_TEST_HTTP") ?? "http://127.0.0.1:1";
 

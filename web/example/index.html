@@ -32,7 +32,7 @@
     <!-- A Dessa program, compiled to JavaScript right here in the browser -->
     <script type="text/dessa" src="app.ds"></script>
     <script type="text/dessa">
-        { document, Element, Event, log } from $("webutils");
+        $("webutils") { document, Element, Event, log }
         func[Emp] changeColor(color[Str]) {
             document.body.style.backgroundColor = color;
             log("changed background color to", color);

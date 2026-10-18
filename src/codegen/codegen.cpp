@@ -1391,7 +1391,8 @@ std::string Codegen::printable(const Expr* e) {
 std::string Codegen::call(const CallExpr* e) {
     const Expr* callee = e->callee.get();
 
-    if (callee->kind == ExprKind::Identifier) {
+    // sqrt(2), or m.sqrt(2) with $("math" as m)
+    if (callee->kind == ExprKind::Identifier || analyser.isAliasRef(callee)) {
         const Symbol* symbol = analyser.symbolOf(callee);
         if (symbol && symbol->kind == SymbolKind::Builtin && symbol->variadic) {
             bool order = e->args.size() >= 2 &&
@@ -1492,6 +1493,13 @@ std::string Codegen::member(const MemberExpr* e) {
     const Expr* object = e->object.get();
     const SemanticType& objectType = typeOf(object);
     if (analyser.isDynamicMember(e)) return "dessa::obj_get(" + expr(object) + ", \"" + e->name.lexeme + "\")";
+    // m.PI / m.sqrt with $("math" as m)
+    if (analyser.isAliasRef(e)) {
+        const Symbol* target = analyser.symbolOf(e);
+        if (!target) return "/* unknown */";
+        if (target->kind == SymbolKind::Builtin) return target->cppName;
+        return globalName(*target);
+    }
 
     if (!symbol) return "/* unknown member */";
 

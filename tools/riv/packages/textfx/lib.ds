@@ -1,7 +1,7 @@
 /***
  * textfx -- small text helpers.
  *
- *     { box, isPalindrome, splitCamel, likes } from $("textfx");   (after `riv add textfx`)
+ *     $("textfx") { box, isPalindrome, splitCamel, likes }   (after `riv add textfx`)
  *
  *     print(box("Hello", "Dessa"));          a framed block of lines
  *     isPalindrome("Never odd or even")      true

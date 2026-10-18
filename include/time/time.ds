@@ -2,7 +2,7 @@
  * $("time") -- clocks and waiting. Dates and times (DateTime, time zones,
  * names in several languages) are written in Dessa: see time.dm.
  *
- *     { millis, sleep } from $("time");
+ *     $("time") { millis, sleep }
  *
  * Declaration file: documentation only. Bodies are `...`; the real
  * implementation is C++ in runtime/lib/time.hpp.

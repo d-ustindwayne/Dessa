@@ -1,0 +1,16 @@
+enum Kind { ROUND, SQUARE }
+class Shape {
+    var[Str] name = "";
+    init(name[Str]) { this.name = name; }
+    func[Str] describe() { return $"a shape called {this.name}"; }
+}
+class Circle(Shape) {
+    var[Dbl] r = 1;
+    init(r[Dbl]) {
+        super("circle");
+        this.r = r;
+    }
+    func[Kind] kind() { return Kind.ROUND; }
+}
+func[Dbl] area(c[Circle]) { return 3.0 * c.r * c.r; }
+const[Int] SIDES = 0;

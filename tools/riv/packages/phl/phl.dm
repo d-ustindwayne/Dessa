@@ -25,7 +25,7 @@
  *     print(toPhl(doc));                                   // back to PHL text
  */
 
-{ Json, JsonKind, jsonNull, jsonBool, jsonNum, jsonStr, jsonArray, jsonObject } from $("json");
+$("json") { Json, JsonKind, jsonNull, jsonBool, jsonNum, jsonStr, jsonArray, jsonObject }
 
 class PhlError {
     var[Str] message = "";

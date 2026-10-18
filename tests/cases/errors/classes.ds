@@ -40,9 +40,9 @@ class NoSuper(Person) {        // fine: inherits init(name, age) from Person
 }
 
 class LateSuper(Person) {
-    init() {                   // error: init must start with super.init(...)
+    init() {                   // error: init must start with super(...)
         print("hi");
-        super.init("x", 1);    // error: super.init(...) must be the first statement of init
+        super("x", 1);         // error: super(...) must be the first statement of init
     }
 }
 
