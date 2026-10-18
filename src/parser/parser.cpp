@@ -863,6 +863,10 @@ ExprPtr Parser::pipe() {
         Token op = previous();
         int line = expr->line, column = expr->column;
         ExprPtr target = call();
+        if (target->kind != ExprKind::Call && target->kind != ExprKind::Identifier && target->kind != ExprKind::Member &&
+            target->kind != ExprKind::Lambda && target->kind != ExprKind::Grouping) {
+            throw error(op, "After |> comes a function or a call, e.g. x |> f or x |> f(2)");
+        }
         if (target->kind == ExprKind::Call) {
             auto* callExpr = static_cast<CallExpr*>(target.get());
             Argument first;
