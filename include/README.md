@@ -39,7 +39,7 @@ These libraries are packages, so programs that don't use them stay small. Instal
 | Package | Native | What it does |
 |---|---|---|
 | `json` | | `Json` values, `parseJson`, `stringify`, builders |
-| `phl` | | PHL documents: `parsePhl`, `toPhl` (uses `json`) |
+| `phl` | | PHL documents: `parsePhl`, `toPhl` (uses `json`; being revised, frozen for now) |
 | `request` | ✓ (uses curl) | HTTP: `get`, `post`, `put`, `patch`, `delete`, `Response` |
 | `sql` | ✓ (`sql.cpp` + SQLite) | databases: `connectMssql`, `connect` (any ODBC), `openSqlite` |
 | `ashwee` | ✓ | desktop GUI: `Window`, `Button`, `TextBox`, `ListBox`, ... (Windows, Linux with GTK 3, macOS) |

@@ -58,7 +58,7 @@ that folder with `riv install`.
 | Package | What it has |
 |---|---|
 | `json` | `Json` values, `parseJson`, `stringify` |
-| `phl` | read and write PHL documents |
+| `phl` | read and write PHL documents (being revised) |
 | `sql` | SQLite and SQL Server (or any ODBC database) |
 | `request` | HTTP requests (`get`, `post`, ...) through curl |
 | `ashwee` | desktop windows and controls (Windows, Linux, macOS) |

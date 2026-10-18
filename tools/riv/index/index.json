@@ -37,7 +37,7 @@
       ]
     },
     "phl": {
-      "description": "Read and write PHL, the readable data format",
+      "description": "Read and write PHL (old syntax; being revised)",
       "versions": [
         "1.0.0",
         "1.1.0",

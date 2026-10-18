@@ -167,6 +167,9 @@ print(stringify(data, 2));      // indented
 
 ### phl
 
+> **Being revised.** The PHL syntax is changing, so this package is frozen
+> until the new syntax is final. It reads and writes the old syntax.
+
 PHL is a readable data format (a separate project). `parsePhl(text)` gives a
 `Json`, and `toPhl(json)` writes PHL.
 

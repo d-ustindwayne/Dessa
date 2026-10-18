@@ -169,7 +169,7 @@ class LinkedList {
         var[ListNode] node = new ListNode(value);
         node.next = this._first;
         this._first = node;
-        if (this._last == nil) this._last = node;
+        this._last ?= node;
         this._size++;
     }
 
@@ -193,8 +193,7 @@ class LinkedList {
         for (var[Int] i = 0; i < index; i++) {
             if (node != nil) node = node.next;
         }
-        if (node == nil) throw $"{what}: index {index} is out of range";
-        return node;
+        return node ?! $"{what}: index {index} is out of range";
     }
 
     // The value at a position (0 is the first).
@@ -483,8 +482,7 @@ class SearchTree {
 
     // The smallest value. Error if the tree is empty.
     func[Obj] min() {
-        var[TreeNode | Nil] node = this._root;
-        if (node == nil) throw "min: the tree is empty";
+        var[TreeNode] node = this._root ?! "min: the tree is empty";
         var[TreeNode | Nil] next = node.left;
         while (next != nil) {
             node = next;
@@ -495,8 +493,7 @@ class SearchTree {
 
     // The largest value. Error if the tree is empty.
     func[Obj] max() {
-        var[TreeNode | Nil] node = this._root;
-        if (node == nil) throw "max: the tree is empty";
+        var[TreeNode] node = this._root ?! "max: the tree is empty";
         var[TreeNode | Nil] next = node.right;
         while (next != nil) {
             node = next;

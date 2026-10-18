@@ -1,6 +1,9 @@
 /***
  * $("phl") -- read and write PHL, Dessa's data format. Written in Dessa.
  *
+ * NOTE: being revised: the PHL syntax is changing, so this package is frozen until the new syntax is final.
+ * It reads and writes the old syntax shown below.
+ *
  *     name: "Dustin Dwayne"
  *     Services: [Database: [ServerName: "Server", Port: 1341]]
  *     product: {ID, Name, Price} [
