@@ -1016,8 +1016,10 @@ std::string Codegen::expr(const Expr* e) {
             if (n->isAnonymous) {
                 std::string fields;
                 for (const auto& f : n->args) {
-                    fields += (fields.empty() ? "" : ", ") + std::string("{\"") + f.name.value_or("") + "\", " +
-                              exprAs(f.value.get(), SemanticType::simple(SemanticTypeKind::Obj)) + "}";
+                    const SemanticType* declared = analyser.anonFieldType(f.value.get());
+                    std::string value = declared ? "dessa::Obj(" + exprAs(f.value.get(), *declared) + ")"
+                                                 : exprAs(f.value.get(), SemanticType::simple(SemanticTypeKind::Obj));
+                    fields += (fields.empty() ? "" : ", ") + std::string("{\"") + f.name.value_or("") + "\", " + value + "}";
                 }
                 return "dessa::anon({" + fields + "})";
             }
@@ -1146,11 +1148,23 @@ std::string Codegen::identifier(const IdentifierExpr* e) {
     return name;
 }
 
+// a + b through _add (or a < b through _cmp)
+std::string Codegen::operatorCall(const Analyser::OperatorCall& call, const std::string& left, const Expr* right) {
+    std::string invoke = "dessa::ref(" + left + ")->" + mangle(call.method.name) + "(" + exprAs(right, call.method.parameters[0].type) + ")";
+    if (call.viaCmp) {
+        const char* test = call.op == TokenType::L_ANGLE ? " < 0" : call.op == TokenType::R_ANGLE ? " > 0" : call.op == TokenType::LESS_EQUAL ? " <= 0" : " >= 0";
+        return "(" + invoke + test + ")";
+    }
+    if (call.op == TokenType::BANG_EQUAL) return "(!" + invoke + ")";
+    return invoke;
+}
+
 std::string Codegen::binary(const BinaryExpr* e) {
     const Expr* l = e->left.get();
     const Expr* r = e->right.get();
     const SemanticType& lt = typeOf(l);
     const SemanticType& rt = typeOf(r);
+    if (const auto* call = analyser.operatorCallOf(e)) return operatorCall(*call, expr(l), r);
 
     switch (e->op.type) {
         case TokenType::EQUAL_EQUAL:
@@ -1249,6 +1263,7 @@ std::string Codegen::assign(const AssignExpr* e) {
         return "(" + lhs + " = " + exprAs(e->value.get(), targetType) + ")";
     }
 
+    if (const auto* call = analyser.operatorCallOf(e)) return "(" + lhs + " = " + operatorCall(*call, current, e->value.get()) + ")";
     std::string value = expr(e->value.get());
     switch (e->op.type) {
         case TokenType::DIV_EQUAL:
@@ -1543,10 +1558,21 @@ std::string Codegen::lambda(const LambdaExpr* e) {
     SemanticType ret = fn.returnType ? *fn.returnType : SemanticType::simple(SemanticTypeKind::Emp);
     if (type.returnType && !type.returnType->isUnknown() && (ret.isUnknown())) ret = *type.returnType;
 
-    std::string params;
+    std::string params, convert;
+    const auto* narrowed = analyser.objParamsOf(e);
     for (size_t i = 0; i < e->params.size(); ++i) {
         const SemanticType& p = i < type.parameterTypes.size() ? type.parameterTypes[i] : kUnknown;
-        params += (i ? ", " : "") + cppType(p) + " " + mangle(e->params[i].name);
+        const SemanticType* own = nullptr;
+        if (narrowed) for (const auto& [index, t] : *narrowed) if (index == i) own = &t;
+        if (own) {
+            // an Obj comes in; the lambda's own type is checked here
+            const std::string raw = "ds_obj_" + std::to_string(i);
+            params += (i ? ", " : "") + std::string("dessa::Obj ") + raw;
+            convert += cppType(*own) + " " + mangle(e->params[i].name) + " = dessa::obj_to<" + cppType(*own) + ">(" + raw +
+                       ", \"parameter '" + e->params[i].name + "' (" + own->toString() + ")\"); ";
+        } else {
+            params += (i ? ", " : "") + cppType(p) + " " + mangle(e->params[i].name);
+        }
     }
     std::string capture = currentClass ? "[=, this]" : "[=]";
     std::string header = capture + "(" + params + ") -> " + cppType(ret) + " ";
@@ -1573,6 +1599,7 @@ std::string Codegen::lambda(const LambdaExpr* e) {
         body = "{\n" + inner + std::string(static_cast<size_t>(indentLevel) * 4, ' ') + "}";
     }
     returnType = savedReturn;
+    if (!convert.empty() && !body.empty()) body = "{ " + convert + body.substr(1);
     return header + body;
 }
 

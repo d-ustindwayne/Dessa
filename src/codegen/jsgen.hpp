@@ -105,6 +105,7 @@ private:
     std::string isCheck(const std::string& value, const SemanticType& target) const;
     // Can `value` be stored in a place of this type? (Obj setting a class field)
     std::string fitsCheck(const std::string& value, const SemanticType& target) const;
+    std::string operatorCall(const Analyser::OperatorCall& call, const std::string& left, const Expr* right);
     std::string objItem(const std::string& code, const SemanticType& target, const std::string& what) const;
     std::string number(const Expr* e);   // the operand as a JS number (Int converted)
     std::string fromExtern(const std::string& code, const SemanticType& type) const;

@@ -198,6 +198,11 @@ SemanticType Analyser::analyseIs(const IsExpr* expression) {
         if (s->kind == SymbolKind::Variable || s->kind == SymbolKind::Parameter || s->kind == SymbolKind::Constant) value = s->type;
     }
     if (value.is(SemanticTypeKind::Obj)) return boolean;   // an Obj may hold anything
+    if (target.is(SemanticTypeKind::Obj)) {
+        // every value is an Obj; only nil isn't
+        if (!value.containsNil()) warning(expression, "This is always true: every " + value.toString() + " is an Obj");
+        return boolean;
+    }
     const SemanticType base = withoutNil(value);
     std::vector<SemanticType> members = base.kind == SemanticTypeKind::Union ? base.unionMembers : std::vector<SemanticType>{base};
 
@@ -494,7 +499,56 @@ SemanticType Analyser::analyseBinary(const BinaryExpr* expression) {
     return binaryResult(expression->op, left, right, expression);
 }
 
+// a + b, a == b, a < b ... on a class that has _add, _eq, _lt (or _cmp) ...
+std::optional<SemanticType> Analyser::operatorMethod(const Token& op, const SemanticType& left, const SemanticType& right, const Expr* at) {
+    if (!left.isClass() || !at) return std::nullopt;
+    TokenType base = op.type;
+    switch (base) {
+        case TokenType::PLUS_EQUAL: base = TokenType::PLUS; break;
+        case TokenType::MINUS_EQUAL: base = TokenType::MINUS; break;
+        case TokenType::MULT_EQUAL: base = TokenType::MULT; break;
+        case TokenType::DIV_EQUAL: base = TokenType::DIV; break;
+        case TokenType::MOD_EQUAL: base = TokenType::MOD; break;
+        case TokenType::EXPONENT_EQUAL: base = TokenType::EXPONENT; break;
+        default: break;
+    }
+    static const std::unordered_map<TokenType, std::string> names = {
+        {TokenType::PLUS, "_add"}, {TokenType::MINUS, "_sub"}, {TokenType::MULT, "_mul"}, {TokenType::DIV, "_div"},
+        {TokenType::MOD, "_mod"}, {TokenType::EXPONENT, "_pow"}, {TokenType::EQUAL_EQUAL, "_eq"}, {TokenType::BANG_EQUAL, "_eq"},
+        {TokenType::L_ANGLE, "_lt"}, {TokenType::R_ANGLE, "_gt"}, {TokenType::LESS_EQUAL, "_le"}, {TokenType::GREATER_EQUAL, "_ge"},
+    };
+    auto name = names.find(base);
+    if (name == names.end()) return std::nullopt;
+    const bool comparison = base == TokenType::L_ANGLE || base == TokenType::R_ANGLE || base == TokenType::LESS_EQUAL || base == TokenType::GREATER_EQUAL;
+    const Symbol* method = findMember(left, name->second);
+    bool viaCmp = false;
+    if ((!method || method->kind != SymbolKind::Method) && comparison) {
+        method = findMember(left, "_cmp");
+        viaCmp = true;
+    }
+    if (!method || method->kind != SymbolKind::Method) return std::nullopt;
+    const std::string shown = viaCmp ? "_cmp" : name->second;
+    if (method->parameters.size() != 1) {
+        error(at, "'" + shown + "' must take one parameter (the right side of " + op.lexeme + ")");
+        return SemanticType::unknown();
+    }
+    if (!right.isUnknown() && !isAssignable(method->parameters[0].type, right)) {
+        error(at, "'" + left.toString() + "." + shown + "' takes " + method->parameters[0].type.toString() + ", not " + right.toString());
+    }
+    operatorCalls[at] = OperatorCall{*method, viaCmp, base};
+    if (viaCmp) {
+        if (!method->returnType.isInteger()) error(at, "'_cmp' must return an Int (negative, 0 or positive)");
+        return simple(SemanticTypeKind::Bul);
+    }
+    if (base == TokenType::EQUAL_EQUAL || base == TokenType::BANG_EQUAL || comparison) {
+        if (!method->returnType.is(SemanticTypeKind::Bul)) error(at, "'" + shown + "' must return a Bul");
+        return simple(SemanticTypeKind::Bul);
+    }
+    return method->returnType;
+}
+
 SemanticType Analyser::binaryResult(const Token& op, const SemanticType& left, const SemanticType& right, const Expr* at) {
+    if (auto viaMethod = operatorMethod(op, left, right, at)) return *viaMethod;
     if (left.isUnknown() || right.isUnknown()) {
         switch (op.type) {
             case TokenType::EQUAL_EQUAL: case TokenType::BANG_EQUAL:
@@ -1037,6 +1091,11 @@ std::optional<Symbol> Analyser::builtinMethod(const SemanticType& receiver, cons
         if (name == "toStr") return make({}, Str);
         return std::nullopt;
     }
+    // Every class: how it prints, even without its own toStr
+    if (receiver.isReference()) {
+        if (name == "toStr") return make({}, Str);
+        return std::nullopt;
+    }
     if (receiver.isEnum()) {
         if (name == "name" || name == "toStr") return make({}, Str);
         if (name == "value") return make({}, Int);
@@ -1381,7 +1440,15 @@ ArgumentOrder Analyser::checkArguments(const std::string& name,
                 missing += (missing.empty() ? "" : ", ") + parameters[i].name;
             }
         }
-        if (!missing.empty()) error(at, "Missing argument(s) for '" + name + "': " + missing);
+        if (!missing.empty()) {
+            std::string hint;
+            if (args.empty() && at && at->kind == ExprKind::New) {
+                // e.g. db.queryAs(() := new Person(), ...) with an init that needs values
+                hint = " (to allow new " + name + "(), give init's parameters defaults, e.g. " + parameters.front().name + "[" +
+                       parameters.front().type.toString() + "] = ...)";
+            }
+            error(at, "Missing argument(s) for '" + name + "': " + missing + hint);
+        }
     }
 
     if (argTypes) *argTypes = std::move(types);
@@ -1609,11 +1676,17 @@ SemanticType Analyser::analyseCall(const CallExpr* expression) {
 SemanticType Analyser::analyseNew(const NewExpr* expression) {
     if (expression->isAnonymous) {
         std::unordered_set<std::string> seen;
-        for (const auto& field : expression->args) {
+        for (size_t i = 0; i < expression->args.size(); ++i) {
+            const auto& field = expression->args[i];
+            const bool typed = i < expression->fieldTypes.size() && expression->fieldTypes[i];
+            SemanticType declared = typed ? resolveType(*expression->fieldTypes[i], expression->line, expression->column)
+                                          : simple(SemanticTypeKind::Obj);
             SemanticType t = analyseExpression(field.value.get());
             if (t.isVoidLike()) error(field.value.get(), "Field '" + field.name.value_or("") + "' has no value (Emp)");
+            else if (typed) checkConversion(declared, field.value.get(), t, "for field '" + field.name.value_or("") + "'");
             if (field.name && !seen.insert(*field.name).second) error(field.value.get(), "Duplicate field '" + *field.name + "'");
-            expectedTypes[field.value.get()] = simple(SemanticTypeKind::Obj);
+            if (typed) fieldTypesOf[field.value.get()] = declared;
+            else expectedTypes[field.value.get()] = simple(SemanticTypeKind::Obj);
         }
         return simple(SemanticTypeKind::Obj);
     }

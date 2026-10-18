@@ -305,6 +305,35 @@ private:
     SemanticType analyseCollection(const std::vector<CollectionElement>& elements, bool isSet, const Expr* at);
 
     SemanticType binaryResult(const Token& op, const SemanticType& left, const SemanticType& right, const Expr* at);
+    std::optional<SemanticType> operatorMethod(const Token& op, const SemanticType& left, const SemanticType& right, const Expr* at);
+public:
+    // a + b on a class with _add: the method to call (cmp: through _cmp)
+    struct OperatorCall {
+        Symbol method;
+        bool viaCmp = false;
+        TokenType op = TokenType::PLUS;
+    };
+    const OperatorCall* operatorCallOf(const Expr* e) const {
+        auto it = operatorCalls.find(e);
+        return it == operatorCalls.end() ? nullptr : &it->second;
+    }
+private:
+    std::unordered_map<const Expr*, OperatorCall> operatorCalls;
+    std::unordered_map<const Expr*, SemanticType> fieldTypesOf;   // new { var[Dbl] age = 30 }: the field's type
+    // (row[Geo]) := ... where a Func[.., [Obj]] is expected: parameter -> its own type
+    std::unordered_map<const Expr*, std::vector<std::pair<size_t, SemanticType>>> objParams;
+public:
+    const std::vector<std::pair<size_t, SemanticType>>* objParamsOf(const Expr* lambda) const {
+        auto it = objParams.find(lambda);
+        return it == objParams.end() ? nullptr : &it->second;
+    }
+private:
+public:
+    const SemanticType* anonFieldType(const Expr* value) const {
+        auto it = fieldTypesOf.find(value);
+        return it == fieldTypesOf.end() ? nullptr : &it->second;
+    }
+private:
 
     // Narrowing facts implied by a condition being true / false.
     using Narrowings = std::vector<std::pair<std::string, SemanticType>>;

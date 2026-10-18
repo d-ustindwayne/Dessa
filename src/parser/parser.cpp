@@ -1267,17 +1267,27 @@ ExprPtr Parser::primary() {
         if (check(TokenType::L_BRACE)) {
             Token brace = advance();
             std::vector<Argument> fields;
+            std::vector<std::optional<TypeNode>> types;
             while (!check(TokenType::R_BRACE) && !isAtEnd()) {
+                // name = value, or var[Type] name = value
+                std::optional<TypeNode> type;
+                if (match({TokenType::VAR})) {
+                    consume(TokenType::L_BRACKET, "Expect '[' after var.");
+                    type = parseType();
+                    consume(TokenType::R_BRACKET, "Expect ']' after the type.");
+                }
                 Argument field;
                 field.name = consume(TokenType::IDENTIFIER, "Expect a field name, e.g. new { message = \"Hi\" }.").lexeme;
                 if (!match({TokenType::EQUAL, TokenType::COLON})) throw error(peek(), "Expect '=' after the field name.");
                 field.value = expression();
                 fields.push_back(std::move(field));
-                if (!match({TokenType::COMMA})) break;
+                types.push_back(std::move(type));
+                if (!match({TokenType::COMMA, TokenType::SEMICOLON})) break;
             }
             consume(TokenType::R_BRACE, "Expect '}' after the fields of the object.");
             auto anonymous = std::make_unique<NewExpr>(brace, std::move(fields));
             anonymous->isAnonymous = true;
+            anonymous->fieldTypes = std::move(types);
             return place(std::move(anonymous), newToken);
         }
         Token className = consume(TokenType::IDENTIFIER, "Expect class name after 'new'.");
@@ -1287,6 +1297,13 @@ ExprPtr Parser::primary() {
         consume(TokenType::L_PAREN, "Expect '(' after class name.");
         std::vector<Argument> args = parseArguments();
         consume(TokenType::R_PAREN, "Expect ')' after constructor arguments.");
+        if (className.lexeme == "Obj") {
+            // new Obj(): an empty object, like new {}
+            if (!args.empty()) throw error(className, "new Obj() takes no arguments; give it fields with new { name = value }");
+            auto empty = std::make_unique<NewExpr>(className, std::vector<Argument>{});
+            empty->isAnonymous = true;
+            return place(std::move(empty), newToken);
+        }
         return place(std::make_unique<NewExpr>(std::move(className), std::move(args)), newToken);
     }
 

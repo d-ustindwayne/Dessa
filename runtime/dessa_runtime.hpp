@@ -363,7 +363,9 @@ Str type_of(const T& value, const Str& known) {
 template <class T, class V>
 bool is(const V& value) {
     using U = bare<V>;
-    if constexpr (std::is_same_v<U, Obj>) {
+    if constexpr (std::is_same_v<T, Obj>) {
+        return has(value);   // x is Obj: anything but nil
+    } else if constexpr (std::is_same_v<U, Obj>) {
         return value.template holds<T>();
     } else if constexpr (is_variant<U>::value) {
         return std::visit([](const auto& v) { return is<T>(v); }, value);

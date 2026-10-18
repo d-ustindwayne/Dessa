@@ -951,7 +951,9 @@ std::string JsCodegen::expr(const Expr* e) {
             if (n->isAnonymous) {
                 std::string fields;
                 for (const auto& f : n->args) {
-                    fields += (fields.empty() ? "" : ", ") + std::string("[") + jsString(f.name.value_or("")) + ", " + expr(f.value.get()) + "]";
+                    const SemanticType* declared = analyser.anonFieldType(f.value.get());
+                    fields += (fields.empty() ? "" : ", ") + std::string("[") + jsString(f.name.value_or("")) + ", " +
+                              (declared ? exprAs(f.value.get(), *declared) : expr(f.value.get())) + "]";
                 }
                 return "$.anon([" + fields + "])";
             }
@@ -999,6 +1001,7 @@ std::string JsCodegen::isCheck(const std::string& value, const SemanticType& tar
         case SemanticTypeKind::Map: return "$.isMap(" + value + ")";
         case SemanticTypeKind::Function: return "$.isFn(" + value + ")";
         case SemanticTypeKind::Nil: return "(" + value + " == null)";
+        case SemanticTypeKind::Obj: return "(" + value + " != null)";
         case SemanticTypeKind::UserDefined:
             if (target.isEnum()) return "$.isEnumOf(" + value + ", " + className(target) + ")";
             if (target.isInterface()) return "$.implements(" + value + ", " + jsString(target.key()) + ")";
@@ -1081,7 +1084,19 @@ std::string JsCodegen::identifier(const IdentifierExpr* e) {
     }
 }
 
+// a + b through _add (or a < b through _cmp)
+std::string JsCodegen::operatorCall(const Analyser::OperatorCall& call, const std::string& left, const Expr* right) {
+    std::string invoke = left + "." + memberName(call.method.name) + "(" + exprAs(right, call.method.parameters[0].type) + ")";
+    if (call.viaCmp) {
+        const char* test = call.op == TokenType::L_ANGLE ? " < 0n" : call.op == TokenType::R_ANGLE ? " > 0n" : call.op == TokenType::LESS_EQUAL ? " <= 0n" : " >= 0n";
+        return "(" + invoke + test + ")";
+    }
+    if (call.op == TokenType::BANG_EQUAL) return "(!" + invoke + ")";
+    return invoke;
+}
+
 std::string JsCodegen::binary(const BinaryExpr* e) {
+    if (const auto* call = analyser.operatorCallOf(e)) return operatorCall(*call, expr(e->left.get()), e->right.get());
     const Expr* l = e->left.get();
     const Expr* r = e->right.get();
     const SemanticType& lt = typeOf(l);
@@ -1217,6 +1232,7 @@ std::string JsCodegen::assign(const AssignExpr* e) {
     } else {
         lhs = expr(target);
     }
+    if (const auto* call = analyser.operatorCallOf(e)) return "(" + lhs + " = " + operatorCall(*call, lhs, e->value.get()) + ")";
     if (e->op.type == TokenType::QUESTION_EQUAL) return "(" + lhs + " ?" "?= " + exprAs(e->value.get(), targetType) + ")";
     std::string value = e->op.type == TokenType::EQUAL ? exprAs(e->value.get(), targetType) : combine(lhs);
     if (externField) value = toExtern(value, targetType);
@@ -1587,6 +1603,16 @@ std::string JsCodegen::lambda(const LambdaExpr* e) {
         body = "{\n" + inner + std::string(static_cast<size_t>(indentLevel) * 4, ' ') + "}";
     }
     returnType = savedReturn;
+    // An Obj comes in where the lambda names its own type: checked here
+    if (const auto* narrowed = analyser.objParamsOf(e)) {
+        std::string convert;
+        for (const auto& [index, t] : *narrowed) {
+            const std::string name = jsName(e->params[index].name);
+            convert += name + " = " + objItem(name, t, "parameter '" + e->params[index].name + "' (" + t.toString() + ")") + "; ";
+        }
+        if (!body.empty() && body[0] == '(') body = "{ " + convert + "return " + body + "; }";
+        else if (!body.empty()) body = "{ " + convert + body.substr(1);
+    }
     std::string arrow = "(" + ps + ") => " + body;
 
     // Locals from outside are captured by value (C++'s [=]): later changes

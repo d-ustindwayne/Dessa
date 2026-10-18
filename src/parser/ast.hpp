@@ -267,6 +267,7 @@ struct NewExpr : Expr {
     Token className;
     std::vector<Argument> args;
     bool isAnonymous = false;
+    std::vector<std::optional<TypeNode>> fieldTypes;   // new { var[Str] name = "x" }
     NewExpr(Token className, std::vector<Argument> args)
         : Expr(ExprKind::New), className(std::move(className)), args(std::move(args)) {}
 };

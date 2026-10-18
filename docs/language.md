@@ -277,6 +277,34 @@ if (pet is Dog) print(pet.age);
 - A class without `init` takes its parent's `init`.
 - `super(...)` calls the parent's `init` (`super.init(...)` works too), and
   `super.method()` calls the parent's version of a method.
+- Every class has `toStr()`: how it prints, `Name(field: value, ...)` unless
+  the class writes its own. (A method called `toString` gets a warning.)
+- Every instance is also an `Obj`, so it fits wherever an `Obj` goes, and
+  `x is Obj` is true for anything but nil.
+
+### Operators on your classes
+
+A class can say what `+`, `==`, `<` and the others mean for it, with methods
+that have special names:
+
+```dessa
+class Money {
+    var[Int] cents = 0;
+    init(cents[Int]) { this.cents = cents; }
+    func[Money] _add(other[Money]) { return new Money(this.cents + other.cents); }
+    func[Bul] _eq(other[Money]) { return this.cents == other.cents; }
+    func[Int] _cmp(other[Money]) { return this.cents - other.cents; }
+}
+var[Money] total = new Money(250) + new Money(100);
+total += new Money(5);
+print(total == new Money(355), total > new Money(1));
+```
+
+| Operator | Method |
+|---|---|
+| `+ - * / % ^` | `_add _sub _mul _div _mod _pow` (also used by `+=` and the others) |
+| `==`, `!=` | `_eq` (returns Bul) |
+| `< > <= >=` | `_lt _gt _le _ge` (return Bul), or one `_cmp` returning negative, 0 or positive |
 - Without a `toStr()`, an object prints as `Dog(name: "Rex", age: 3)`.
 
 ## Interfaces
@@ -328,6 +356,13 @@ for (var[Obj] t in things) print(typeof(t), t);
 
 var[Obj] pet = new Dog("Rex");
 if (pet is Dog) print(pet.speak());     // after `is`, it is a Dog
+
+var[Obj] empty = new Obj();             // the same as new {}
+var[Obj] person = new {
+    var[Str] name = "Dustin",           // a field can say its type: the value is converted
+    var[Dbl] age = 30,                  // 30 becomes a Dbl
+    male = true
+};
 ```
 
 Fields are looked up when the program runs, so a missing field is an error
@@ -337,12 +372,13 @@ then (`Obj has no field 'missing'`). The compiler still checks the rest: an
 `==` compares values, and two anonymous objects are equal when their fields
 are. An `Obj` may hold `nil`.
 
-A loop over `Obj` values may give its variable a class type; each item is
-checked when the loop gets to it:
+A loop over `Obj` values may give its variable a class type, and so may a
+lambda that gets `Obj` values; each item is checked when it arrives:
 
 ```dessa
 var[Obj<>] pets = [new Dog("Rex"), new Dog("Bo")];
 for (var[Dog] d in pets) print(d.speak());
+pets.forEach((d[Dog]) := print(d.speak()));
 ```
 
 Fields can also be reached by name: `fieldsOf(x)` lists them, `getField(x,

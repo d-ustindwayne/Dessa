@@ -36,6 +36,9 @@ void Analyser::analyse(const Program& prog) {
     dynamicMembers.clear();
     aliasTables.clear();
     aliasRefs.clear();
+    operatorCalls.clear();
+    fieldTypesOf.clear();
+    objParams.clear();
 
     builtinScope = std::make_unique<Scope>(ScopeKind::Module);
     for (const auto& fn : globalBuiltins()) {
@@ -671,6 +674,10 @@ void Analyser::checkClassHierarchy(const Module& module) {
         for (const auto& member : decl->members) {
             if (!member || member->kind != StmtKind::FuncDecl) continue;
             const auto* method = static_cast<const FuncDeclStmt*>(member.get());
+            if (method->name == "toString" && method->params.empty()) {
+                report(DiagnosticSeverity::Warning, member->line, member->column,
+                       "Dessa prints an object with toStr(), not toString(); rename it to toStr to use it with print");
+            }
             for (const auto& a : method->annotations) {
                 if (a.lexeme != "override") {
                     error(a.line, a.column, "Unknown annotation '@" + a.lexeme + "' (the only one is @override)");
@@ -1216,7 +1223,30 @@ bool isPlainDecimalLiteral(const Expr* e) {
 } // namespace
 
 bool Analyser::checkConversion(const SemanticType& target, const Expr* value, const SemanticType& valueType, const std::string& context) {
+    // A lambda may take a narrower type where an Obj comes in: objs.forEach((row[Geo]) := ...).
+    // Each value is checked when the lambda is called.
+    if (value && value->kind == ExprKind::Lambda && target.kind == SemanticTypeKind::Function &&
+        valueType.kind == SemanticTypeKind::Function && target.parameterTypes.size() == valueType.parameterTypes.size()) {
+        SemanticType adjusted = valueType;
+        std::vector<std::pair<size_t, SemanticType>> narrowed;
+        for (size_t i = 0; i < target.parameterTypes.size(); ++i) {
+            if (target.parameterTypes[i].is(SemanticTypeKind::Obj) && !valueType.parameterTypes[i].is(SemanticTypeKind::Obj) &&
+                !valueType.parameterTypes[i].isUnknown()) {
+                narrowed.emplace_back(i, valueType.parameterTypes[i]);
+                adjusted.parameterTypes[i] = target.parameterTypes[i];
+            }
+        }
+        if (!narrowed.empty()) {
+            objParams[value] = narrowed;
+            exprTypes[value] = adjusted;
+            return checkConversion(target, value, adjusted, context);
+        }
+    }
     if (value) expectedTypes[value] = target;
+    // A Flt into a Dbl brings its rounding along: 37.7749f is 37.77489852905273 as a Dbl
+    if (value && valueType.is(SemanticTypeKind::Flt) && withoutNil(target).is(SemanticTypeKind::Dbl) && value->kind != ExprKind::Literal) {
+        warning(value, "This Flt goes into a Dbl " + context + " and keeps the Flt's rounding (37.7749 shows as 37.77489852905273); use Dbl for both");
+    }
     if (isAssignable(target, valueType)) return true;
 
     // var[Int] half = 7 / 2;  -> 3 (an Int / Int division is truncated when

@@ -1,0 +1,19 @@
+// Warnings and errors for classes, operator methods and Flt / Dbl
+
+class Location {
+    var[Dbl] lat = 0;
+    init(lat[Flt]) {
+        this.lat = lat;                        // warning: keeps the Flt's rounding
+    }
+    func[Str] toString() { return "x"; }       // warning: Dessa prints an object with toStr(), not toString()
+}
+class Box {
+    var[Int] size = 0;
+    init(size[Int]) { this.size = size; }
+    func[Box] _add(other[Box], extra[Int]) { return this; }
+    func[Int] _eq(other[Box]) { return 1; }
+}
+var[Box] b = new Box();                        // error: (to allow new Box(), give init's parameters defaults
+var[Box] c = b + b;                            // error: '_add' must take one parameter
+var[Bul] same = b == b;                        // error: '_eq' must return a Bul
+var[Bul] check = b is Obj;                     // warning: This is always true: every Box is an Obj

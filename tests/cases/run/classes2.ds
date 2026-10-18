@@ -1,0 +1,53 @@
+// Classes and Obj: every instance is an Obj, toStr() on every class, operator methods,
+// Obj literals, and lambdas with their own types over Obj values
+
+class Point { var[Int] x = 1; var[Int] y = 2; }
+class Named { var[Str] n = "a"; func[Str] toStr() { return $"Named {this.n}"; } }
+var[Point | Nil] p = new Point();
+print(p is Obj, p?.toStr(), new Named().toStr(), typeof(p));
+var[Obj] o = new Point();
+print(o is Obj, o is Point);
+var[Point | Nil] none = nil;
+print(none is Obj);
+
+class Money {
+    var[Int] cents = 0;
+    init(cents[Int]) { this.cents = cents; }
+    func[Money] _add(other[Money]) { return new Money(this.cents + other.cents); }
+    func[Money] _mul(times[Int]) { return new Money(this.cents * times); }
+    func[Bul] _eq(other[Money]) { return this.cents == other.cents; }
+    func[Int] _cmp(other[Money]) { return this.cents - other.cents; }
+    func[Str] toStr() { return $"${this.cents / 100}"; }
+}
+var[Money] a = new Money(250);
+var[Money] b = new Money(100);
+print(a + b, a * 3, a == new Money(250), a != b, a < b, a >= b, b <= b);
+var[Money] total = new Money(0);
+total += a;
+total += b;
+print(total, total > a);
+var[Money<>] prices = [a, b, new Money(50)];
+prices.sort((x[Money], y[Money]) := x._cmp(y));
+print(prices);
+
+var[Obj] obj1 = new Obj();
+var[Obj] obj2 = new {};
+var[Obj] obj3 = new { var[Str] Name = "Dustin" };
+var[Obj] obj4 = new {
+    var[Str] name = "dustin",
+    var[Dbl] age = 30,
+    var[Bul] male = true
+};
+obj1.score = 5;
+print(obj1, obj2, obj3, obj4, typeof(obj4.age), obj4.age);
+
+class Geo {
+    var[Int] id = 0;
+    var[Str] name = "";
+}
+var[Obj<>] rows = [new { id = 1 }, new Geo(), new Geo()];
+setField(rows<1>, "name", "Cebu");
+var[Obj<>] onlyGeo = rows.filter((o[Obj]) := o is Geo);
+onlyGeo.forEach((g[Geo]) := print(g.name.upper(), g.id));
+print(onlyGeo.map((g[Geo]) := g.name.length()));
+try { rows.forEach((g[Geo]) := print(g.id)); } catch (e[Str]) { print(e); }
