@@ -123,7 +123,7 @@ jobs:
           generate_release_notes: true
 
   npm:
-    # Publishes the npm package "dessalang" when the repository has an NPM_TOKEN secret
+    # Publishes the npm package "dessalang" (the version in npm/package.json) when the repository has an NPM_TOKEN secret
     needs: web
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
@@ -143,5 +143,4 @@ jobs:
         run: |
           if [ -z "$NODE_AUTH_TOKEN" ]; then echo "No NPM_TOKEN secret: skipping npm publish"; exit 0; fi
           cd npm
-          npm version --no-git-tag-version "${GITHUB_REF_NAME#v}" --allow-same-version
           npm publish --access public
