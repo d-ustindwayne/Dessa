@@ -44,8 +44,10 @@ $("sql");
 | `riv install` | install every dependency (and what they need) into `riv_modules/` |
 | `riv list` | show the dependencies and whether they are installed |
 | `riv search [text]` | list the packages that are available |
-| `riv publish [folder]` | share a package (`--all <folder>` for every package in a folder) |
-| `riv network [churn\|heal]` | show the network's peers (see below) |
+| `riv info <name>` | versions, size, infohash and magnet link of a package |
+| `riv publish [folder]` | put a package in your index and store, ready to share (see below) |
+| `riv seed` | share your packages with others until you stop it |
+| `riv bundled <folder>` | use the packages that came with Dessa from that folder (the installers do this) |
 | `riv run [args]` | run the entry file |
 
 Commit `riv.pkg` with your project, but not `riv_modules/`: anyone can recreate
@@ -65,8 +67,9 @@ that folder with `riv install`.
 | `colors` | terminal colours and colour codes |
 | `textfx` | boxes, padding, palindromes, anagrams, camelCase splitting |
 
-The installers share all of these, so `riv add <name>` works right away. See
-[libraries.md](libraries.md) for what each one contains.
+`riv add` installs these straight from the Dessa folder, without
+downloading anything. See [libraries.md](libraries.md) for what each one
+contains.
 
 ## Making a package
 
@@ -81,11 +84,14 @@ greet/
 
 ```
 cd greet
-riv publish
+riv publish          # into your index (~/.riv/index) and store (~/.riv/store)
+riv seed             # share it; keep it running
+riv publish --pr     # ask for it to be added to the official index (needs gh, the GitHub CLI)
 ```
 
 Raise `version` in `riv.pkg` every time you publish again. Names starting with
-`_` stay private to the package.
+`_` stay private to the package. `--webseed <url>` adds a web address that
+holds `<name>/...` (a folder on GitHub works), used when nobody is sharing.
 
 ### Packages with C++ code
 
@@ -106,27 +112,55 @@ The functions live in the C++ namespace `dessa::<name>`. Usually they start
 with `_` and the package's `.dm` file wraps them in friendly Dessa classes.
 `tools/riv/packages/sql` and `tools/riv/packages/ashwee` are complete examples.
 
-## The network
+## How packages are shared
 
-riv is meant to share packages peer to peer, like a torrent, instead of
-downloading them from one central server. Until that exists it is simulated
-in a SQLite database: `~/.riv/network.db` (set `RIV_NETWORK` to use another
-file).
+There is no package server: packages travel like torrents, with the
+BitTorrent protocol.
 
-- `riv publish` cuts each file into pieces of 64,000 characters, hashes every
-  piece and gives copies to 4 of the 8 simulated peers.
-- `riv install` asks online peers for each piece and checks it against its
-  hash. If a peer sends a damaged piece, riv asks another one. Each finished
-  file is checked again before it is written.
-- `riv network` shows the peers. `riv network churn` takes random peers
-  offline to show the swarm still works with fewer of them, and
-  `riv network heal` brings them all back.
+- **The index** says which packages and versions exist, each with its
+  torrent. It is a handful of JSON files. The official one is in the Dessa
+  repository (`tools/riv/index/`) and riv reads it from GitHub. Yours is in
+  `~/.riv/index`. Set `RIV_INDEX` to use other ones (folders or web
+  addresses, separated like `PATH`).
+- **Installing** looks for the package on your computer first: in your store
+  (`~/.riv/store`, everything installed or published before) and in the
+  packages that came with Dessa. If it isn't there, riv downloads it from the
+  people sharing it. It finds them through public trackers (free servers that
+  only pass addresses around) and on your local network (no internet needed,
+  handy in a classroom). If no one is sharing it, the files come from the
+  torrent's web seed: for the packages that come with Dessa, the package
+  folder on GitHub. Every piece is checked with SHA-1, whoever sent it.
+- **Sharing**: `riv seed` shares everything in your store and the packages
+  that came with Dessa, until you stop it.
 
 ```
 riv add sql
-  + sql@1.0.0: 7 file(s), 154 piece(s) from 8 peer(s), 2 damaged piece(s) caught by the hash check and fetched again
-  + json@1.0.0: 2 file(s), 2 piece(s) from 2 peer(s)
+  ~ sql@1.0.0: looking for people sharing it...
+  2 peer(s) found
+  + sql@1.0.0: 149 piece(s): 149 from 2 peer(s)
+  + json@1.0.0: from your store
 ```
 
-Not done yet: a real network between computers, binary files (packages are
-text only), version ranges and a lock file.
+Any torrent program can share a package too: `riv info sql` prints its magnet
+link.
+
+Things to know:
+
+- Computers at home are usually behind a router, so two of them on different
+  networks can't always reach each other. On the same network they always can.
+  When no one can be reached, the web seed is used.
+- The web seed of the official index points at the `main` branch, so it only
+  serves the newest version of each bundled package. Older versions need
+  someone sharing them.
+
+Settings (environment variables): `RIV_HOME` (instead of `~/.riv`),
+`RIV_INDEX`, `RIV_PEERS` (`host:port,host:port`, peers to try first),
+`RIV_TRACKERS=0`, `RIV_LAN=0`, `RIV_WEBSEED=0` (turn a way of finding pieces
+off), `RIV_TIMEOUT` (seconds to wait for peers, default 60).
+
+For whoever keeps an index: `riv index <packages folder> --out <index folder>
+--webseed <url>` writes the entries of every package in a folder, and
+`--check` reports packages whose files changed without a new index entry (CI
+runs it for the official index).
+
+Not done yet: version ranges (`^1.0`) and a lock file, and signing packages.

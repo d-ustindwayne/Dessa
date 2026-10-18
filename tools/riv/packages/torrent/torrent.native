@@ -1,0 +1,11 @@
+// Native part of $("torrent"): a small BitTorrent engine (torrent.cpp)
+header torrent.hpp
+source torrent.cpp
+link.windows -lws2_32
+link.unix -lpthread
+
+func[Str<>] _create(folder[Str], name[Str], trackers[Str<>], webseeds[Str<>])
+func[Str] _infoHash(torrent[Str])
+func[Bul] _matches(folder[Str], torrent[Str])
+func[Str] _download(torrent[Str], target[Str], peers[Str<>], options[Str<>])
+func[Emp] _seed(torrents[Str<>], folders[Str<>], port[Int], options[Str<>], seconds[Int])

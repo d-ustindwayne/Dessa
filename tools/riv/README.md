@@ -1,11 +1,10 @@
-# riv: the Dessa package manager (prototype)
+# riv: the Dessa package manager
 
-riv is written in Dessa itself (`riv.ds`, using the `sql` and `json` packages). It installs
-packages into a project's `riv_modules/` folder.
+riv is written in Dessa itself (`riv.ds`, using the `torrent`, `json` and `request` packages). It
+installs packages into a project's `riv_modules/` folder.
 
-The plan is for riv to share packages **peer to peer, like a torrent**, instead of downloading
-them from one central server. That network doesn't exist yet, so this prototype **simulates it in
-a SQLite database** (see [The network](#the-network-simulated)).
+There is no package server: riv shares packages **peer to peer with the BitTorrent protocol**
+(see [Sharing](#sharing)).
 
 ## Build
 
@@ -13,8 +12,8 @@ a SQLite database** (see [The network](#the-network-simulated)).
 cmake --build build --target riv          # -> build/riv.exe
 ```
 
-`install.ps1` / `install.sh` in the repo root build it, put it on PATH and share the bundled
-packages for you.
+`install.ps1` / `install.sh` in the repo root build it, put it on PATH and run
+`riv bundled <packages folder>` so the bundled packages install without downloading.
 
 ## A package
 
@@ -39,7 +38,8 @@ A package with C++ code also has a `<name>.native` file (see `include/README.md`
 | `request` | HTTP through curl |
 | `sql` | SQLite (bundled, ~9 MB of C) + SQL Server / ODBC |
 | `ashwee` | desktop GUI (Windows, Linux, macOS), with `examples/todo.ds` |
-| `colors`, `textfx` | tiny examples |
+| `torrent` | the BitTorrent engine riv uses (C++: trackers, local network discovery, web seeds) |
+| `colors`, `textfx`, `codes`, `numbers` | small packages written in Dessa |
 
 ## Commands
 
@@ -50,9 +50,12 @@ A package with C++ code also has a `<name>.native` file (see `include/README.md`
 | `riv remove sql` | remove a dependency |
 | `riv install` | install every dependency (and theirs) into `riv_modules/`; skips ones already there |
 | `riv list` | show the dependencies and whether they're installed |
-| `riv search [text]` | list the packages on the network |
-| `riv publish [folder]` | share a package on the network (`--all <folder>` for every package in a folder) |
-| `riv network` | show the peers; `churn` takes random ones offline, `heal` brings them back |
+| `riv search [text]` | list the packages in the index |
+| `riv info sql` | versions, size, infohash and magnet link |
+| `riv publish [folder]` | put a package in your index and store (`--webseed <url>`, `--pr` for the official index) |
+| `riv seed` | share your packages (`--port <n>`, `--minutes <n>`) |
+| `riv bundled <folder>` | use the bundled packages from that folder without downloading |
+| `riv index <folder> --out <index>` | write index entries for every package in a folder (`--check` to verify) |
 | `riv run [args]` | run the package's entry file |
 
 ## Using an installed package
@@ -66,33 +69,32 @@ $("sql");                              // riv_modules/sql/sql.dm, plus its C++ p
 The compiler finds `riv_modules/` in the program's folder or any folder above it, so files in
 `src/` work too.
 
-## The network (simulated)
+## Sharing
 
-The network is the database `~/.riv/network.db`. Set `RIV_NETWORK` to use another file. It has
-8 made-up peers (manila, tokyo, berlin, ...). A few of them are unreliable and sometimes send
-damaged data.
-
-- **`riv publish`** cuts every file into pieces of 64K characters and hashes each piece (two
-  32-bit FNV-1a hashes, written as 16 hex digits). It gives copies of each piece to 4 random
-  peers. A piece is stored once even if several package versions share it.
-- **`riv install`** downloads each piece from a random online peer that has it and checks it
-  against its hash. If the hash doesn't match, it asks another peer, for up to 3 rounds. Each
-  finished file is checked against its own hash before it's written.
-- **`riv network churn`** takes random peers offline to show the swarm still works with fewer
-  peers. **`riv network heal`** brings them all back.
+- **The index** (`index/` here, read from GitHub) lists every package version with its torrent:
+  `index.json` for `riv search`, and `<name>.json` with the versions. Your own packages go in
+  `~/.riv/index`. After changing a bundled package, raise its version and run
+  `riv index tools/riv/packages --out tools/riv/index --webseed https://raw.githubusercontent.com/d-ustindwayne/Dessa/main/tools/riv/packages/`;
+  `python tests/test.py riv` checks that the index matches the packages.
+- **`riv install`** uses a copy already on the computer (the store `~/.riv/store`, or the bundled
+  packages) when its files match the torrent. Otherwise it downloads the torrent: peers come from
+  public trackers, the local network (BEP 14 multicast) and `RIV_PEERS`; when none of them has a
+  piece, the torrent's web seed (the package folder on GitHub) is used. Pieces are checked with
+  SHA-1.
+- **`riv seed`** shares the store and the bundled packages. Any BitTorrent program can join in:
+  `riv info <name>` prints the magnet link.
+- Text files are shared with LF line endings, so a Windows checkout, a Linux one and the files on
+  GitHub all give the same torrent.
 
 ```
-riv publish --all tools/riv/packages
-mkdir C:\temp\shop && cd C:\temp\shop
-riv init shop
 riv add sql
-  + sql@1.0.0: 7 file(s), 154 piece(s) from 8 peer(s), 3 damaged piece(s) caught by the hash check and fetched again
-  + json@1.0.0: 2 file(s), 2 piece(s) from 2 peer(s)
+  ~ sql@1.0.0: looking for people sharing it...
+  2 peer(s) found
+  + sql@1.0.0: 149 piece(s): 149 from 2 peer(s)
 ```
 
-## Not done yet (it's a prototype)
+## Not done yet
 
-- a real peer-to-peer network (peer discovery, transfers between machines, signing packages)
-- only text files can be packaged (no images or other binary files yet)
 - version ranges (`^1.0`) and a lock file; versions are exact today
+- signing packages (today the index, with its SHA-1 piece hashes, is what you trust)
 - `riv remove` doesn't clean up packages that were only needed by the removed one

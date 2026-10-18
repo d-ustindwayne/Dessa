@@ -4,7 +4,7 @@
 #   sh install.sh            (from the Dessa folder)
 #
 # Builds dessa and riv, installs them to ~/.local/share/dessa, links them
-# into ~/.local/bin and shares the bundled riv packages on the riv network.
+# into ~/.local/bin and lets riv use the bundled packages without downloading them.
 # Options:  --yes (ask nothing)  --prefix DIR  --uninstall
 set -e
 
@@ -42,7 +42,7 @@ if [ "$UNINSTALL" = 1 ]; then
     ask "Remove Dessa and its links in $LINKS?" || exit 0
     rm -f "$LINKS/dessa" "$LINKS/riv"
     rm -rf "$PREFIX"
-    ok "removed (your riv network in ~/.riv and riv_modules folders were left alone)"
+    ok "removed (your riv store in ~/.riv and riv_modules folders were left alone)"
     say "   If you added $LINKS to PATH for Dessa, you can remove that line from your shell profile."
     exit 0
 fi
@@ -121,8 +121,8 @@ case ":$PATH:" in
         ;;
 esac
 
-step "Sharing the bundled packages on the riv network"
-"$PREFIX/bin/riv" publish --all "$PREFIX/packages" || warn "riv could not publish the packages; run: riv publish --all $PREFIX/packages"
+step "Telling riv where the bundled packages are"
+"$PREFIX/bin/riv" bundled "$PREFIX/packages" || warn "riv could not note the packages; run: riv bundled $PREFIX/packages"
 
 VERSION=$("$PREFIX/bin/dessa" --version)
 say ""

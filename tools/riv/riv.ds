@@ -1,5 +1,5 @@
 /***
- * riv -- the Dessa package manager (prototype), written in Dessa.
+ * riv -- the Dessa package manager, written in Dessa.
  *
  * Build it once:   cmake --build build --target riv      (-> build/riv.exe)
  *
@@ -19,28 +19,35 @@
  *     $("sql");                           // riv_modules/sql/sql.dm (+ its native part)
  *     { red } from $("colors");           // riv_modules/colors/lib.ds
  *
- * ---- The network (simulated) ----
- * riv is meant to share packages peer to peer, like a torrent, instead of
- * from one central server. Until that exists, the network is simulated in a
- * SQLite database ($RIV_NETWORK, or ~/.riv/network.db):
+ * ---- Sharing, like a torrent ----
+ * There is no package server. Packages travel with the BitTorrent protocol
+ * ($("torrent")):
  *
- *   - `riv publish` cuts every file into pieces of PIECE_SIZE characters,
- *     hashes each piece and hands copies to REPLICAS random peers.
- *   - `riv install` asks the online peers for each piece, checks it against
- *     its hash (a peer may send bad data) and asks another peer if it's wrong,
- *     then checks the whole file before writing it.
- *   - `riv network` shows the peers; `riv network churn` takes random peers
- *     offline, `riv network heal` brings them all back.
+ *   - The index says which packages and versions exist, each with its
+ *     torrent. It is a few JSON files: the official one is in the Dessa
+ *     repository (tools/riv/index), and your own is ~/.riv/index.
+ *   - `riv install` gets a package from your computer if it already has it
+ *     (the store ~/.riv/store, or the packages that came with Dessa), or else
+ *     from the people sharing it (`riv seed`), found through public trackers
+ *     and on your local network. When no one shares it, the files come from
+ *     the torrent's web seed (the package folder on GitHub). Every piece is
+ *     checked with SHA-1.
+ *   - `riv seed` shares everything you have.
  */
 
-$("os", "sys", "math");
-{ Database, openSqlite } from $("sql");
-{ Json } from $("json");
+{ readFile, writeFile, fileExists, isDir, listDir, makeDir, deleteAll, cwd, getEnv, run } from $("os");
+{ args, exit, platform } from $("sys");
+{ Json, parseJson, stringify, jsonObject, jsonStr, jsonNum } from $("json");
+{ get as httpGet, Response } from $("request");
+{ makeTorrent, Torrent, download, folderMatches, infoHashOf, DEFAULT_TRACKERS, _seed } from $("torrent");
+{ toBase64 } from $("dcrypto");
 
 const[Str] MANIFEST = "riv.pkg";
 const[Str] MODULES = "riv_modules";
-const[Int] PIECE_SIZE = 65536;    // characters per piece
-const[Int] REPLICAS = 4;          // peers that get a copy of each piece
+const[Str] OFFICIAL_REPO = "d-ustindwayne/Dessa";
+const[Str] OFFICIAL_INDEX = "https://raw.githubusercontent.com/d-ustindwayne/Dessa/main/tools/riv/index";
+const[Str] OFFICIAL_WEBSEED = "https://raw.githubusercontent.com/d-ustindwayne/Dessa/main/tools/riv/packages/";
+const[Int] DEFAULT_PORT = 6881;
 
 // ============================================================
 // Errors
@@ -161,7 +168,7 @@ func[Str<>] sortVersions(versions[Str<>]) {
 }
 
 // ============================================================
-// Files and hashes
+// Files and folders
 // ============================================================
 
 // The files of a package folder (relative paths), skipping riv_modules and hidden files.
@@ -193,164 +200,191 @@ func[Str] folderOf(path[Str]) {
     return parts.slice(0, parts.length() - 1).join("/");
 }
 
-func[Str] hex8(value[Int]) {
-    var[Int[16]] h = value;
-    var[Str] text = Str(h);
-    text = text.substr(2, text.length() - 2);   // drop 0x
-    return "0".repeat(8 - text.length()) + text;
-}
-
-// Two 32-bit FNV-1a hashes (different seeds) of characters start..end: 16 hex digits.
-func[Str] hashChars(chars[Chr<>], start[Int], end[Int]) {
-    var[Int] a = 2166136261;
-    var[Int] b = 3141592653;
-    for (var[Int] i = start; i < end; i++) {
-        var[Int] c = chars<i>.code();
-        a = ((a ^^ c) * 16777619) % 4294967296;
-        b = ((b ^^ c) * 16777619) % 4294967296;
+func[Emp] copyFolder(source[Str], target[Str]) {
+    deleteAll(target);
+    makeDir(target);
+    for (var[Str] path in packageFiles(source)) {
+        var[Str] folder = folderOf(path);
+        if (!folder.isEmpty()) makeDir($"{target}/{folder}");
+        writeFile($"{target}/{path}", readFile($"{source}/{path}"));
     }
-    return hex8(a) + hex8(b);
 }
 
-func[Str] hashText(text[Str]) {
-    var[Chr<>] chars = text.chars();
-    return hashChars(chars, 0, chars.length());
+// ~/.riv (or $RIV_HOME): the store, your index and settings
+func[Str] rivHome() {
+    var[Str] home = getEnv("RIV_HOME") ?? ((getEnv("USERPROFILE") ?? getEnv("HOME") ?? ".") + "/.riv");
+    makeDir(home);
+    return home;
+}
+
+func[Str] localIndex() {
+    var[Str] folder = rivHome() + "/index";
+    makeDir(folder);
+    return folder;
+}
+
+func[Str] storeFolder(name[Str], version[Str]) {
+    return $"{rivHome()}/store/{name}/{version}";
+}
+
+func[Str] storeTorrent(name[Str], version[Str]) {
+    return $"{rivHome()}/store/{name}/{version}.torrent";
+}
+
+// "a;b" (Windows) or "a:b" -- the folders in a PATH-like variable
+func[Str<>] pathList(value[Str]) {
+    var[Str] separator = platform() == "windows" ? ";" : ":";
+    return value.split(separator).filter((p[Str]) := !p.trim().isEmpty());
+}
+
+// The folders holding the packages that came with Dessa (`riv bundled`), and DESSA_PACKAGES
+func[Str<>] bundledFolders() {
+    var[Str<>] folders = [];
+    var[Str] saved = rivHome() + "/bundled.txt";
+    if (fileExists(saved)) {
+        for (var[Str] line in readFile(saved).split("\n")) {
+            if (!line.trim().isEmpty() && isDir(line.trim())) folders.push(line.trim());
+        }
+    }
+    var[Str | Nil] extra = getEnv("DESSA_PACKAGES");
+    if (extra != nil) {
+        for (var[Str] f in pathList(extra)) {
+            if (isDir(f) && !folders.includes(f)) folders.push(f);
+        }
+    }
+    return folders;
 }
 
 // ============================================================
-// The network (simulated in SQLite)
+// The index: which packages exist, each version with its torrent
+// ============================================================
+//
+//   <location>/index.json     {"packages": {"sql": {"description": "...", "versions": ["1.0.0"]}}}
+//   <location>/<name>.json    {"name": "sql", "description": "...",
+//                              "versions": {"1.0.0": {"infohash", "torrent", "manifest", "files", "bytes"}}}
+//
+// A location is a folder or a web address. $RIV_INDEX lists them (separated
+// like PATH); by default your own index (~/.riv/index), then the official one.
+
+func[Str<>] indexLocations() {
+    var[Str | Nil] custom = getEnv("RIV_INDEX");
+    if (custom != nil) return pathList(custom);
+    return [localIndex(), OFFICIAL_INDEX];
+}
+
+var[Map[Str, Json | Nil]] indexCache = {:};
+
+// One file of an index location, or nil if it isn't there
+func[Json | Nil] readIndexFile(location[Str], file[Str]) {
+    var[Str] key = $"{location}/{file}";
+    if (indexCache.has(key)) return indexCache<key>;
+    var[Json | Nil] found = nil;
+    try {
+        if (location.startsWith("http://") || location.startsWith("https://")) {
+            var[Response] response = httpGet($"{location}/{file}", {:}, 20);
+            if (response.ok) found = parseJson(response.text);
+        } else if (fileExists($"{location}/{file}")) {
+            found = parseJson(readFile($"{location}/{file}"));
+        }
+    } catch (e[Str]) {
+        found = nil;   // offline, or a damaged file: try the other locations
+    }
+    indexCache<key> = found;
+    return found;
+}
+
+class PackageInfo {
+    var[Str] name = "";
+    var[Str] description = "";
+    var[Map[Str, Json]] versions = {:};   // version -> entry (the first location that has it wins)
+
+    func[Str<>] sortedVersions() { return sortVersions(this.versions.keys()); }
+}
+
+func[PackageInfo] packageInfo(name[Str]) {
+    var[PackageInfo] info = new PackageInfo();
+    info.name = name;
+    for (var[Str] location in indexLocations()) {
+        var[Json | Nil] file = readIndexFile(location, $"{name}.json");
+        if (file == nil) continue;
+        if (info.description.isEmpty() && file.has("description")) info.description = file.get("description").asStr();
+        var[Json] versions = file.get("versions");
+        for (var[Str] v in versions.keys()) {
+            if (!info.versions.has(v)) info.versions<v> = versions.get(v);
+        }
+    }
+    return info;
+}
+
+func[Str] latestVersion(name[Str]) {
+    var[PackageInfo] info = packageInfo(name);
+    if (info.versions.isEmpty()) {
+        throw new RivError($"There is no package '{name}'. Try `riv search`.");
+    }
+    return info.sortedVersions().last();
+}
+
+// An index entry for a package folder
+func[Json] entryFor(folder[Str], manifest[Manifest], webseeds[Str<>]) {
+    var[Torrent] t = makeTorrent(folder, manifest.name, DEFAULT_TRACKERS, webseeds);
+    var[Json] entry = jsonObject();
+    entry.set("infohash", jsonStr(t.infoHash));
+    entry.set("torrent", jsonStr(t.data));
+    entry.set("manifest", jsonStr(manifest.toText()));
+    entry.set("files", jsonNum(t.files));
+    entry.set("bytes", jsonNum(t.bytes));
+    return entry;
+}
+
+// Adds a version to an index folder (<name>.json and index.json)
+func[Emp] addToIndex(location[Str], manifest[Manifest], entry[Json]) {
+    makeDir(location);
+    var[Str] path = $"{location}/{manifest.name}.json";
+    var[Json] file = fileExists(path) ? parseJson(readFile(path)) : jsonObject();
+    file.set("name", jsonStr(manifest.name));
+    file.set("description", jsonStr(manifest.description));
+    if (!file.has("versions")) file.set("versions", jsonObject());
+    file.get("versions").set(manifest.version, entry);
+    writeFile(path, stringify(file, 2) + "\n");
+    updateListing(location, manifest.name, manifest.description, file.get("versions").keys());
+}
+
+func[Emp] updateListing(location[Str], name[Str], description[Str], versions[Str<>]) {
+    var[Str] path = $"{location}/index.json";
+    var[Json] all = fileExists(path) ? parseJson(readFile(path)) : jsonObject();
+    if (!all.has("packages")) all.set("packages", jsonObject());
+    var[Json] item = jsonObject();
+    item.set("description", jsonStr(description));
+    var[Json] list = parseJson("[]");
+    for (var[Str] v in sortVersions(versions)) list.push(jsonStr(v));
+    item.set("versions", list);
+    all.get("packages").set(name, item);
+    // Sorted by name, so the file changes little from one publish to the next
+    var[Json] sorted = jsonObject();
+    var[Str<>] names = all.get("packages").keys();
+    names.sort((a[Str], b[Str]) := a.compare(b));
+    for (var[Str] n in names) sorted.set(n, all.get("packages").get(n));
+    all.set("packages", sorted);
+    writeFile(path, stringify(all, 2) + "\n");
+}
+
+// ============================================================
+// Downloading options ($RIV_PEERS, $RIV_TRACKERS=0, $RIV_LAN=0, $RIV_WEBSEED=0, $RIV_TIMEOUT)
 // ============================================================
 
-func[Str] networkPath() {
-    var[Str | Nil] custom = getEnv("RIV_NETWORK");
-    if (custom != nil) return custom;
-    var[Str] home = getEnv("USERPROFILE") ?? getEnv("HOME") ?? ".";
-    makeDir($"{home}/.riv");
-    return $"{home}/.riv/network.db";
+func[Str<>] givenPeers() {
+    var[Str | Nil] peers = getEnv("RIV_PEERS");
+    if (peers == nil) return [];
+    return peers.split(",").map((p[Str]) := p.trim()).filter((p[Str]) := !p.isEmpty());
 }
 
-func[Database] openNetwork() {
-    var[Database] db = openSqlite(networkPath());
-    db.execute("""
-        CREATE TABLE IF NOT EXISTS packages (
-            name TEXT, version TEXT, description TEXT, entry TEXT, manifest TEXT,
-            PRIMARY KEY (name, version));
-        CREATE TABLE IF NOT EXISTS files (
-            name TEXT, version TEXT, path TEXT, hash TEXT, pieces INTEGER,
-            PRIMARY KEY (name, version, path));
-        CREATE TABLE IF NOT EXISTS file_pieces (
-            name TEXT, version TEXT, path TEXT, piece INTEGER, hash TEXT,
-            PRIMARY KEY (name, version, path, piece));
-        CREATE TABLE IF NOT EXISTS peers (
-            id INTEGER PRIMARY KEY, name TEXT, online INTEGER, reliability REAL);
-        CREATE TABLE IF NOT EXISTS peer_pieces (
-            peer INTEGER, hash TEXT, data TEXT,
-            PRIMARY KEY (peer, hash));
-        """);
-    var[Json | Nil] count = db.queryOne("SELECT COUNT(*) AS n FROM peers");
-    if (count != nil && count.get("n").asInt() == 0) {
-        // A small made-up swarm. Reliability < 1: sometimes sends a damaged piece.
-        db.execute("""
-            INSERT INTO peers (name, online, reliability) VALUES
-                ('manila', 1, 1.0), ('tokyo', 1, 0.97), ('berlin', 1, 1.0), ('sao-paulo', 1, 1.0),
-                ('toronto', 1, 0.9), ('nairobi', 1, 1.0), ('sydney', 1, 1.0), ('oslo', 1, 0.98);
-            """);
-    }
-    return db;
-}
-
-func[Str<>] publishedVersions(db[Database], name[Str]) {
-    var[Str<>] versions = [];
-    for (var[Json] row in db.query("SELECT version FROM packages WHERE name = ?", name)) {
-        versions.push(row.get("version").asStr());
-    }
-    return sortVersions(versions);
-}
-
-func[Str] latestVersion(db[Database], name[Str]) {
-    var[Str<>] versions = publishedVersions(db, name);
-    if (versions.isEmpty()) {
-        throw new RivError($"Package '{name}' is not on the network. Try `riv search`.");
-    }
-    return versions.last();
-}
-
-// Asks the online peers for a piece until one sends data matching its hash.
-class PieceFetcher {
-    var[Database] db;
-    var[Int] bad = 0;                   // damaged pieces that were fetched again
-    var[Map[Str, Int]] fromPeer = {:};  // peer -> pieces received
-
-    init(db[Database]) {
-        this.db = db;
-    }
-
-    func[Str] fetch(hash[Str], label[Str]) {
-        var[Json<>] holders = this.db.query("""
-            SELECT p.name AS peer, p.reliability AS reliability, pp.data AS data
-            FROM peer_pieces pp JOIN peers p ON p.id = pp.peer
-            WHERE pp.hash = ? AND p.online = 1
-            ORDER BY RANDOM()
-            """, hash);
-        if (holders.isEmpty()) {
-            throw new RivError($"no online peer has {label}; try again later (or `riv network heal`)");
-        }
-        // Up to 3 rounds over the peers that have it: damage is usually a one-off
-        for (var[Int] round = 0; round < 3; round++) {
-            for (var[Json] holder in holders) {
-                var[Str] peer = holder.get("peer").asStr();
-                var[Str] data = holder.get("data").asStr();
-                // An unreliable peer sometimes sends damaged data
-                if (random() > holder.get("reliability").asDbl()) {
-                    data = data + "?";
-                }
-                if (hashText(data) == hash) {
-                    this.fromPeer<peer> = this.fromPeer.getOr(peer, 0) + 1;
-                    return data;
-                }
-                this.bad++;   // failed the hash check: ask the next peer
-            }
-        }
-        throw new RivError($"every peer kept sending a damaged copy of {label}");
-    }
-}
-
-// Publishes the package in `folder` to the network.
-func[Emp] publish(db[Database], folder[Str]) {
-    var[Manifest] manifest = readManifest($"{folder}/{MANIFEST}");
-    versionParts(manifest.version); // must be a valid version
-    if (db.queryOne("SELECT 1 AS x FROM packages WHERE name = ? AND version = ?", manifest.name, manifest.version) != nil) {
-        throw new RivError($"{manifest.name}@{manifest.version} is already published; raise the version in {MANIFEST}");
-    }
-    var[Int<>] peers = db.query("SELECT id FROM peers").map((row[Json]) := row.get("id").asInt());
-    var[Int] totalPieces = 0;
-    var[Str<>] files = packageFiles(folder);
-    db.execute("BEGIN");
-    for (var[Str] path in files) {
-        var[Str] text = readFile($"{folder}/{path}");
-        var[Chr<>] chars = text.chars();
-        var[Int] count = Int((chars.length() + PIECE_SIZE - 1) / PIECE_SIZE);
-        if (count == 0) count = 1;   // an empty file is one empty piece
-        for (var[Int] piece = 0; piece < count; piece++) {
-            var[Int] start = piece * PIECE_SIZE;
-            var[Int] end = start + PIECE_SIZE < chars.length() ? start + PIECE_SIZE : chars.length();
-            var[Str] hash = hashChars(chars, start, end);
-            var[Str] data = chars.slice(start, end).join("");
-            db.execute("INSERT INTO file_pieces VALUES (?, ?, ?, ?, ?)", manifest.name, manifest.version, path, piece, hash);
-            // Seed REPLICAS different random peers
-            var[Int<>] pool = peers.copy();
-            for (var[Int] r = 0; r < REPLICAS && !pool.isEmpty(); r++) {
-                var[Int] peer = pool.removeAt(randomInt(0, pool.length() - 1));
-                db.execute("INSERT OR IGNORE INTO peer_pieces VALUES (?, ?, ?)", peer, hash, data);
-            }
-        }
-        db.execute("INSERT INTO files VALUES (?, ?, ?, ?, ?)", manifest.name, manifest.version, path, hashText(text), count);
-        totalPieces += count;
-    }
-    db.execute("INSERT INTO packages VALUES (?, ?, ?, ?, ?)", manifest.name, manifest.version, manifest.description,
-               manifest.entry, manifest.toText());
-    db.execute("COMMIT");
-    print($"Published {manifest.name}@{manifest.version}: {files.length()} file(s), {totalPieces} piece(s), {REPLICAS} copies each");
+func[Str<>] torrentOptions() {
+    var[Str<>] options = [];
+    options.push("trackers=" + (getEnv("RIV_TRACKERS") ?? "1"));
+    options.push("lan=" + (getEnv("RIV_LAN") ?? "1"));
+    options.push("webseed=" + (getEnv("RIV_WEBSEED") ?? "1"));
+    options.push("timeout=" + (getEnv("RIV_TIMEOUT") ?? "60"));
+    return options;
 }
 
 // ============================================================
@@ -359,12 +393,7 @@ func[Emp] publish(db[Database], folder[Str]) {
 
 // Installs packages and everything they depend on into riv_modules/.
 class Installer {
-    var[Database] db;
     var[Map[Str, Str]] installed = {:};   // name -> version
-
-    init(db[Database]) {
-        this.db = db;
-    }
 
     func[Emp] install(name[Str], version[Str]) {
         if (this.installed.has(name)) {
@@ -373,56 +402,133 @@ class Installer {
             }
             return;
         }
-        // Already there (same version): nothing to download
+        // Already there (same version): nothing to do
         var[Str] target = $"{MODULES}/{name}";
         if (fileExists($"{target}/{MANIFEST}")) {
             var[Manifest] here = readManifest($"{target}/{MANIFEST}");
             if (here.version == version) {
                 this.installed<name> = version;
                 print($"  = {name}@{version} (already installed)");
-                for (var[Str] dep in here.dependencies) {
-                    this.install(dep, here.dependencies<dep>);
-                }
+                for (var[Str] dep in here.dependencies) this.install(dep, here.dependencies<dep>);
                 return;
             }
         }
-        var[Json | Nil] package = this.db.queryOne("SELECT manifest FROM packages WHERE name = ? AND version = ?", name, version);
-        if (package == nil) {
-            var[Str<>] available = publishedVersions(this.db, name);
-            var[Str] hint = available.isEmpty() ? "it is not on the network" : $"available: {available.join(", ")}";
+        var[PackageInfo] info = packageInfo(name);
+        if (!info.versions.has(version)) {
+            var[Str] hint = info.versions.isEmpty() ? "there is no such package" : $"available: {info.sortedVersions().join(", ")}";
             throw new RivError($"{name}@{version} not found ({hint})");
         }
-        deleteAll(target);
-        makeDir(target);
-        var[PieceFetcher] fetcher = new PieceFetcher(this.db);
-        var[Json<>] files = this.db.query("SELECT path, hash FROM files WHERE name = ? AND version = ? ORDER BY path", name, version);
-        var[Int] pieces = 0;
-        for (var[Json] file in files) {
-            var[Str] path = file.get("path").asStr();
-            var[Str] text = "";
-            for (var[Json] piece in this.db.query(
-                    "SELECT piece, hash FROM file_pieces WHERE name = ? AND version = ? AND path = ? ORDER BY piece",
-                    name, version, path)) {
-                text += fetcher.fetch(piece.get("hash").asStr(), $"{path} piece {piece.get("piece").asInt() + 1}");
-                pieces++;
-            }
-            if (hashText(text) != file.get("hash").asStr()) {
-                throw new RivError($"{name}@{version}: {path} does not match its hash after downloading");
-            }
-            var[Str] folder = folderOf(path);
-            if (!folder.isEmpty()) makeDir($"{target}/{folder}");
-            writeFile($"{target}/{path}", text);
+        var[Json] entry = info.versions<version>;
+        var[Str] torrent = entry.get("torrent").asStr();
+        var[Str] source = this.localCopy(name, version, torrent);
+        var[Str] how = "";
+        if (source.isEmpty()) {
+            source = storeFolder(name, version);
+            deleteAll(source);
+            makeDir(source);
+            print($"  ~ {name}@{version}: looking for people sharing it...");
+            how = download(torrent, source, givenPeers(), torrentOptions());
+            writeFile(storeTorrent(name, version), torrent);
+        } else {
+            how = source.startsWith(rivHome()) ? "from your store" : "from the packages that came with Dessa";
         }
+        copyFolder(source, target);
         this.installed<name> = version;
-        var[Str] repaired = fetcher.bad > 0 ? $", {fetcher.bad} damaged piece(s) caught by the hash check and fetched again" : "";
-        print($"  + {name}@{version}: {files.length()} file(s), {pieces} piece(s) from {fetcher.fromPeer.length()} peer(s){repaired}");
+        print($"  + {name}@{version}: {how}");
 
-        var[Json | Nil] row = package;
-        var[Manifest] manifest = parseManifest(row.get("manifest").asStr(), $"{name}/{MANIFEST}");
-        for (var[Str] dep in manifest.dependencies) {
-            this.install(dep, manifest.dependencies<dep>);
-        }
+        var[Manifest] manifest = parseManifest(entry.get("manifest").asStr(), $"{name}/{MANIFEST}");
+        for (var[Str] dep in manifest.dependencies) this.install(dep, manifest.dependencies<dep>);
     }
+
+    // A folder on this computer that holds exactly this version, or ""
+    func[Str] localCopy(name[Str], version[Str], torrent[Str]) {
+        var[Str] stored = storeFolder(name, version);
+        if (isDir(stored) && folderMatches(stored, torrent)) return stored;
+        for (var[Str] folder in bundledFolders()) {
+            var[Str] candidate = $"{folder}/{name}";
+            if (fileExists($"{candidate}/{MANIFEST}") && readManifest($"{candidate}/{MANIFEST}").version == version &&
+                folderMatches(candidate, torrent)) {
+                return candidate;
+            }
+        }
+        return "";
+    }
+}
+
+// ============================================================
+// Publishing
+// ============================================================
+
+// Puts a package folder in your store and your index, ready to share.
+func[Emp] publish(folder[Str], webseeds[Str<>], pullRequest[Bul]) {
+    var[Manifest] manifest = readManifest($"{folder}/{MANIFEST}");
+    versionParts(manifest.version); // must be a valid version
+    var[Json] entry = entryFor(folder, manifest, webseeds);
+    var[Str] hash = entry.get("infohash").asStr();
+
+    var[PackageInfo] info = packageInfo(manifest.name);
+    if (info.versions.has(manifest.version) && info.versions<manifest.version>.get("infohash").asStr() != hash) {
+        throw new RivError($"{manifest.name}@{manifest.version} already exists with other files; raise the version in {MANIFEST}");
+    }
+    copyFolder(folder, storeFolder(manifest.name, manifest.version));
+    writeFile(storeTorrent(manifest.name, manifest.version), entry.get("torrent").asStr());
+    addToIndex(localIndex(), manifest, entry);
+    print($"Published {manifest.name}@{manifest.version} ({entry.get("files").asInt()} file(s), {entry.get("bytes").asInt()} bytes)");
+    print($"  infohash {hash}");
+    if (pullRequest) {
+        openPullRequest(manifest, entry);
+    } else {
+        print("It is in your index now. To share it:");
+        print("  riv seed                      share it from this computer (keep it running)");
+        print("  riv publish --pr              ask for it to be added to the official index (needs the GitHub CLI, gh)");
+    }
+}
+
+// The output of a command (trimmed)
+func[Str] capture(command[Str]) {
+    var[Str] file = rivHome() + "/command-output.txt";
+    deleteAll(file);
+    run($"{command} > \"{file}\" 2>&1");
+    return fileExists(file) ? readFile(file).trim() : "";
+}
+
+// Opens a pull request adding the package to the official index (tools/riv/index)
+func[Emp] openPullRequest(manifest[Manifest], entry[Json]) {
+    var[Str] login = capture("gh api user --jq .login");
+    if (login.isEmpty() || login.includes(" ")) {
+        throw new RivError("`riv publish --pr` needs the GitHub CLI: install it, then run `gh auth login`");
+    }
+    var[Str] repo = OFFICIAL_REPO;
+    if (login + "/Dessa" != OFFICIAL_REPO) {
+        capture($"gh repo fork {OFFICIAL_REPO} --clone=false");
+        repo = login + "/Dessa";
+    }
+    var[Str] base = capture($"gh api repos/{OFFICIAL_REPO}/git/ref/heads/main --jq .object.sha");
+    var[Str] branch = $"riv-{manifest.name}-{manifest.version}";
+    capture($"gh api repos/{repo}/git/refs -f ref=refs/heads/{branch} -f sha={base}");
+
+    // The official files with this version added
+    var[Str] work = rivHome() + "/pr";
+    deleteAll(work);
+    makeDir(work);
+    var[Json | Nil] official = readIndexFile(OFFICIAL_INDEX, $"{manifest.name}.json");
+    if (official != nil) writeFile($"{work}/{manifest.name}.json", stringify(official, 2));
+    var[Json | Nil] listing = readIndexFile(OFFICIAL_INDEX, "index.json");
+    if (listing != nil) writeFile($"{work}/index.json", stringify(listing, 2));
+    addToIndex(work, manifest, entry);
+
+    for (var[Str] file in [$"{manifest.name}.json", "index.json"]) {
+        var[Str] path = $"tools/riv/index/{file}";
+        writeFile($"{work}/{file}.b64", toBase64(readFile($"{work}/{file}")));
+        var[Str] sha = capture($"gh api \"repos/{repo}/contents/{path}?ref={branch}\" --jq .sha");
+        var[Str] update = sha.length() == 40 ? $" -f sha={sha}" : "";
+        var[Str] result = capture($"gh api -X PUT repos/{repo}/contents/{path} -f \"message=riv: {manifest.name}@{manifest.version}\" -F content=@{work}/{file}.b64 -f branch={branch}{update}");
+        if (!result.includes("\"content\"")) throw new RivError($"GitHub refused {path}: {result}");
+    }
+    var[Str] head = repo == OFFICIAL_REPO ? branch : $"{login}:{branch}";
+    var[Str] url = capture($"gh pr create --repo {OFFICIAL_REPO} --head {head} --title \"riv: publish {manifest.name}@{manifest.version}\" --body \"Adds {manifest.name}@{manifest.version} to the riv index (infohash {entry.get("infohash").asStr()}).\"");
+    print($"Pull request: {url}");
+    print("Keep `riv seed` running so people can download it.");
 }
 
 // ============================================================
@@ -449,7 +555,7 @@ func[Emp] cmdInstall() {
         return;
     }
     print($"Installing dependencies of {manifest.name}:");
-    var[Installer] installer = new Installer(openNetwork());
+    var[Installer] installer = new Installer();
     for (var[Str] dep in manifest.dependencies) {
         installer.install(dep, manifest.dependencies<dep>);
     }
@@ -461,7 +567,7 @@ func[Emp] cmdAdd(spec[Str]) {
     var[Manifest] manifest = readManifest();
     var[Str<>] parts = spec.split("@");
     var[Str] name = parts<0>;
-    var[Str] version = parts.length() > 1 ? parts<1> : latestVersion(openNetwork(), name);
+    var[Str] version = parts.length() > 1 ? parts<1> : latestVersion(name);
     manifest.dependencies<name> = version;
     manifest.save();
     print($"Added {name}@{version} to {MANIFEST}");
@@ -491,69 +597,166 @@ func[Emp] cmdList() {
 }
 
 func[Emp] cmdSearch(text[Str]) {
-    var[Database] db = openNetwork();
-    var[Int] found = 0;
-    for (var[Json] row in db.query("SELECT DISTINCT name FROM packages ORDER BY name")) {
-        var[Str] name = row.get("name").asStr();
-        if (!name.lower().includes(text.lower())) continue;
-        var[Str<>] versions = publishedVersions(db, name);
-        var[Json | Nil] latest = db.queryOne("SELECT description FROM packages WHERE name = ? AND version = ?", name, versions.last());
-        var[Str] description = latest == nil ? "" : latest.get("description").asStr();
-        print($"{name}  [{versions.join(", ")}]  {description}");
-        found++;
+    var[Map[Str, Str]] described = {:};
+    var[Map[Str, Str<>]] versions = {:};
+    for (var[Str] location in indexLocations()) {
+        var[Json | Nil] listing = readIndexFile(location, "index.json");
+        if (listing == nil || !listing.has("packages")) continue;
+        var[Json] packages = listing.get("packages");
+        for (var[Str] name in packages.keys()) {
+            if (!name.lower().includes(text.lower())) continue;
+            var[Json] item = packages.get(name);
+            if (!described.has(name)) described<name> = item.has("description") ? item.get("description").asStr() : "";
+            var[Str<>] known = versions.getOr(name, []);
+            for (var[Int] i = 0; i < item.get("versions").length(); i++) {
+                var[Str] v = item.get("versions").at(i).asStr();
+                if (!known.includes(v)) known.push(v);
+            }
+            versions<name> = known;
+        }
     }
-    if (found == 0) print("No packages found. Publish one with `riv publish`.");
+    var[Str<>] names = described.keys();
+    names.sort((a[Str], b[Str]) := a.compare(b));
+    for (var[Str] name in names) {
+        print($"{name}  [{sortVersions(versions<name>).join(", ")}]  {described<name>}");
+    }
+    if (names.isEmpty()) print("No packages found (are you online?). Publish one with `riv publish`.");
 }
 
-// riv publish            (this folder)
-// riv publish <folder>   (another package folder)
-// riv publish --all <folder>   (every package folder inside <folder>)
+// riv info sql   /   riv info sql@1.0.0
+func[Emp] cmdInfo(spec[Str]) {
+    var[Str<>] parts = spec.split("@");
+    var[PackageInfo] info = packageInfo(parts<0>);
+    if (info.versions.isEmpty()) throw new RivError($"There is no package '{parts<0>}'. Try `riv search`.");
+    var[Str] version = parts.length() > 1 ? parts<1> : info.sortedVersions().last();
+    if (!info.versions.has(version)) throw new RivError($"{info.name}@{version} not found (available: {info.sortedVersions().join(", ")})");
+    var[Json] entry = info.versions<version>;
+    print($"{info.name}@{version}  {info.description}");
+    print($"  versions  {info.sortedVersions().join(", ")}");
+    print($"  files     {entry.get("files").asInt()} ({entry.get("bytes").asInt()} bytes)");
+    print($"  infohash  {entry.get("infohash").asStr()}");
+    var[Str] magnet = $"magnet:?xt=urn:btih:{entry.get("infohash").asStr()}&dn={info.name}";
+    for (var[Str] t in DEFAULT_TRACKERS) magnet += "&tr=" + t.replaceAll(":", "%3A").replaceAll("/", "%2F");
+    print($"  magnet    {magnet}");
+}
+
+// riv publish [folder] [--webseed <url>] [--pr]
 func[Emp] cmdPublish(rest[Str<>]) {
-    var[Database] db = openNetwork();
-    if (!rest.isEmpty() && rest<0> == "--all") {
-        if (rest.length() < 2) throw new RivError("`riv publish --all` needs a folder of packages");
-        var[Str] root = rest<1>;
-        var[Int] skipped = 0;
+    var[Str] folder = ".";
+    var[Str<>] webseeds = [];
+    var[Bul] pullRequest = false;
+    for (var[Int] i = 0; i < rest.length(); i++) {
+        if (rest<i> == "--pr") {
+            pullRequest = true;
+        } else if (rest<i> == "--webseed") {
+            if (i + 1 >= rest.length()) throw new RivError("--webseed needs a web address (a folder holding <name>/...)");
+            i++;
+            webseeds.push(rest<i>);
+        } else {
+            folder = rest<i>;
+        }
+    }
+    publish(folder, webseeds, pullRequest);
+}
+
+// riv seed [--port <n>] [--minutes <n>]
+func[Emp] cmdSeed(rest[Str<>]) {
+    var[Int] port = DEFAULT_PORT;
+    var[Int] seconds = 0;
+    for (var[Int] i = 0; i + 1 < rest.length(); i += 2) {
+        if (rest<i> == "--port") port = Int(rest<i + 1>);
+        else if (rest<i> == "--minutes") seconds = Int(rest<i + 1>) * 60;
+    }
+    var[Str<>] torrents = [];
+    var[Str<>] folders = [];
+    var[Str<>] names = [];
+    // The store: everything installed or published from here
+    var[Str] store = rivHome() + "/store";
+    if (isDir(store)) {
+        for (var[Str] name in listDir(store)) {
+            for (var[Str] file in listDir($"{store}/{name}")) {
+                if (!file.endsWith(".torrent")) continue;
+                var[Str] version = file.substr(0, file.length() - 8);
+                if (!isDir($"{store}/{name}/{version}")) continue;
+                torrents.push(readFile($"{store}/{name}/{file}"));
+                folders.push($"{store}/{name}/{version}");
+                names.push($"{name}@{version}");
+            }
+        }
+    }
+    // The packages that came with Dessa, when they match the index
+    for (var[Str] root in bundledFolders()) {
         for (var[Str] name in listDir(root)) {
             var[Str] folder = $"{root}/{name}";
             if (!fileExists($"{folder}/{MANIFEST}")) continue;
             var[Manifest] manifest = readManifest($"{folder}/{MANIFEST}");
-            if (db.queryOne("SELECT 1 AS x FROM packages WHERE name = ? AND version = ?", manifest.name, manifest.version) != nil) {
-                skipped++;
-                continue;
-            }
-            publish(db, folder);
+            var[Str] label = $"{manifest.name}@{manifest.version}";
+            if (names.includes(label)) continue;
+            var[PackageInfo] info = packageInfo(manifest.name);
+            if (!info.versions.has(manifest.version)) continue;
+            var[Str] torrent = info.versions<manifest.version>.get("torrent").asStr();
+            if (!folderMatches(folder, torrent)) continue;
+            torrents.push(torrent);
+            folders.push(folder);
+            names.push(label);
         }
-        if (skipped > 0) print($"({skipped} package(s) already on the network)");
-        return;
     }
-    publish(db, rest.isEmpty() ? "." : rest<0>);
+    if (torrents.isEmpty()) throw new RivError("Nothing to share yet: install or publish a package first.");
+    print($"Sharing {names.join(", ")}");
+    _seed(torrents, folders, port, torrentOptions(), seconds);
 }
 
-func[Emp] cmdNetwork(action[Str]) {
-    var[Database] db = openNetwork();
-    if (action == "churn") {
-        // Each peer goes offline with a chance of 1 in 3
-        for (var[Json] peer in db.query("SELECT id FROM peers")) {
-            db.execute("UPDATE peers SET online = ? WHERE id = ?", random() < 0.34 ? 0 : 1, peer.get("id").asInt());
+// riv bundled <folder>: where the packages that came with Dessa are
+func[Emp] cmdBundled(folder[Str]) {
+    if (!isDir(folder)) throw new RivError($"no folder '{folder}'");
+    var[Str] saved = rivHome() + "/bundled.txt";
+    var[Str<>] folders = fileExists(saved) ? readFile(saved).split("\n").map((l[Str]) := l.trim()).filter((l[Str]) := !l.isEmpty()) : [];
+    if (!folders.includes(folder)) folders.push(folder);
+    writeFile(saved, folders.join("\n") + "\n");
+    var[Int] count = listDir(folder).filter((n[Str]) := fileExists($"{folder}/{n}/{MANIFEST}")).length();
+    print($"riv will use the {count} package(s) in {folder} without downloading them, and share them with `riv seed`.");
+}
+
+// riv index <packages folder> [--out <folder>] [--webseed <url>] [--check]
+// (for whoever maintains an index: makes or checks <name>.json for every package)
+func[Emp] cmdIndex(rest[Str<>]) {
+    if (rest.isEmpty()) throw new RivError("`riv index` needs a folder of packages");
+    var[Str] root = rest<0>;
+    var[Str] out = localIndex();
+    var[Str<>] webseeds = [];
+    var[Bul] check = false;
+    for (var[Int] i = 1; i < rest.length(); i++) {
+        if (rest<i> == "--check") check = true;
+        else if (rest<i> == "--out" && i + 1 < rest.length()) { i++; out = rest<i>; }
+        else if (rest<i> == "--webseed" && i + 1 < rest.length()) { i++; webseeds.push(rest<i>); }
+    }
+    var[Int] problems = 0;
+    var[Str<>] names = listDir(root);
+    for (var[Str] name in names) {
+        var[Str] folder = $"{root}/{name}";
+        if (!fileExists($"{folder}/{MANIFEST}")) continue;
+        var[Manifest] manifest = readManifest($"{folder}/{MANIFEST}");
+        var[Str] label = $"{manifest.name}@{manifest.version}";
+        if (check) {
+            var[Json | Nil] file = fileExists($"{out}/{manifest.name}.json") ? parseJson(readFile($"{out}/{manifest.name}.json")) : nil;
+            if (file == nil || !file.get("versions").has(manifest.version)) {
+                print($"  MISSING  {label} is not in {out}");
+                problems++;
+            } else if (!folderMatches(folder, file.get("versions").get(manifest.version).get("torrent").asStr())) {
+                print($"  CHANGED  {label}: the files differ from the index (raise the version and run riv index again)");
+                problems++;
+            } else {
+                print($"  ok       {label}");
+            }
+            continue;
         }
-    } else if (action == "heal") {
-        db.execute("UPDATE peers SET online = 1");
-    } else if (!action.isEmpty()) {
-        throw new RivError($"unknown `riv network {action}` (use churn or heal)");
+        addToIndex(out, manifest, entryFor(folder, manifest, webseeds));
+        print($"  indexed  {label}");
     }
-    print($"Network: {networkPath()}");
-    for (var[Json] peer in db.query("""
-            SELECT p.name AS name, p.online AS online, p.reliability AS reliability, COUNT(pp.hash) AS pieces
-            FROM peers p LEFT JOIN peer_pieces pp ON pp.peer = p.id
-            GROUP BY p.id ORDER BY p.id
-            """)) {
-        var[Str] state = peer.get("online").asInt() == 1 ? "online " : "OFFLINE";
-        var[Int] reliable = Int(peer.get("reliability").asDbl() * 100);
-        print($"  {peer.get("name").asStr()}  {state}  {peer.get("pieces").asInt()} piece(s)  {reliable}% reliable");
+    if (problems > 0) {
+        print($"{problems} package(s) need `riv index {root} --out {out}`");
+        exit(1);
     }
-    var[Json | Nil] totals = db.queryOne("SELECT COUNT(*) AS packages FROM packages");
-    if (totals != nil) print($"  {totals.get("packages").asInt()} package version(s) published");
 }
 
 func[Emp] cmdRun(extra[Str<>]) {
@@ -567,19 +770,22 @@ func[Emp] cmdRun(extra[Str<>]) {
 }
 
 func[Emp] help() {
-    print("riv -- the Dessa package manager (prototype)");
+    print("riv -- the Dessa package manager");
     print();
     print("  riv init [name]           create riv.pkg (and main.ds) in this folder");
     print("  riv add <pkg>[@version]   add a dependency and install it");
     print("  riv remove <pkg>          remove a dependency");
     print("  riv install               install every dependency into riv_modules/");
     print("  riv list                  show this package's dependencies");
-    print("  riv search [text]         list the packages on the network");
-    print("  riv publish [folder]      share a package on the network (--all <folder> for many)");
-    print("  riv network [churn|heal]  show the peers; take random ones offline / bring them back");
+    print("  riv search [text]         list the packages in the index");
+    print("  riv info <pkg>[@version]  versions, size, infohash and magnet link");
+    print("  riv publish [folder]      put a package in your index and store (--webseed <url>, --pr)");
+    print("  riv seed                  share your packages with others (--port <n>, --minutes <n>)");
+    print("  riv bundled <folder>      use the packages that came with Dessa from that folder");
     print("  riv run [args...]         run this package's entry file");
     print();
-    print($"Network (simulated): {networkPath()}  (set RIV_NETWORK to change it)");
+    print($"Your store and index: {rivHome()}  (set RIV_HOME to change it)");
+    print($"Indexes: {indexLocations().join(", ")}  (RIV_INDEX)");
 }
 
 // ============================================================
@@ -589,6 +795,7 @@ func[Emp] help() {
 var[Str<>] argv = args();
 var[Str] command = argv.isEmpty() ? "help" : argv<0>;
 var[Str] argument = argv.length() > 1 ? argv<1> : "";
+var[Str<>] rest = argv.length() > 1 ? argv.slice(1, argv.length()) : [];
 
 func[Emp] needArgument(what[Str]) {
     if (argument.isEmpty()) {
@@ -610,9 +817,18 @@ try {
         }
         case "list" := { cmdList(); }
         case "search" := { cmdSearch(argument); }
-        case "publish" := { cmdPublish(argv.slice(1, argv.length())); }
-        case "network" := { cmdNetwork(argument); }
-        case "run" := { cmdRun(argv.slice(1, argv.length())); }
+        case "info" := {
+            needArgument("a package name");
+            cmdInfo(argument);
+        }
+        case "publish" := { cmdPublish(rest); }
+        case "seed" := { cmdSeed(rest); }
+        case "bundled" := {
+            needArgument("the folder of the bundled packages");
+            cmdBundled(argument);
+        }
+        case "index" := { cmdIndex(rest); }
+        case "run" := { cmdRun(rest); }
         case "help" := { help(); }
         default := {
             print($"riv: unknown command '{command}'");

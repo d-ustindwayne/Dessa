@@ -37,7 +37,7 @@ to check that everything still works.
 - npm package `dessalang` with a Node API and the `dessa-web` command
 
 **Tools**
-- riv: package manager with a simulated peer-to-peer network
+- riv: package manager sharing packages with BitTorrent (trackers, local network, GitHub web seed), index in the repo
 - `ashwee` on Windows, Linux (GTK 3) and macOS
 - Installers for Windows (wizard), Linux and macOS; prebuilt releases
 - VS Code: highlighting (also in HTML and `.dhtml`), errors as you type, completion, hover with links, go to definition, links on imports, parameter hints, HTML help in `.dhtml`
@@ -46,4 +46,4 @@ to check that everything still works.
 ## Later
 
 - Pipe operator `|>` (the token is reserved)
-- riv: a real network between computers, binary files, version ranges, a lock file
+- riv: version ranges, a lock file, signed packages

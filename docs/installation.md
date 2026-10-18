@@ -32,7 +32,7 @@ The installer walks you through these steps:
 | Build | Builds `dessa` and `riv` (skipped for a prebuilt download). |
 | Install | Copies everything to `%LOCALAPPDATA%\Dessa` (you can choose another folder). |
 | PATH | Adds `dessa` and `riv` to your PATH. If g++ isn't on PATH, it offers to add that too. |
-| Packages | Shares the bundled packages on the riv network so `riv add sql` works. |
+| Packages | Runs `riv bundled` so `riv add sql` installs the bundled packages without downloading. |
 | File types | Optional: Dessa icons for `.ds`, `.dm`, `.dhtml` files, and "Run with Dessa" in their right-click menu. |
 | VS Code | Optional: installs the Dessa extension. |
 
@@ -135,5 +135,5 @@ Then restart VS Code. See [editor.md](editor.md).
 - Windows: `powershell -ExecutionPolicy Bypass -File install.ps1 -Uninstall`
 - Linux, macOS: `sh install.sh --uninstall`
 
-Your projects, their `riv_modules` folders and the riv network in `~/.riv` are
+Your projects, their `riv_modules` folders and riv's store in `~/.riv` are
 left alone.

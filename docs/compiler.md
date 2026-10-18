@@ -83,7 +83,7 @@ dessa emit app.ds -o app.cpp
 | `DESSA_HOME` | the Dessa folder, if `dessa` can't find its `runtime` and `include` folders by itself |
 | `DESSA_PACKAGES` | extra folders to look for packages in (separated by `;` on Windows, `:` elsewhere) |
 | `DESSA_VERBOSE` | set to `1` to see the C++ compiler's own messages when something goes wrong inside Dessa |
-| `RIV_NETWORK` | the riv network database (default `~/.riv/network.db`) |
+| `RIV_HOME` | riv's store, index and settings (default `~/.riv`); see [riv.md](riv.md) for the others |
 
 ## Errors
 

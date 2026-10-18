@@ -32,6 +32,8 @@ import json
 import os
 import re
 import subprocess
+import time
+import tempfile
 import sys
 from pathlib import Path
 
@@ -313,6 +315,67 @@ def editor_test():
     return problems
 
 
+def riv_test():
+    """riv end to end: bundled packages, the index check, and a package that
+    travels by torrent from one riv home to another."""
+    riv = EXE.parent / ("riv.exe" if os.name == "nt" else "riv")
+    if not riv.exists():
+        return None   # riv isn't built
+    problems = []
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        index = ROOT / "tools" / "riv" / "index"
+
+        def riv_run(args, cwd, env_extra, timeout=120):
+            env = dict(os.environ, RIV_TRACKERS="0", RIV_LAN="0", RIV_WEBSEED="0", RIV_TIMEOUT="20", DESSA=str(EXE))
+            env.update(env_extra)
+            return subprocess.run([str(riv)] + args, cwd=cwd, env=env, capture_output=True, text=True, encoding="utf-8", timeout=timeout)
+
+        # The official index matches the bundled packages
+        result = riv_run(["index", str(PACKAGES), "--out", str(index), "--check"], ROOT, {"RIV_HOME": str(tmp / "h0")})
+        if result.returncode != 0:
+            problems.append("tools/riv/index is out of date:\n" + result.stdout.strip())
+
+        # A bundled package installs from disk
+        app = tmp / "app"
+        app.mkdir()
+        home1 = {"RIV_HOME": str(tmp / "h1"), "RIV_INDEX": str(index), "DESSA_PACKAGES": str(PACKAGES)}
+        riv_run(["init", "app"], app, home1)
+        result = riv_run(["add", "colors"], app, home1)
+        if "colors@1.1.0: from the packages that came with Dessa" not in result.stdout or not (app / "riv_modules" / "textfx" / "riv.pkg").exists():
+            problems.append("riv add colors (bundled): " + result.stdout + result.stderr)
+
+        # A new package: published in one home, shared, installed in another
+        greet = tmp / "greet"
+        greet.mkdir()
+        (greet / "riv.pkg").write_text("name = greet\nversion = 1.0.0\nentry = lib.ds\ndescription = Says hello\n", encoding="utf-8")
+        (greet / "lib.ds").write_text('func[Str] hello(name[Str]) { return $"Hello, {name}!"; }\n', encoding="utf-8")
+        mine = {"RIV_HOME": str(tmp / "h2"), "RIV_INDEX": str(tmp / "h2" / "index")}
+        result = riv_run(["publish", str(greet)], tmp, mine)
+        if "Published greet@1.0.0" not in result.stdout:
+            problems.append("riv publish: " + result.stdout + result.stderr)
+        env = dict(os.environ, RIV_TRACKERS="0", RIV_LAN="0", RIV_WEBSEED="0", **mine)
+        seeder = subprocess.Popen([str(riv), "seed", "--port", "7979", "--minutes", "2"], cwd=tmp, env=env,
+                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8")
+        try:
+            time.sleep(2)
+            other = tmp / "other"
+            other.mkdir()
+            theirs = {"RIV_HOME": str(tmp / "h3"), "RIV_INDEX": str(tmp / "h2" / "index"), "RIV_PEERS": "127.0.0.1:7979"}
+            riv_run(["init", "other"], other, theirs)
+            result = riv_run(["add", "greet"], other, theirs)
+            if "greet@1.0.0: 1 piece(s): 1 from 1 peer(s)" not in result.stdout:
+                problems.append("riv add greet (by torrent): " + result.stdout + result.stderr)
+            (other / "main.ds").write_text('{ hello } from $("greet");\nprint(hello("riv"));\n', encoding="utf-8")
+            result = subprocess.run([str(EXE), "run", "main.ds"], cwd=other, capture_output=True, text=True, encoding="utf-8", timeout=120)
+            if result.stdout.strip() != "Hello, riv!":
+                problems.append("running the downloaded package: " + result.stdout + result.stderr)
+        finally:
+            seeder.kill()
+            seeder.wait()
+    return problems
+
+
 def main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -349,6 +412,18 @@ def main():
         else:
             passed += 1
             print("ok   editor (dessa complete / hover)")
+    if not JS and (not pattern or pattern in "riv"):
+        problems = riv_test()
+        if problems is None:
+            print("skip riv (build it: cmake --build build --target riv)")
+        elif problems:
+            failed += 1
+            print("FAIL riv (index, bundled packages, sharing by torrent)")
+            for p in problems:
+                print("     " + p.replace("\n", "\n     "))
+        else:
+            passed += 1
+            print("ok   riv (index, bundled packages, sharing by torrent)")
 
     for path in collect():
         name = (path.relative_to(CASES) if CASES in path.parents else path.relative_to(ROOT)).as_posix()

@@ -34,7 +34,7 @@ A core library is a folder `include/<name>/` containing:
 ## riv packages (`tools/riv/packages/`)
 
 These libraries are packages, so programs that don't use them stay small. Install one with
-`riv add <name>`. The installer shares them all on the riv network.
+`riv add <name>`; the bundled ones install from the Dessa folder without downloading.
 
 | Package | Native | What it does |
 |---|---|---|
@@ -43,6 +43,7 @@ These libraries are packages, so programs that don't use them stay small. Instal
 | `request` | ✓ (uses curl) | HTTP: `get`, `post`, `put`, `patch`, `delete`, `Response` |
 | `sql` | ✓ (`sql.cpp` + SQLite) | databases: `connectMssql`, `connect` (any ODBC), `openSqlite` |
 | `ashwee` | ✓ | desktop GUI: `Window`, `Button`, `TextBox`, `ListBox`, ... (Windows, Linux with GTK 3, macOS) |
+| `torrent` | ✓ | BitTorrent: share folders peer to peer (riv uses it) |
 | `colors`, `textfx` | | small examples of plain Dessa packages |
 
 A package's native part is described by a **`<name>.native`** file next to its `.hpp`:

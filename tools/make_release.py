@@ -9,7 +9,7 @@ Creates dessa-<version>-<os>-<arch>.zip (Windows) or .tar.gz (Linux/macOS):
     dessa-0.0.5-windows-x64/
         bin/dessa(.exe) bin/riv(.exe)
         runtime/  include/              the core
-        tools/riv/packages/             riv packages, shared on the riv network on install
+        tools/riv/packages/             riv packages (riv installs them from here without downloading)
         tools/vscode-dessa/             the VS Code extension
         web/dessa.js  web/example/        Dessa in the browser (when built)
         install.ps1  install.sh         they see bin/ and skip building

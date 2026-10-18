@@ -186,6 +186,14 @@ Values passed after the SQL fill the `?` places safely. `connect(...)` takes any
 ODBC connection string, and `drivers()` lists the installed ODBC drivers.
 Both accept `TrustCertificate=yes` as a shorter `TrustServerCertificate=yes`.
 
+### torrent
+
+Shares folders with the BitTorrent protocol; riv uses it. `makeTorrent(folder,
+name, trackers, webseeds)`, `download(torrent, target, peers, options)` and
+`seed(torrents, folders, port, seconds)`. Peers are found through public
+trackers, on the local network, or from a list; web seeds fill in when no one
+shares a piece.
+
 ### request
 
 `get`, `post`, `put`, `patch`, `delete`, `postJson`, and `request(method, url,

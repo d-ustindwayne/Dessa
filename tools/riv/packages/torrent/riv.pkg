@@ -1,0 +1,4 @@
+name = torrent
+version = 1.0.0
+entry = torrent.dm
+description = Share folders with the BitTorrent protocol (trackers, local network, web seeds)

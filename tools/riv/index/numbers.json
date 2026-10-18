@@ -1,0 +1,13 @@
+{
+  "name": "numbers",
+  "description": "Roman numerals, numbers in words, spreadsheet columns, digits, fractions, temperatures",
+  "versions": {
+    "1.0.0": {
+      "infohash": "6881a18bb2ef5ca88a5e64bf8ac48ae5d87d1e8e",
+      "torrent": "ZDg6YW5ub3VuY2U0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2UxMzphbm5vdW5jZS1saXN0bGw0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2VlbDMzOnVkcDovL29wZW4uc3RlYWx0aC5zaTo4MC9hbm5vdW5jZWVsNDE6dWRwOi8vdHJhY2tlci50b3JyZW50LmV1Lm9yZzo0NTEvYW5ub3VuY2VlbDM3OnVkcDovL2V4b2R1cy5kZXN5bmMuY29tOjY5NjkvYW5ub3VuY2VlZTEwOmNyZWF0ZWQgYnkxMTpyaXYgKERlc3NhKTQ6aW5mb2Q1OmZpbGVzbGQ2Omxlbmd0aGk5NjU3ZTQ6cGF0aGw2OmxpYi5kc2VlZDY6bGVuZ3RoaTE0N2U0OnBhdGhsNzpyaXYucGtnZWVlNDpuYW1lNzpudW1iZXJzMTI6cGllY2UgbGVuZ3RoaTE2Mzg0ZTY6cGllY2VzMjA6HayQ52uOxaN8PNJiP1OALjaQLKhlODp1cmwtbGlzdGw3ODpodHRwczovL3Jhdy5naXRodWJ1c2VyY29udGVudC5jb20vZC11c3RpbmR3YXluZS9EZXNzYS9tYWluL3Rvb2xzL3Jpdi9wYWNrYWdlcy9lZQ==",
+      "manifest": "name = numbers\nversion = 1.0.0\nentry = lib.ds\ndescription = Roman numerals, numbers in words, spreadsheet columns, digits, fractions, temperatures\n\n[dependencies]\n",
+      "files": 2,
+      "bytes": 9804
+    }
+  }
+}

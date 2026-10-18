@@ -6,8 +6,8 @@
 
   It checks for a C++ compiler and CMake (and offers to install them with
   winget), builds dessa and riv, copies everything to an install folder,
-  puts dessa and riv on your PATH and shares the bundled riv packages
-  (sql, request, json, phl, ashwee, ...) on the riv network.
+  puts dessa and riv on your PATH and lets riv use the bundled packages
+  (sql, request, json, phl, ashwee, ...) without downloading them.
 
   Options:
       -Yes          accept every default, ask nothing
@@ -160,7 +160,7 @@ if ($Uninstall) {
     Ok "removed the file types"
     if (Test-Path $Prefix) { Remove-Item $Prefix -Recurse -Force; Ok "deleted $Prefix" }
     Say ""
-    Say "Dessa is uninstalled. (Your riv network in ~\.riv and riv_modules folders were left alone.)" "Green"
+    Say "Dessa is uninstalled. (Your riv store in ~\.riv and riv_modules folders were left alone.)" "Green"
     exit 0
 }
 
@@ -294,9 +294,9 @@ if (-not $NoPath) {
 # 6. riv packages
 # ------------------------------------------------------------
 
-Step "Sharing the bundled packages on the riv network"
-& (Join-Path $Bin "riv.exe") publish --all $packages
-if ($LASTEXITCODE -ne 0) { Warn "riv could not publish the packages; run: riv publish --all `"$packages`"" }
+Step "Telling riv where the bundled packages are"
+& (Join-Path $Bin "riv.exe") bundled $packages
+if ($LASTEXITCODE -ne 0) { Warn "riv could not note the packages; run: riv bundled `"$packages`"" }
 
 # ------------------------------------------------------------
 # 7. Extras: file icons, VS Code
