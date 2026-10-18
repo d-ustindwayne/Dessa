@@ -452,7 +452,9 @@ bool waitReadable(Socket s, double seconds) {
     fd_set set;
     FD_ZERO(&set);
     FD_SET(s, &set);
-    timeval tv{static_cast<long>(seconds), static_cast<long>((seconds - static_cast<long>(seconds)) * 1e6)};
+    timeval tv{};
+    tv.tv_sec = static_cast<decltype(tv.tv_sec)>(seconds);
+    tv.tv_usec = static_cast<decltype(tv.tv_usec)>((seconds - static_cast<double>(tv.tv_sec)) * 1e6);
     return select(static_cast<int>(s + 1), &set, nullptr, nullptr, &tv) > 0;
 }
 
