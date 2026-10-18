@@ -402,17 +402,7 @@ class Installer {
             }
             return;
         }
-        // Already there (same version): nothing to do
         var[Str] target = $"{MODULES}/{name}";
-        if (fileExists($"{target}/{MANIFEST}")) {
-            var[Manifest] here = readManifest($"{target}/{MANIFEST}");
-            if (here.version == version) {
-                this.installed<name> = version;
-                print($"  = {name}@{version} (already installed)");
-                for (var[Str] dep in here.dependencies) this.install(dep, here.dependencies<dep>);
-                return;
-            }
-        }
         var[PackageInfo] info = packageInfo(name);
         if (!info.versions.has(version)) {
             var[Str] hint = info.versions.isEmpty() ? "there is no such package" : $"available: {info.sortedVersions().join(", ")}";
@@ -420,6 +410,17 @@ class Installer {
         }
         var[Json] entry = info.versions<version>;
         var[Str] torrent = entry.get("torrent").asStr();
+        // Already there: the same version with exactly the same files
+        if (fileExists($"{target}/{MANIFEST}")) {
+            var[Manifest] here = readManifest($"{target}/{MANIFEST}");
+            if (here.version == version && folderMatches(target, torrent)) {
+                this.installed<name> = version;
+                print($"  = {name}@{version} (already installed)");
+                for (var[Str] dep in here.dependencies) this.install(dep, here.dependencies<dep>);
+                return;
+            }
+            if (here.version == version) print($"  ! {name}@{version} in {MODULES} has other files than the index says: installing it again");
+        }
         var[Str] source = this.localCopy(name, version, torrent);
         var[Str] how = "";
         if (source.isEmpty()) {
@@ -713,7 +714,16 @@ func[Emp] cmdBundled(folder[Str]) {
     var[Str<>] folders = fileExists(saved) ? readFile(saved).split("\n").map((l[Str]) := l.trim()).filter((l[Str]) := !l.isEmpty()) : [];
     if (!folders.includes(folder)) folders.push(folder);
     writeFile(saved, folders.join("\n") + "\n");
-    var[Int] count = listDir(folder).filter((n[Str]) := fileExists($"{folder}/{n}/{MANIFEST}")).length();
+    // Your index lists them too, so riv knows these versions even when the
+    // official index doesn't (yet) or there is no internet
+    var[Int] count = 0;
+    for (var[Str] name in listDir(folder)) {
+        var[Str] package = $"{folder}/{name}";
+        if (!fileExists($"{package}/{MANIFEST}")) continue;
+        var[Manifest] manifest = readManifest($"{package}/{MANIFEST}");
+        addToIndex(localIndex(), manifest, entryFor(package, manifest, [OFFICIAL_WEBSEED]));
+        count++;
+    }
     print($"riv will use the {count} package(s) in {folder} without downloading them, and share them with `riv seed`.");
 }
 

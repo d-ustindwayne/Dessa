@@ -344,6 +344,13 @@ def riv_test():
         result = riv_run(["add", "colors"], app, home1)
         if "colors@1.1.0: from the packages that came with Dessa" not in result.stdout or not (app / "riv_modules" / "textfx" / "riv.pkg").exists():
             problems.append("riv add colors (bundled): " + result.stdout + result.stderr)
+        # Old or changed files with the same version number are noticed and replaced
+        lib = app / "riv_modules" / "colors" / "lib.ds"
+        original = lib.read_text(encoding="utf-8")
+        lib.write_text(original + "\n// changed\n", encoding="utf-8")
+        result = riv_run(["install"], app, home1)
+        if "installing it again" not in result.stdout or lib.read_text(encoding="utf-8") != original:
+            problems.append("riv install with changed files: " + result.stdout + result.stderr)
 
         # A new package: published in one home, shared, installed in another
         greet = tmp / "greet"
