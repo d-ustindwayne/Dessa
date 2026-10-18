@@ -461,6 +461,19 @@ SemanticType Analyser::analyseBinary(const BinaryExpr* expression) {
         return simple(SemanticTypeKind::Bul);
     }
 
+    // value ?! error: the value, or throw the error when it's nil
+    if (op == TokenType::QUESTION_BANG) {
+        if (!right.isUnknown() && !right.is(SemanticTypeKind::Str) && !right.isReference()) {
+            error(expression->right.get(), "After ?! comes what to throw: a Str message or a class instance, not " + right.toString());
+        }
+        if (left.is(SemanticTypeKind::Obj) || left.isUnknown()) return left;
+        if (!left.containsNil()) {
+            warning(expression, "Left side of '?!' can never be nil (" + left.toString() + ")");
+            return left;
+        }
+        return withoutNil(left);
+    }
+
     if (op == TokenType::QUESTION_QUESTION) {
         if (left.is(SemanticTypeKind::Obj)) return left;   // an Obj may hold nil
         if (!left.containsNil() && !left.isUnknown()) {
@@ -764,6 +777,25 @@ SemanticType Analyser::analyseAssignment(const AssignExpr* expression) {
 
     SemanticType targetType = analyseAssignmentTarget(target);
     SemanticType valueType;
+
+    if (expression->op.type == TokenType::QUESTION_EQUAL) {
+        // x ?= value: only when x is nil
+        if (target->kind == ExprKind::Index || dynamicMembers.count(target)) {
+            error(expression, "?= works on variables and fields");
+        }
+        valueType = analyseExpression(expression->value.get());
+        if (!targetType.isUnknown() && !targetType.containsNil() && !targetType.is(SemanticTypeKind::Obj)) {
+            warning(expression, "'?=' does nothing here: " + targetType.toString() + " can never be nil (declare it as " +
+                    targetType.toString() + " | Nil)");
+        } else if (!targetType.isUnknown()) {
+            checkConversion(targetType, expression->value.get(), valueType, "in ?=");
+        }
+        if (target->kind == ExprKind::Identifier && !valueType.containsNil() && !valueType.isUnknown()) {
+            // afterwards it holds something either way
+            narrowAfterAssignment(static_cast<const IdentifierExpr*>(target)->name.lexeme, withoutNil(targetType));
+        }
+        return targetType;
+    }
 
     if (expression->op.type == TokenType::EQUAL) {
         if (expression->value->kind == ExprKind::Lambda && targetType.kind == SemanticTypeKind::Function && targetType.returnType) {

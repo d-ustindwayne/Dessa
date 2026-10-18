@@ -427,6 +427,19 @@ R coalesce(const T& value, F&& fallback) {
     return R(fallback());
 }
 
+// a ?! error: the value, or `raise` (which throws) when it's nil
+template <class R, class T, class F>
+R or_throw(const T& value, F&& raise) {
+    using U = bare<T>;
+    if (has(value)) {
+        if constexpr (is_optional<U>::value) return R(*value);
+        else if constexpr (is_variant<U>::value) return unwrap_to<R>(value);
+        else return R(value);
+    }
+    raise();
+    fail("Unexpected nil value");
+}
+
 // ============================================================
 // Equality across nullable / union values
 // ============================================================

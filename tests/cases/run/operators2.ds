@@ -1,0 +1,59 @@
+// ?= (set if nil), ?! (throw if nil), |> (pipe) and @override
+
+class DataError {
+    var[Str] message = "";
+    init(message[Str]) { this.message = message; }
+}
+
+// ?=
+var[Str | Nil] name = nil;
+name ?= "John";
+name ?= "Never";
+print(name, name.length());            // narrowed: name is a Str now
+
+class Settings { var[Int | Nil] port = nil; }
+var[Settings] s = new Settings();
+s.port ?= 8080;
+s.port ?= 9090;
+print(s.port);
+
+// ?!
+var[Map[Str, Int]] ages = {"Ann": 31};
+func[Int] ageOf(who[Str]) {
+    return ages.get(who) ?! $"no age for {who}";
+}
+print(ageOf("Ann"));
+try { print(ageOf("Bo")); } catch (e[Str]) { print(e); }
+var[Str | Nil] missing = nil;
+try {
+    var[Str] value = missing ?! new DataError("value is Nil in data.Name");
+    print(value);
+} catch (e[DataError]) {
+    print("DataError:", e.message);
+}
+
+// |>
+func[Str] shout(text[Str]) { return text.upper() + "!"; }
+func[Str] repeatTimes(text[Str], times[Int]) { return text.repeat(times); }
+var[Str] title = "hello"
+    |> shout
+    |> repeatTimes(2)
+    |> shout();
+print(title);
+print([3, 1, 2] |> sorted() |> describe(" < "));
+func[Int<>] sorted(items[Int<>]) {
+    var[Int<>] copy = items.copy();
+    copy.sort();
+    return copy;
+}
+func[Str] describe(items[Int<>], sep[Str]) { return items.join(sep); }
+
+// @override
+class Animal {
+    func[Str] speak() { return "..."; }
+}
+class Dog(Animal) {
+    @override
+    func[Str] speak() { return "Woof"; }
+}
+print(new Dog().speak());

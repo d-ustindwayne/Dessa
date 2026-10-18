@@ -223,6 +223,8 @@ print(nickname?.upper());                  // nil if nickname is nil
 if (nickname != nil) {
     print(nickname.length());              // known to be a Str here
 }
+nickname ?= "Buddy";                       // set it only if it's nil; a Str from here on
+var[Str] email = findEmail() ?! "no email address";   // throw (a Str or a class instance) if nil
 ```
 
 `is` checks a type and narrows the variable inside the `if`:
@@ -416,13 +418,35 @@ Dessa code. See [web.md](web.md).
 | Comparison | `== != < > <= >=` |
 | Logic | `&& \|\| !` |
 | Bits (Int) | `& \| ^^` (xor) `<< >> ~` |
-| Assignment | `= += -= *= /= %= ^=`, `++ --` |
-| Nil | `??` (fallback), `?.` (safe member) |
+| Assignment | `= += -= *= /= %= ^=`, `?=` (only if nil), `++ --` |
+| Nil | `??` (fallback), `?.` (safe member), `?!` (throw if nil) |
+| Pipe | `x \|> f(a)` is `f(x, a)`; `x \|> f` is `f(x)` |
 | Other | `? :` (ternary), `is` (type check), `...` (spread) |
 
 Comparisons can't be chained: write `0 < x && x < 10`.
 
+The pipe makes a chain of calls read from left to right:
+
+```dessa
+var[Str] title = "hello"
+    |> shout
+    |> repeatTimes(2);       // repeatTimes(shout("hello"), 2)
+```
+
+## Annotations
+
+`@override` before a method says it replaces a method of the parent class (or
+of the interface). If there is no such method, for example because of a typo,
+it's an error:
+
+```dessa
+class Dog(Animal) {
+    @override
+    func[Str] speak() { return "Woof"; }
+}
+```
+
 ## Reserved for later
 
-`|>` (pipe), `with`, `@` and a few others are reserved words: using them is an
-error now so that they can get a meaning later.
+`with`, `from` and `!!` are reserved: using them is an error now so that they
+can get a meaning later.

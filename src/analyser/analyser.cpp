@@ -632,6 +632,13 @@ void Analyser::collectFunctionSignatures(const Module& module) {
 }
 
 void Analyser::checkClassHierarchy(const Module& module) {
+    for (const auto& statement : module.ast) {
+        if (statement && statement->kind == StmtKind::FuncDecl) {
+            for (const auto& a : static_cast<const FuncDeclStmt*>(statement.get())->annotations) {
+                error(a.line, a.column, "@" + a.lexeme + " is only for methods of a class");
+            }
+        }
+    }
     // Report every class that is part of an inheritance cycle, then cut the
     // cycles so the checks below terminate.
     std::vector<ClassInfo*> cyclic;
@@ -660,6 +667,30 @@ void Analyser::checkClassHierarchy(const Module& module) {
         auto it = classes.find(SemanticType::userDefined(decl->name, module.id, UserTypeKind::Class).key());
         if (it == classes.end() || it->second.decl != decl) continue;
         ClassInfo& info = it->second;
+
+        for (const auto& member : decl->members) {
+            if (!member || member->kind != StmtKind::FuncDecl) continue;
+            const auto* method = static_cast<const FuncDeclStmt*>(member.get());
+            for (const auto& a : method->annotations) {
+                if (a.lexeme != "override") {
+                    error(a.line, a.column, "Unknown annotation '@" + a.lexeme + "' (the only one is @override)");
+                    continue;
+                }
+                bool found = false;
+                for (const ClassInfo* p = info.parent ? findClass(*info.parent) : nullptr; p && !found;
+                     p = p->parent ? findClass(*p->parent) : nullptr) {
+                    found = p->methods.count(method->name) != 0;
+                }
+                if (!found && info.interface) {
+                    if (const InterfaceInfo* iface = findInterface(*info.interface)) found = iface->methods.count(method->name) != 0;
+                }
+                if (!found) {
+                    error(a.line, a.column, "'" + method->name + "' has @override, but " +
+                          (info.parent || info.interface ? "no parent class or interface of '" + info.name + "' has a method '" + method->name + "'"
+                                                         : "'" + info.name + "' has no parent class or interface"));
+                }
+            }
+        }
 
         // Overrides must keep the signature; fields can't be redeclared.
         if (info.parent) {

@@ -1,0 +1,26 @@
+// What the compiler checks for ?=, ?!, |> and @override
+
+class Base {
+    func[Str] hello() { return "hi"; }
+}
+class Child(Base) {
+    @override
+    func[Str] hello() { return "hey"; }
+    @override                                   // error: no parent class or interface of 'Child' has a method 'goodbye'
+    func[Str] goodbye() { return "bye"; }
+    @deprecated                                 // error: Unknown annotation '@deprecated'
+    func[Str] old() { return "old"; }
+}
+class Alone {
+    @override                                   // error: 'Alone' has no parent class or interface
+    func[Str] hello() { return "x"; }
+}
+@override                                       // error: @override is only for methods of a class
+func[Emp] loose() {}
+
+var[Int | Nil] n = nil;
+var[Int] a = n ?! 42;                           // error: After ?! comes what to throw
+var[(Int | Nil)<>] list = [nil];
+list<0> ?= 5;                                   // error: ?= works on variables and fields
+var[Str] text = 5 |> describe;                  // error: Cannot convert Int to Str
+func[Str] describe(s[Str]) { return s; }

@@ -626,6 +626,8 @@ $.typeOf = (v, known) => {
 
 // a?.b
 $.chain = (v, f) => (v === null || v === undefined) ? null : f(v);
+// a ?! error
+$.orThrow = (v, raise) => (v === null || v === undefined) ? raise() : v;
 
 // Values crossing to / from JavaScript objects (webutils' Element, Event, ...)
 $.extInt = (v) => v === null || v === undefined ? null : typeof v === "bigint" ? v : BigInt(Math.trunc(Number(v)));

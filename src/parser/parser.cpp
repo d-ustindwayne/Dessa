@@ -9,10 +9,6 @@ namespace {
 
 bool isReserved(TokenType type) {
     switch (type) {
-        case TokenType::QUESTION_EQUAL:
-        case TokenType::QUESTION_BANG:
-        case TokenType::AT:
-        case TokenType::FUNC_PIPE:
         case TokenType::WITH:
         case TokenType::FROM:
             return true;
@@ -199,6 +195,14 @@ StmtPtr Parser::declarationInner() {
     if (match({TokenType::VAR}))   return varDeclaration();
     if (match({TokenType::CONST})) return constDeclaration();
     if (match({TokenType::FUNC}))  return funcDeclaration();
+    if (check(TokenType::AT)) {
+        Token at = peek();
+        std::vector<Token> annotations = parseAnnotations();
+        if (!match({TokenType::FUNC})) throw error(peek(), "Annotations like @override go before methods.");
+        StmtPtr fn = funcDeclaration();
+        static_cast<FuncDeclStmt*>(fn.get())->annotations = std::move(annotations);
+        return fn;
+    }
     if (match({TokenType::CLASS})) return classDeclaration();
     if (match({TokenType::ENUM}))  return enumDeclaration();
     if (match({TokenType::INTERFACE})) return interfaceDeclaration();
@@ -288,6 +292,9 @@ StmtPtr Parser::classDeclaration() {
     std::optional<std::string> parentClassName;
     if (match({TokenType::L_PAREN})) {
         parentClassName = consume(TokenType::IDENTIFIER, "Expect parent class name.").lexeme;
+        while (match({TokenType::DOT})) {   // class Circle(shapes.Shape)
+            *parentClassName += "." + consume(TokenType::IDENTIFIER, "Expect class name after '.'.").lexeme;
+        }
         consume(TokenType::R_PAREN, "Expect ')' after parent class name.");
     }
 
@@ -296,12 +303,17 @@ StmtPtr Parser::classDeclaration() {
     while (!check(TokenType::R_BRACE) && !isAtEnd()) {
         Token start = peek();
         try {
+            std::vector<Token> annotations = parseAnnotations();
             StmtPtr member;
             if (match({TokenType::VAR})) member = varDeclaration();
             else if (match({TokenType::CONST})) member = constDeclaration();
             else if (match({TokenType::FUNC})) member = funcDeclaration();
             else if (match({TokenType::INIT})) member = constructorDeclaration();
             else throw error(peek(), "Expect var, const, func, or init declaration inside class.");
+            if (!annotations.empty()) {
+                if (member->kind == StmtKind::FuncDecl) static_cast<FuncDeclStmt*>(member.get())->annotations = std::move(annotations);
+                else error(annotations.front(), "Annotations like @override go before methods");
+            }
             members.push_back(place(std::move(member), start));
         } catch (const ParseError&) {
             synchronize();
@@ -310,6 +322,15 @@ StmtPtr Parser::classDeclaration() {
     consume(TokenType::R_BRACE, "Expect '}' after class body.");
 
     return std::make_unique<ClassDeclStmt>(std::move(name), std::move(interfaceName), std::move(parentClassName), std::move(members));
+}
+
+// @override (several may follow each other)
+std::vector<Token> Parser::parseAnnotations() {
+    std::vector<Token> annotations;
+    while (match({TokenType::AT})) {
+        annotations.push_back(consume(TokenType::IDENTIFIER, "Expect an annotation name after '@', e.g. @override."));
+    }
+    return annotations;
 }
 
 StmtPtr Parser::enumDeclaration() {
@@ -823,7 +844,7 @@ ExprPtr Parser::assignment() {
     ExprPtr expr = ternary();
     if (match({TokenType::EQUAL, TokenType::PLUS_EQUAL, TokenType::MINUS_EQUAL,
                TokenType::MULT_EQUAL, TokenType::DIV_EQUAL, TokenType::EXPONENT_EQUAL,
-               TokenType::MOD_EQUAL})) {
+               TokenType::MOD_EQUAL, TokenType::QUESTION_EQUAL})) {
         Token op = previous();
         ExprPtr value = assignment();
         int line = expr->line, column = expr->column;
@@ -835,8 +856,32 @@ ExprPtr Parser::assignment() {
     return expr;
 }
 
+// x |> f(a)  is  f(x, a);   x |> f  is  f(x)
+ExprPtr Parser::pipe() {
+    ExprPtr expr = nullishCoalescing();
+    while (match({TokenType::FUNC_PIPE})) {
+        Token op = previous();
+        int line = expr->line, column = expr->column;
+        ExprPtr target = call();
+        if (target->kind == ExprKind::Call) {
+            auto* callExpr = static_cast<CallExpr*>(target.get());
+            Argument first;
+            first.value = std::move(expr);
+            callExpr->args.insert(callExpr->args.begin(), std::move(first));
+            expr = std::move(target);
+        } else {
+            std::vector<Argument> args(1);
+            args[0].value = std::move(expr);
+            expr = std::make_unique<CallExpr>(std::move(target), std::move(args), op);
+        }
+        expr->line = line;
+        expr->column = column;
+    }
+    return expr;
+}
+
 ExprPtr Parser::ternary() {
-    ExprPtr condition = nullishCoalescing();
+    ExprPtr condition = pipe();
     if (match({TokenType::QUESTION})) {
         ExprPtr thenBranch = expression();
         consume(TokenType::COLON, "Expect ':' after ternary 'then' branch.");
@@ -852,7 +897,7 @@ ExprPtr Parser::ternary() {
 
 ExprPtr Parser::nullishCoalescing() {
     ExprPtr expr = logicalOr();
-    while (match({TokenType::QUESTION_QUESTION})) {
+    while (match({TokenType::QUESTION_QUESTION, TokenType::QUESTION_BANG})) {
         Token op = previous();
         expr = binary(std::move(expr), std::move(op), logicalOr());
     }

@@ -1103,6 +1103,11 @@ std::string JsCodegen::binary(const BinaryExpr* e) {
             return std::string("(") + (negate ? "!" : "") + "$.eq(" + expr(l) + ", " + expr(r) + "))";
         }
         case TokenType::QUESTION_QUESTION: return "(" + expr(l) + " ?? " + exprAs(r, result) + ")";
+        case TokenType::QUESTION_BANG: {
+            // value ?! error
+            std::string raise = typeOf(r).is(SemanticTypeKind::Str) ? "throw new $.DsError(" + expr(r) + ");" : "throw new $.Thrown(" + expr(r) + ");";
+            return "$.orThrow(" + expr(l) + ", () => { " + raise + " })";
+        }
         case TokenType::AND_AND: return "(" + expr(l) + " && " + expr(r) + ")";
         case TokenType::OR_OR: return "(" + expr(l) + " || " + expr(r) + ")";
         case TokenType::DIV:
@@ -1212,6 +1217,7 @@ std::string JsCodegen::assign(const AssignExpr* e) {
     } else {
         lhs = expr(target);
     }
+    if (e->op.type == TokenType::QUESTION_EQUAL) return "(" + lhs + " ?" "?= " + exprAs(e->value.get(), targetType) + ")";
     std::string value = e->op.type == TokenType::EQUAL ? exprAs(e->value.get(), targetType) : combine(lhs);
     if (externField) value = toExtern(value, targetType);
     return "(" + lhs + " = " + value + ")";

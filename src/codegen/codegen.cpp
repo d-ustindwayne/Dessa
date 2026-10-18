@@ -1176,6 +1176,11 @@ std::string Codegen::binary(const BinaryExpr* e) {
             std::string type = cppType(result);
             return "dessa::coalesce<" + type + ">(" + expr(l) + ", [&]() -> " + type + " { return " + exprAs(r, result) + "; })";
         }
+        case TokenType::QUESTION_BANG: {
+            // value ?! error
+            std::string raise = rt.is(SemanticTypeKind::Str) ? "throw dessa::Error(" + expr(r) + ");" : "throw dessa::Thrown{" + expr(r) + "};";
+            return "dessa::or_throw<" + cppType(typeOf(e)) + ">(" + expr(l) + ", [&]() { " + raise + " })";
+        }
         case TokenType::DIV: return "dessa::div(" + expr(l) + ", " + expr(r) + ")";
         case TokenType::MOD: return "dessa::mod(" + expr(l) + ", " + expr(r) + ")";
         case TokenType::EXPONENT: return "dessa::pow(" + expr(l) + ", " + expr(r) + ")";
@@ -1218,6 +1223,11 @@ std::string Codegen::assign(const AssignExpr* e) {
             lhs = raw;
             current = isOptionalValue(s->type) ? "dessa::unwrap(" + raw + ")" : raw;
         }
+    }
+
+    // x ?= value: only when x is nil
+    if (e->op.type == TokenType::QUESTION_EQUAL) {
+        return "(dessa::has(" + lhs + ") ? " + lhs + " : (" + lhs + " = " + exprAs(e->value.get(), targetType) + "))";
     }
 
     if (e->op.type == TokenType::EQUAL) {

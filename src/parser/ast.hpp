@@ -372,6 +372,7 @@ struct FuncDeclStmt : Stmt {
     std::vector<Param> params;
     StmtPtr body; // a BlockStmt, or nullptr for an interface signature
     bool isConstructor = false;
+    std::vector<Token> annotations;   // @override
     FuncDeclStmt(TypeNode returnType, std::string name, std::vector<Param> params, StmtPtr body)
         : Stmt(StmtKind::FuncDecl), returnType(std::move(returnType)), name(std::move(name)),
           params(std::move(params)), body(std::move(body)) {}
