@@ -1,6 +1,6 @@
-# Push a tag like v0.0.5 to build prebuilt Dessa for Windows, Linux and macOS
+# Push a tag like v0.0.6 to build prebuilt Dessa for Windows, Linux and macOS
 # and attach them to a GitHub release:
-#     git tag v0.0.5 && git push origin v0.0.5
+#     git tag v0.0.6 && git push origin v0.0.6
 name: Release
 
 on:

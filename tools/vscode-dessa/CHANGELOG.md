@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.0.6
 
 - Unused imports are shown faded (setting `dessa.unusedImports`: dim, warning or off)
 - Completion suggests names only: no keywords, and no `()` added after a function
