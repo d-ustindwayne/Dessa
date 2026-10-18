@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.0
+
+- New builtins `fieldsOf`, `getField`, `setField` are known to completion and hover
+- The import snippet uses `$("name")`
+
 ## 0.0.6
 
 - Unused imports are shown faded (setting `dessa.unusedImports`: dim, warning or off)
