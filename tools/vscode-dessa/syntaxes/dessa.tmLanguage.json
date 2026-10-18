@@ -229,6 +229,14 @@
             },
             {
               "include": "#comments"
+            },
+            {
+              "name": "keyword.control.import.dessa",
+              "match": "\\bas\\b"
+            },
+            {
+              "name": "entity.name.namespace.dessa",
+              "match": "\\b[A-Za-z_]\\w*\\b"
             }
           ]
         },

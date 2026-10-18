@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- No hover or go to definition on words inside strings and comments
+- `$` at the start of a line offers an import; inside `$(` the libraries and the project's own files are suggested, with the quotes
+- Highlighting for `$("math" as m)`, `?=`, `?!`, `|>` and `@override`
+
 ## 0.1.0
 
 - New builtins `fieldsOf`, `getField`, `setField` are known to completion and hover

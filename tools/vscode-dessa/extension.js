@@ -146,6 +146,45 @@ function inDessaScript(doc, position) {
     return doc.languageId === 'dessa-html' && !/\btype\s*=/i.test(tag) && !/\bsrc\s*=/i.test(tag);
 }
 
+// Is the position inside a string or a comment rather than code? The code
+// inside a template string's {braces} counts as code.
+function inStringOrComment(doc, position) {
+    const start = doc.languageId === 'dessa' ? 0 : doc.offsetAt(new vscode.Position(position.line, 0));
+    const text = doc.getText().slice(start, doc.offsetAt(position));
+    const TRIPLE = '"'.repeat(3);
+    const interpolations = [];   // open template strings: [string state, brace depth]
+    let state = 'code', str = null, i = 0;
+    while (i < text.length) {
+        const c = text[i];
+        if (state === 'line') {
+            if (c === '\n') state = 'code';
+            i++;
+        } else if (state === 'block') {
+            if (text.startsWith('*/', i)) { state = 'code'; i += 2; } else i++;
+        } else if (state === 'string') {
+            if (c === '\\') { i += 2; continue; }
+            if (str.triple && text.startsWith(TRIPLE, i)) { state = 'code'; i += 3; continue; }
+            if (!str.triple && (c === str.quote || c === '\n')) { state = 'code'; i++; continue; }
+            if (str.template && c === '{') { interpolations.push([str, 0]); state = 'code'; i++; continue; }
+            i++;
+        } else {
+            if (text.startsWith('//', i)) { state = 'line'; i += 2; }
+            else if (text.startsWith('/*', i)) { state = 'block'; i += 2; }
+            else if (text.startsWith('$' + TRIPLE, i)) { state = 'string'; str = { quote: '"', triple: true, template: true }; i += 4; }
+            else if (text.startsWith(TRIPLE, i)) { state = 'string'; str = { quote: '"', triple: true, template: false }; i += 3; }
+            else if (text.startsWith('$"', i)) { state = 'string'; str = { quote: '"', triple: false, template: true }; i += 2; }
+            else if (c === '"' || c === "'") { state = 'string'; str = { quote: c, triple: false, template: false }; i++; }
+            else if (c === '{' && interpolations.length) { interpolations[interpolations.length - 1][1]++; i++; }
+            else if (c === '}' && interpolations.length) {
+                const top = interpolations[interpolations.length - 1];
+                if (top[1] === 0) { interpolations.pop(); state = 'string'; str = top[0]; } else top[1]--;
+                i++;
+            } else i++;
+        }
+    }
+    return state !== 'code';
+}
+
 // ============================================================
 // Diagnostics
 // ============================================================
@@ -673,6 +712,29 @@ function memberItems(data, typeName, receiverIsTypeName) {
     return items;
 }
 
+// The project's Dessa files as import names (utils/strings.ds -> utils.strings),
+// next to the edited file
+function projectModules(doc) {
+    const root = path.dirname(doc.fileName);
+    const own = path.resolve(doc.fileName);
+    const found = [];
+    const walk = (folder, prefix, depth) => {
+        let entries = [];
+        try { entries = fs.readdirSync(folder, { withFileTypes: true }); } catch { return; }
+        for (const e of entries) {
+            if (e.name.startsWith('.') || e.name === 'riv_modules' || e.name === 'node_modules') continue;
+            const full = path.join(folder, e.name);
+            if (e.isDirectory()) {
+                if (depth < 3) walk(full, prefix + e.name + '.', depth + 1);
+            } else if (/\.(ds|dm|dx|dz|dsx|dxx|dzx|dds|dss)$/.test(e.name) && path.resolve(full) !== own) {
+                found.push(prefix + e.name.replace(/\.[^.]+$/, ''));
+            }
+        }
+    };
+    walk(root, '', 0);
+    return [...new Set(found)].sort();
+}
+
 function symbolKind(kind) {
     switch (kind) {
         case 'function': case 'builtin': return vscode.CompletionItemKind.Function;
@@ -682,6 +744,7 @@ function symbolKind(kind) {
         case 'constant': return vscode.CompletionItemKind.Constant;
         case 'method': return vscode.CompletionItemKind.Method;
         case 'field': return vscode.CompletionItemKind.Field;
+        case 'module': return vscode.CompletionItemKind.Module;
         default: return vscode.CompletionItemKind.Variable;
     }
 }
@@ -697,16 +760,37 @@ const completionProvider = {
         const before = doc.getText(new vscode.Range(new vscode.Position(0, 0), position));
         const data = await symbols(doc);
 
-        // $("ma
-        if (/\$\(\s*(?:"[\w.]*"\s*,\s*)*"[\w.]*$/.test(linePrefix)) {
-            return (data ? data.libraries : []).map((lib) => {
-                const item = new vscode.CompletionItem(lib.name, vscode.CompletionItemKind.Module);
-                item.detail = `builtin library: ${lib.members.map((m) => m.name).join(', ')}`;
+        // $ at the start of a line: an import
+        if (/^\s*\$$/.test(linePrefix)) {
+            const item = new vscode.CompletionItem('$("...")', vscode.CompletionItemKind.Module);
+            item.insertText = new vscode.SnippetString('("$1")');
+            item.detail = 'import a library or a file';
+            item.command = { command: 'editor.action.triggerSuggest', title: 'Suggest' };
+            return [item];
+        }
+        // $("ma  or  $(ma : libraries and the project's files, with the quotes
+        const inImport = /\$\(\s*(?:"[\w.]*"(?:\s+as\s+\w+)?\s*,\s*)*("?)([\w.]*)$/.exec(linePrefix);
+        if (inImport) {
+            const quoted = inImport[1] === '"';
+            const typed = inImport[2];
+            const replace = new vscode.Range(position.translate(0, -typed.length - (quoted ? 1 : 0)), position);
+            const close = doc.lineAt(position).text.slice(position.character).startsWith('"') ? '' : '"';
+            const make = (name, kind, detail) => {
+                const item = new vscode.CompletionItem(name, kind);
+                item.detail = detail;
+                item.insertText = '"' + name + (quoted ? close : '"');
+                item.range = replace;
+                item.filterText = (quoted ? '"' : '') + name;
                 return item;
-            });
+            };
+            const items = (data ? data.libraries : []).map((lib) =>
+                make(lib.name, vscode.CompletionItemKind.Module, `library: ${lib.members.map((m) => m.name).join(', ')}`));
+            for (const module of projectModules(doc)) items.push(make(module, vscode.CompletionItemKind.File, 'a file of this project'));
+            return items;
         }
         // A quote typed anywhere else starts an ordinary string
         if (context && context.triggerCharacter === '"') return undefined;
+        if (inStringOrComment(doc, position)) return undefined;
 
         // Ask the compiler first: exact types, locals, narrowing, imports
         const fromCompiler = await compilerCompletions(doc, position);
@@ -871,8 +955,9 @@ const hoverProvider = {
         if (!inDessaScript(doc, position)) return null;
         const range = doc.getWordRangeAtPosition(position);
         if (!range) return null;
-        const text = (await importHover(doc, position)) || (await compilerHover(doc, position)) ||
-                     (await describe(doc, doc.getText(range)));
+        const quoted = inStringOrComment(doc, position);   // only an import's name has a hover there
+        const text = (await importHover(doc, position)) || (quoted ? null : (await compilerHover(doc, position)) ||
+                     (await describe(doc, doc.getText(range))));
         if (!text) return null;
         const markdown = new vscode.MarkdownString(text);
         markdown.isTrusted = true;
@@ -899,6 +984,7 @@ const definitionProvider = {
         // An import: the module file
         const imp = importAt(await symbols(doc), position);
         if (imp) return new vscode.Location(vscode.Uri.file(imp.file), new vscode.Position(0, 0));
+        if (inStringOrComment(doc, position)) return null;
         // Anything the compiler can resolve: variables, functions, fields,
         // methods (win.label), constructors (new Window), builtins
         const hover = await compilerQuery(doc, 'hover', position);
@@ -1066,7 +1152,7 @@ function activate(context) {
     context.subscriptions.push(
         diagnosticCollection,
         output,
-        vscode.languages.registerCompletionItemProvider(selector, completionProvider, '.', '"'),
+        vscode.languages.registerCompletionItemProvider(selector, completionProvider, '.', '"', '$'),
         vscode.languages.registerHoverProvider(selector, hoverProvider),
         vscode.languages.registerSignatureHelpProvider(selector, signatureHelpProvider, '(', ','),
         vscode.languages.registerDefinitionProvider(selector, definitionProvider),
