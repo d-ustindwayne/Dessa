@@ -60,6 +60,10 @@ jobs:
       - name: Test the JavaScript backend (same tests, run with Node)
         run: python3 tests/test.py --js
 
+      - name: The Dessa lexer gives the same tokens as the C++ one (selfhost)
+        if: matrix.os == 'ubuntu-24.04'
+        run: python3 selfhost/check.py
+
       - name: Show the compiler logs if something failed
         if: failure()
         run: |

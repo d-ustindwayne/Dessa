@@ -73,12 +73,13 @@ riv run
 |---|---|
 | `src/` | the compiler: lexer, parser, analyser, C++ and JavaScript generators |
 | `runtime/` | the support code every program uses (C++ and JavaScript) |
-| `include/` | the core libraries (`math`, `os`, `sys`, `time`, `webutils`) |
+| `include/` | the core libraries (`math`, `os`, `sys`, `time`, `random`, `dsds`, `dcrypto`, `webutils`) |
 | `tools/riv/` | riv and the bundled packages |
 | `tools/vscode-dessa/` | the VS Code extension |
 | `web/` | the browser compiler's loader and an example page |
 | `npm/` | the npm package |
 | `tests/` | the test suite |
+| `selfhost/` | the compiler being rewritten in Dessa (the lexer is done; see `selfhost/PLAN.md`) |
 
 ## Working on Dessa
 

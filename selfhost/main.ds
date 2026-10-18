@@ -1,0 +1,20 @@
+// The Dessa compiler written in Dessa (work in progress, see PLAN.md).
+//
+//     dessa run selfhost/main.ds tokens file.ds     the tokens, like `dessa tokens file.ds`
+
+{ Lexer, Token, TokenType } from $("lexer");
+{ readFile } from $("os");
+{ args, exit } from $("sys");
+
+var[Str<>] given = args();
+if (given.length() != 2 || given<0> != "tokens") {
+    print("usage: dessa run selfhost/main.ds tokens <file.ds>");
+    exit(2);
+}
+
+var[Lexer] lexer = new Lexer(readFile(given<1>));
+for (var[Token] token in lexer.scanTokens()) {
+    if (token.type != TokenType.END_OF_FILE) print(token);
+}
+for (var[Str] e in lexer.errors) print(e);
+if (!lexer.errors.isEmpty()) exit(1);
