@@ -8,19 +8,20 @@
  *     var[Database] db2 = connectMssql("Server=school;Database=shop;User Id=student;Password=secret;");
  *     var[Database] local = openSqlite("app.db");                 // a file (":memory:" = temporary)
  *
- *     for (var[Json] row in db.query("SELECT name, price FROM products WHERE price > ?", 10)) {
- *         print(row.get("name").asStr(), row.get("price").asDbl());
+ *     for (var[Obj] row in db.queryAll("SELECT name, price FROM products WHERE price > ?", 10)) {
+ *         print(row.name, row.price);
  *     }
+ *     var[Obj] first = db.query("SELECT name FROM products WHERE id = ?", 3);   // one row, or nil
  *     var[Int] changed = db.execute("UPDATE products SET price = ? WHERE id = ?", 9.99, 3);
  *     db.close();
  *
  * `?` in the SQL is filled from the extra arguments, in order. Values are
  * sent separately from the SQL text, so they can't break the query (no SQL
- * injection). Rows come back as Json objects (see $("json")).
+ * injection). Rows come back as objects (Obj): row.name. To get your own
+ * classes instead, use queryAs / queryAllAs.
  */
 
 $("sql") { _odbcDrivers, _odbcOpen, _sqliteOpen, _query, _execute, _close }   // native part
-$("json") { Json, jsonObject, jsonNull, jsonNum, jsonStr, jsonBool }
 
 class SqlError {
     var[Str] message = "";
@@ -40,17 +41,6 @@ func[Str] _tag(value[Int | Dbl | Str | Bul | Nil]) {
     if (value is Bul) return value ? "b:1" : "b:0";
     if (value is Str) return $"s:{value}";
     return "n:";
-}
-
-func[Json] _cell(text[Str]) {
-    var[Str] value = text.substr(2, text.length() - 2);
-    switch (text.substr(0, 1)) {
-        case "i" := { return jsonNum(Dbl(value)); }
-        case "d" := { return jsonNum(Dbl(value)); }
-        case "b" := { return jsonBool(value == "1"); }
-        case "s" := { return jsonStr(value); }
-        default := { return jsonNull(); }
-    }
 }
 
 // A cell as a value of its own type (for queryAs)
@@ -115,49 +105,47 @@ class Database {
         return tagged;
     }
 
-    // Rows of a SELECT, each a Json object: row.get("name").asStr()
-    func[Json<>] query(sql[Str], params[(Int | Dbl | Str | Bul | Nil)*]) {
-        var[Str<>] raw = [];
+    // Runs a SELECT; the column names and the cells (tagged text) of every row
+    func[Str<>] _select(sql[Str], params[(Int | Dbl | Str | Bul | Nil)<>]) {
         try {
-            raw = _query(this.handle, sql, this._params(params));
+            return _query(this.handle, sql, this._params(params));
         } catch (e[Str]) {
             throw new SqlError(e);
         }
+    }
+
+    // Every row of a SELECT as an object: row.name, row.price
+    //
+    //     for (var[Obj] row in db.queryAll("SELECT name, price FROM products")) print(row.name);
+    func[Obj<>] queryAll(sql[Str], params[(Int | Dbl | Str | Bul | Nil)*]) {
+        var[Str<>] raw = this._select(sql, params);
         var[Int] columns = Int(raw<0>);
-        var[Str<>] names = raw.slice(1, columns + 1);
-        var[Json<>] rows = [];
+        var[Obj<>] rows = [];
         var[Int] at = columns + 1;
         while (at + columns <= raw.length() && columns > 0) {
-            var[Json] row = jsonObject();
-            for (var[Int] c = 0; c < columns; c++) {
-                row.set(names<c>, _cell(raw<at + c>));
-            }
+            var[Obj] row = new Obj();
+            for (var[Int] c = 0; c < columns; c++) setField(row, raw<1 + c>, _cellValue(raw<at + c>));
             rows.push(row);
             at += columns;
         }
         return rows;
     }
 
-    // The first row, or nil if there is none.
-    func[Json | Nil] queryOne(sql[Str], params[(Int | Dbl | Str | Bul | Nil)*]) {
-        var[Json<>] rows = this.query(sql, ...params);
+    // The first row of a SELECT as an object, or nil if there is none.
+    func[Obj] query(sql[Str], params[(Int | Dbl | Str | Bul | Nil)*]) {
+        var[Obj<>] rows = this.queryAll(sql, ...params);
         if (rows.isEmpty()) return nil;
         return rows<0>;
     }
 
-    // Rows of a SELECT, each put in a new object made by `make`: the columns go
-    // into the fields with the same name (case and _ don't matter, so
-    // first_name fills firstName). Columns without a field are left out.
+    // Every row of a SELECT, each put in a new object made by `make`: the
+    // columns go into the fields with the same name (case and _ don't matter,
+    // so first_name fills firstName). Columns without a field are left out.
     //
     //     class Person { var[Int] id = 0; var[Str] name = ""; }
-    //     for (var[Person] p in db.queryAs(() := new Person(), "SELECT * FROM people")) print(p.name);
-    func[Obj<>] queryAs(make[Func[Obj]], sql[Str], params[(Int | Dbl | Str | Bul | Nil)*]) {
-        var[Str<>] raw = [];
-        try {
-            raw = _query(this.handle, sql, this._params(params));
-        } catch (e[Str]) {
-            throw new SqlError(e);
-        }
+    //     for (var[Person] p in db.queryAllAs(() := new Person(), "SELECT * FROM people")) print(p.name);
+    func[Obj<>] queryAllAs(make[Func[Obj]], sql[Str], params[(Int | Dbl | Str | Bul | Nil)*]) {
+        var[Str<>] raw = this._select(sql, params);
         var[Int] columns = Int(raw<0>);
         var[Str<>] names = raw.slice(1, columns + 1);
         var[Obj<>] items = [];
@@ -175,9 +163,12 @@ class Database {
         return items;
     }
 
-    // The first row as an object (see queryAs), or nil if there is none.
-    func[Obj] queryOneAs(make[Func[Obj]], sql[Str], params[(Int | Dbl | Str | Bul | Nil)*]) {
-        var[Obj<>] items = this.queryAs(make, sql, ...params);
+    // The first row as an object of your class (see queryAllAs), or nil if there is none.
+    //
+    //     var[Obj] one = db.queryAs(() := new Person(), "SELECT * FROM people WHERE id = ?", 7);
+    //     if (one is Person) print(one.name);
+    func[Obj] queryAs(make[Func[Obj]], sql[Str], params[(Int | Dbl | Str | Bul | Nil)*]) {
+        var[Obj<>] items = this.queryAllAs(make, sql, ...params);
         if (items.isEmpty()) return nil;
         return items<0>;
     }

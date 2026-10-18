@@ -177,10 +177,19 @@ $("sql");
 var[Database] db = openSqlite("shop.db");           // or connectMssql("Server=...;Database=...;Trusted_Connection=yes")
 db.execute("CREATE TABLE IF NOT EXISTS items (name TEXT, price REAL)");
 db.execute("INSERT INTO items VALUES (?, ?)", "Mouse", 25.99);
-for (var[Json] row in db.query("SELECT * FROM items WHERE price < ?", 50)) {
-    print(row.get("name").asStr());
+for (var[Obj] row in db.queryAll("SELECT * FROM items WHERE price < ?", 50)) {
+    print(row.name, row.price);
 }
+var[Obj] cheapest = db.query("SELECT name FROM items ORDER BY price");   // the first row, or nil
 ```
+
+| Method | Gives |
+|---|---|
+| `queryAll(sql, ...)` | every row, as objects (`row.name`) |
+| `query(sql, ...)` | the first row, or nil |
+| `queryAllAs(make, sql, ...)` | every row, as objects of your class |
+| `queryAs(make, sql, ...)` | the first row as your class, or nil |
+| `execute(sql, ...)` | how many rows changed (INSERT, UPDATE, DELETE, CREATE ...) |
 
 Rows can also go straight into objects of your own class. The columns fill
 the fields with the same name (case and `_` don't matter, so `first_name`
@@ -192,14 +201,15 @@ class Person {
     var[Str] firstName = "";
     var[Bul] active = false;
 }
-for (var[Person] p in db.queryAs(() := new Person(), "SELECT * FROM people WHERE id > ?", 10)) {
+for (var[Person] p in db.queryAllAs(() := new Person(), "SELECT * FROM people WHERE id > ?", 10)) {
     print(p.firstName);
 }
-var[Obj] one = db.queryOneAs(() := new Person(), "SELECT * FROM people WHERE id = ?", 1);
+db.queryAllAs(() := new Person(), "SELECT * FROM people").forEach((p[Person]) := print(p.id));
+var[Obj] one = db.queryAs(() := new Person(), "SELECT * FROM people WHERE id = ?", 1);
 if (one is Person) print(one.firstName);
 ```
 
-`() := new Person()` tells `queryAs` what to make (there are no generics).
+`() := new Person()` tells `queryAllAs` what to make (there are no generics).
 0/1 columns fill `Bul` fields, and a column that doesn't fit its field is an
 error naming the column.
 

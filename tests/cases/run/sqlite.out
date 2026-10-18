@@ -1,18 +1,20 @@
 <Database sqlite>
 1
-{"id":1,"name":"Mouse","price":25.99,"stock":150,"active":1}
-{"id":2,"name":"Chair","price":149.5,"stock":45,"active":1}
-{"id":3,"name":"Café ☕ mug","price":8,"stock":null,"active":0}
+{id = 1, name = "Mouse", price = 25.99, stock = 150, active = 1}
+{id = 2, name = "Chair", price = 149.5, stock = 45, active = 1}
+{id = 3, name = "Café ☕ mug", price = 8, stock = Nil, active = 0}
 ["Mouse", "Chair"]
-Café ☕ mug true
+Café ☕ mug true Str
 true
 2
-{"n":3,"total":217.48}
-{"n":4}
+{n = 3, total = 217.48}
+4
 SQL error: no such table: missing_table
 Staff(staffId: 1, firstName: "Ann", rate: 52.5, active: true, note: Nil) ANN
 Staff(staffId: 2, firstName: "Bo", rate: 40, active: false, note: "new") BO
 80
 Nil
+Ann true
+Bo false
 column 'staff_id': Cannot store Str in field 'staffId' (Int)
 SQL error: this database connection is closed

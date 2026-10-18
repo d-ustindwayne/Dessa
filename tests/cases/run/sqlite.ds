@@ -1,7 +1,6 @@
 // $("sql") with SQLite (an in-memory database)
 
 $("sql") { openSqlite, Database, SqlError }
-$("json") { Json }
 
 class Staff {
     var[Int] staffId = 0;
@@ -18,39 +17,38 @@ db.execute("CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT, price REAL
 print(db.execute("INSERT INTO products (name, price, stock, active) VALUES (?, ?, ?, ?)", "Chair", 149.5, 45, true));
 db.execute("INSERT INTO products (name, price, stock, active) VALUES (?, ?, ?, ?)", "Café ☕ mug", 8, nil, false);
 
-for (var[Json] row in db.query("SELECT * FROM products ORDER BY id")) {
+for (var[Obj] row in db.queryAll("SELECT * FROM products ORDER BY id")) {
     print(row);
 }
-print(db.query("SELECT name FROM products WHERE price > ? AND active = ?", 20, true).map((r[Json]) := r.get("name").asStr()));
+print(db.queryAll("SELECT name FROM products WHERE price > ? AND active = ?", 20, true).map((r[Obj]) := Str(r.name)));
 
-var[Json | Nil] mug = db.queryOne("SELECT name, stock FROM products WHERE id = ?", 3);
-if (mug != nil) {
-    print(mug.get("name").asStr(), mug.get("stock").isNull());
-}
-print(db.queryOne("SELECT * FROM products WHERE id = ?", 99) == nil);
+var[Obj] mug = db.query("SELECT name, stock FROM products WHERE id = ?", 3);
+print(mug.name, mug.stock == nil, typeof(mug.name));
+print(db.query("SELECT * FROM products WHERE id = ?", 99) == nil);
 print(db.execute("UPDATE products SET price = price * 2 WHERE price < ?", 30));
-print(db.queryOne("SELECT COUNT(*) AS n, SUM(price) AS total FROM products"));
+print(db.query("SELECT COUNT(*) AS n, SUM(price) AS total FROM products"));
 
 // Values can't break the SQL: this is just a strange name
 db.execute("INSERT INTO products (name) VALUES (?)", "x'); DROP TABLE products; --");
-print(db.queryOne("SELECT COUNT(*) AS n FROM products"));
+print(db.query("SELECT COUNT(*) AS n FROM products").n);
 
 try {
-    db.query("SELECT * FROM missing_table");
+    db.queryAll("SELECT * FROM missing_table");
 } catch (e[SqlError]) {
     print(e.message);
 }
 // Rows into objects of a class
 db.execute("CREATE TABLE staff (staff_id INTEGER, first_name TEXT, rate REAL, active INTEGER, note TEXT, extra TEXT)");
 db.execute("INSERT INTO staff VALUES (1, 'Ann', 52.5, 1, NULL, 'x'), (2, 'Bo', 40, 0, 'new', 'y')");
-for (var[Staff] person in db.queryAs(() := new Staff(), "SELECT * FROM staff ORDER BY staff_id")) {
+for (var[Staff] person in db.queryAllAs(() := new Staff(), "SELECT * FROM staff ORDER BY staff_id")) {
     print(person, person.firstName.upper());
 }
-var[Obj] bo = db.queryOneAs(() := new Staff(), "SELECT * FROM staff WHERE staff_id = ?", 2);
+var[Obj] bo = db.queryAs(() := new Staff(), "SELECT * FROM staff WHERE staff_id = ?", 2);
 if (bo is Staff) print(bo.rate * 2);
-print(db.queryOneAs(() := new Staff(), "SELECT * FROM staff WHERE staff_id = 99"));
+print(db.queryAs(() := new Staff(), "SELECT * FROM staff WHERE staff_id = 99"));
+db.queryAllAs(() := new Staff(), "SELECT * FROM staff").forEach((s[Staff]) := print(s.firstName, s.active));
 try {
-    db.queryAs(() := new Staff(), "SELECT 'not a number' AS staff_id");
+    db.queryAllAs(() := new Staff(), "SELECT 'not a number' AS staff_id");
 } catch (e[SqlError]) {
     print(e.message);
 }

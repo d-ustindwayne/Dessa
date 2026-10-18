@@ -4,4 +4,3 @@ entry = sql.dm
 description = SQLite and SQL Server / ODBC databases
 
 [dependencies]
-json = 1.1.0

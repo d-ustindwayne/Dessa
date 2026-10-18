@@ -2,7 +2,6 @@
 // $("sql") with Microsoft SQL Server through ODBC
 
 $("sql") { connectMssql, drivers, Database, SqlError }
-$("json") { Json }
 
 class Person {
     var[Int] id = 0;
@@ -17,7 +16,7 @@ print(drivers().includes("ODBC Driver 17 for SQL Server") || drivers().includes(
 
 var[Database] db = connectMssql("Server=localhost;Database=tempdb;Trusted_Connection=yes;");
 var[Database] csharpStyle = connectMssql("Data Source=localhost;Initial Catalog=tempdb;Integrated Security=true;TrustCertificate=true");
-print(csharpStyle.queryOne("SELECT DB_NAME() AS db"));
+print(csharpStyle.query("SELECT DB_NAME() AS db"));
 csharpStyle.close();
 print(db);
 
@@ -25,21 +24,19 @@ db.execute("CREATE TABLE #people (id INT IDENTITY PRIMARY KEY, name NVARCHAR(100
 print(db.execute("INSERT INTO #people (name, age, salary, active, joined) VALUES (?, ?, ?, ?, ?)", "Ann", 30, 52000.5, true, "2024-03-01"));
 db.execute("INSERT INTO #people (name, age, salary, active, joined) VALUES (?, ?, ?, ?, ?)", "Bo Ñúñez 😀", 25, 41000, false, nil);
 
-for (var[Json] row in db.query("SELECT * FROM #people ORDER BY id")) {
+for (var[Obj] row in db.queryAll("SELECT * FROM #people ORDER BY id")) {
     print(row);
 }
-var[Json | Nil] ann = db.queryOne("SELECT name, age FROM #people WHERE age > ?", 28);
-if (ann != nil) {
-    print(ann.get("name").asStr(), ann.get("age").asInt());
-}
-for (var[Person] p in db.queryAs(() := new Person(), "SELECT * FROM #people ORDER BY id")) {
+var[Obj] ann = db.query("SELECT name, age FROM #people WHERE age > ?", 28);
+print(ann.name, Int(ann.age) + 1);
+for (var[Person] p in db.queryAllAs(() := new Person(), "SELECT * FROM #people ORDER BY id")) {
     print(p);
 }
 print(db.execute("UPDATE #people SET age = age + 1"));
-print(db.queryOne("SELECT COUNT(*) AS n, AVG(CAST(age AS FLOAT)) AS avgAge FROM #people"));
+print(db.query("SELECT COUNT(*) AS n, AVG(CAST(age AS FLOAT)) AS avgAge FROM #people"));
 
 try {
-    db.query("SELECT * FROM table_that_does_not_exist");
+    db.queryAll("SELECT * FROM table_that_does_not_exist");
 } catch (e[SqlError]) {
     print(e.message);
 }
