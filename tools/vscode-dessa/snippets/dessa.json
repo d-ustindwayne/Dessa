@@ -117,7 +117,7 @@
   },
   "Import builtin": {
     "prefix": "import",
-    "body": "\\$(<${1|math,os,sys,time|}>);",
+    "body": "\\$(\"${1|math,os,sys,time,random,dsds,dcrypto|}\");",
     "description": "Import a builtin library"
   },
   "Print": {

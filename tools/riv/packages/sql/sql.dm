@@ -53,6 +53,58 @@ func[Json] _cell(text[Str]) {
     }
 }
 
+// A cell as a value of its own type (for queryAs)
+func[Obj] _cellValue(text[Str]) {
+    var[Str] value = text.substr(2, text.length() - 2);
+    switch (text.substr(0, 1)) {
+        case "i" := { return Int(value); }
+        case "d" := { return Dbl(value); }
+        case "b" := { return value == "1"; }
+        case "s" := { return value; }
+        default := { return nil; }
+    }
+}
+
+// "first_name", "FirstName" and "firstname" are the same name
+func[Str] _nameKey(name[Str]) {
+    return name.replaceAll("_", "").lower();
+}
+
+// For each column, the field it fills ("" if none)
+func[Str<>] _matchFields(columns[Str<>], fields[Str<>]) {
+    var[Map[Str, Str]] byKey = {:};
+    for (var[Str] f in fields) byKey<_nameKey(f)> = f;
+    var[Str<>] out = [];
+    for (var[Str] c in columns) out.push(byKey.getOr(_nameKey(c), ""));
+    return out;
+}
+
+// Sets a field, converting where it's safe: 0/1 into a Bul (SQLite has no
+// booleans), a whole decimal into an Int, anything into a Str
+func[Emp] _fill(item[Obj], field[Str], value[Obj], column[Str]) {
+    try {
+        setField(item, field, value);
+        return;
+    } catch (e[Str]) {
+        var[Obj] current = getField(item, field);
+        try {
+            if (current is Bul && value is Int) {
+                setField(item, field, Int(value) != 0);
+                return;
+            }
+            if (current is Int && value is Dbl && Dbl(value) == Dbl(Int(value))) {
+                setField(item, field, Int(value));
+                return;
+            }
+            if (current is Str && value != nil) {
+                setField(item, field, Str(value));
+                return;
+            }
+        } catch (again[Str]) {}
+        throw new SqlError($"column '{column}': {e}");
+    }
+}
+
 class Database {
     var[Int] handle = -1;
     var[Str] kind = "";          // "odbc" or "sqlite"
@@ -91,6 +143,43 @@ class Database {
         var[Json<>] rows = this.query(sql, ...params);
         if (rows.isEmpty()) return nil;
         return rows<0>;
+    }
+
+    // Rows of a SELECT, each put in a new object made by `make`: the columns go
+    // into the fields with the same name (case and _ don't matter, so
+    // first_name fills firstName). Columns without a field are left out.
+    //
+    //     class Person { var[Int] id = 0; var[Str] name = ""; }
+    //     for (var[Person] p in db.queryAs(() := new Person(), "SELECT * FROM people")) print(p.name);
+    func[Obj<>] queryAs(make[Func[Obj]], sql[Str], params[(Int | Dbl | Str | Bul | Nil)*]) {
+        var[Str<>] raw = [];
+        try {
+            raw = _query(this.handle, sql, this._params(params));
+        } catch (e[Str]) {
+            throw new SqlError(e);
+        }
+        var[Int] columns = Int(raw<0>);
+        var[Str<>] names = raw.slice(1, columns + 1);
+        var[Obj<>] items = [];
+        var[Str<>] fieldFor = [];     // column -> field name ("" if none)
+        var[Int] at = columns + 1;
+        while (at + columns <= raw.length() && columns > 0) {
+            var[Obj] item = make();
+            if (fieldFor.isEmpty()) fieldFor = _matchFields(names, fieldsOf(item));
+            for (var[Int] c = 0; c < columns; c++) {
+                if (!fieldFor<c>.isEmpty()) _fill(item, fieldFor<c>, _cellValue(raw<at + c>), names<c>);
+            }
+            items.push(item);
+            at += columns;
+        }
+        return items;
+    }
+
+    // The first row as an object (see queryAs), or nil if there is none.
+    func[Obj] queryOneAs(make[Func[Obj]], sql[Str], params[(Int | Dbl | Str | Bul | Nil)*]) {
+        var[Obj<>] items = this.queryAs(make, sql, ...params);
+        if (items.isEmpty()) return nil;
+        return items<0>;
     }
 
     // INSERT / UPDATE / DELETE / CREATE ...; returns how many rows changed.

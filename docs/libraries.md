@@ -182,6 +182,27 @@ for (var[Json] row in db.query("SELECT * FROM items WHERE price < ?", 50)) {
 }
 ```
 
+Rows can also go straight into objects of your own class. The columns fill
+the fields with the same name (case and `_` don't matter, so `first_name`
+fills `firstName`), and a typed loop variable checks each one:
+
+```dessa
+class Person {
+    var[Int] id = 0;
+    var[Str] firstName = "";
+    var[Bul] active = false;
+}
+for (var[Person] p in db.queryAs(() := new Person(), "SELECT * FROM people WHERE id > ?", 10)) {
+    print(p.firstName);
+}
+var[Obj] one = db.queryOneAs(() := new Person(), "SELECT * FROM people WHERE id = ?", 1);
+if (one is Person) print(one.firstName);
+```
+
+`() := new Person()` tells `queryAs` what to make (there are no generics).
+0/1 columns fill `Bul` fields, and a column that doesn't fit its field is an
+error naming the column.
+
 Values passed after the SQL fill the `?` places safely. `connect(...)` takes any
 ODBC connection string, and `drivers()` lists the installed ODBC drivers.
 Both accept `TrustCertificate=yes` as a shorter `TrustServerCertificate=yes`.

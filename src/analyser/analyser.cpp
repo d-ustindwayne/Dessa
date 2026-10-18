@@ -1702,7 +1702,9 @@ void Analyser::analyseForIn(const ForInStmt* statement) {
     const auto* declaration = static_cast<const VarDeclStmt*>(statement->declaration.get());
     if (declaration && declaration->name) {
         SemanticType declared = resolveType(declaration->type, declaration->line, declaration->column);
-        if (!isAssignable(declared, elementType)) {
+        // for (var[Person] p in objs): each Obj item is checked when the loop runs
+        const bool fromObj = elementType.is(SemanticTypeKind::Obj) && !iterableType.is(SemanticTypeKind::Map);
+        if (!fromObj && !isAssignable(declared, elementType)) {
             error(statement->declaration.get(), "Loop variable '" + *declaration->name + "' of type " + declared.toString() +
                   " cannot hold elements of type " + elementType.toString());
         }

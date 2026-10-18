@@ -333,6 +333,18 @@ then (`Obj has no field 'missing'`). The compiler still checks the rest: an
 `==` compares values, and two anonymous objects are equal when their fields
 are. An `Obj` may hold `nil`.
 
+A loop over `Obj` values may give its variable a class type; each item is
+checked when the loop gets to it:
+
+```dessa
+var[Obj<>] pets = [new Dog("Rex"), new Dog("Bo")];
+for (var[Dog] d in pets) print(d.speak());
+```
+
+Fields can also be reached by name: `fieldsOf(x)` lists them, `getField(x,
+"name")` reads one and `setField(x, "name", value)` sets one. They work on
+class instances and anonymous objects.
+
 ## Errors
 
 ```dessa

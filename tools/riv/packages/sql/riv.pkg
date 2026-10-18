@@ -1,7 +1,7 @@
 name = sql
-version = 1.0.0
+version = 1.1.0
 entry = sql.dm
 description = SQLite and SQL Server / ODBC databases
 
 [dependencies]
-json = 1.0.0
+json = 1.1.0

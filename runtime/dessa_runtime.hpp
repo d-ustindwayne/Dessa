@@ -210,6 +210,7 @@ struct Object : std::enable_shared_from_this<Object> {
     // Fields by name, for Obj (generated for every class)
     virtual bool ds_get(const Str&, Obj&) const { return false; }
     virtual bool ds_set(const Str&, const Obj&) { return false; }
+    virtual void ds_field_names(std::vector<Str>&) const {}
     virtual bool ds_equals(const Object& other) const { return this == &other; }
 };
 
@@ -1053,6 +1054,9 @@ struct AnonObject final : Object {
         fields.put(name, value);
         return true;
     }
+    void ds_field_names(std::vector<Str>& out) const override {
+        for (const auto& [name, value] : fields) out.push_back(name);
+    }
     bool ds_equals(const Object& other) const override {
         const auto* theirs = dynamic_cast<const AnonObject*>(&other);
         return theirs && fields == theirs->fields;
@@ -1090,6 +1094,22 @@ inline Obj obj_set(const Obj& o, const char* name, const Obj& value) {
 }
 
 template <class A, class B> bool obj_eq(const A& a, const B& b) { return Obj(a) == Obj(b); }
+
+// fieldsOf(x), getField(x, "name"), setField(x, "name", value)
+template <class T>
+List<Str> fields_of(const T& value) {
+    Obj o(value);
+    if (o.isNil()) fail("fieldsOf: the value is nil");
+    const Ref<Object>* object = o.box->object();
+    if (!object) fail("fieldsOf: " + with_article(o.type()) + " has no fields");
+    List<Str> names;
+    (*object)->ds_field_names(names);
+    return names;
+}
+template <class T>
+Obj get_field(const T& value, const Str& name) { return obj_get(Obj(value), name.c_str()); }
+template <class T, class V>
+void set_field(const T& value, const Str& name, const V& newValue) { obj_set(Obj(value), name.c_str(), Obj(newValue)); }
 
 // After an `is` check: the Obj's value as that type
 template <class T> auto obj_as(const Obj& o) { return o.template as<T>(); }

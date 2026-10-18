@@ -3,6 +3,14 @@
 { openSqlite, Database, SqlError } from $("sql");
 { Json } from $("json");
 
+class Staff {
+    var[Int] staffId = 0;
+    var[Str] firstName = "";
+    var[Dbl] rate = 0;
+    var[Bul] active = false;
+    var[Str | Nil] note = nil;
+}
+
 var[Database] db = openSqlite(":memory:");
 print(db);
 
@@ -29,6 +37,20 @@ print(db.queryOne("SELECT COUNT(*) AS n FROM products"));
 
 try {
     db.query("SELECT * FROM missing_table");
+} catch (e[SqlError]) {
+    print(e.message);
+}
+// Rows into objects of a class
+db.execute("CREATE TABLE staff (staff_id INTEGER, first_name TEXT, rate REAL, active INTEGER, note TEXT, extra TEXT)");
+db.execute("INSERT INTO staff VALUES (1, 'Ann', 52.5, 1, NULL, 'x'), (2, 'Bo', 40, 0, 'new', 'y')");
+for (var[Staff] person in db.queryAs(() := new Staff(), "SELECT * FROM staff ORDER BY staff_id")) {
+    print(person, person.firstName.upper());
+}
+var[Obj] bo = db.queryOneAs(() := new Staff(), "SELECT * FROM staff WHERE staff_id = ?", 2);
+if (bo is Staff) print(bo.rate * 2);
+print(db.queryOneAs(() := new Staff(), "SELECT * FROM staff WHERE staff_id = 99"));
+try {
+    db.queryAs(() := new Staff(), "SELECT 'not a number' AS staff_id");
 } catch (e[SqlError]) {
     print(e.message);
 }

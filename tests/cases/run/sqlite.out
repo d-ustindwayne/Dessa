@@ -10,4 +10,9 @@ true
 {"n":3,"total":217.48}
 {"n":4}
 SQL error: no such table: missing_table
+Staff(staffId: 1, firstName: "Ann", rate: 52.5, active: true, note: Nil) ANN
+Staff(staffId: 2, firstName: "Bo", rate: 40, active: false, note: "new") BO
+80
+Nil
+column 'staff_id': Cannot store Str in field 'staffId' (Int)
 SQL error: this database connection is closed

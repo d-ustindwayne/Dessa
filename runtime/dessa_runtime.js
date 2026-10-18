@@ -91,6 +91,7 @@ class Obj {
     // Fields by name, for Obj (generated classes add theirs)
     $get() { return NO_FIELD; }
     $set() { return false; }
+    $fieldNames() { return []; }
 }
 Obj.prototype.$class = "Object";
 Obj.prototype.$ifaces = [];
@@ -106,6 +107,7 @@ class AnonObject extends Obj {
     }
     $get(name) { return this.fields.has(name) ? this.fields.get(name) : NO_FIELD; }
     $set(name, v) { this.fields.set(name, v); return true; }
+    $fieldNames() { return Array.from(this.fields.keys()); }
 }
 AnonObject.prototype.$class = "Obj";
 $.anon = (entries) => new AnonObject(entries);
@@ -128,6 +130,15 @@ $.objSet = (o, name, v) => {
     return v;
 };
 $.storeFail = (v, what) => $.fail(`Cannot store ${$.typeOf(v, "Obj")} in ${what}`);
+
+// fieldsOf(x), getField(x, "name"), setField(x, "name", value)
+$.fields_of = (o) => {
+    if (o === null || o === undefined) $.fail("fieldsOf: the value is nil");
+    if (!(o instanceof Obj)) $.fail(`fieldsOf: ${withArticle($.typeOf(o, "Obj"))} has no fields`);
+    return o.$fieldNames();
+};
+$.get_field = (o, name) => $.objGet(o, name);
+$.set_field = (o, name, v) => { $.objSet(o, name, v); };
 
 // enum Color { RED, GREEN = 5, BLUE }: values without a number count on (6)
 $.enumType = (name, entries) => {

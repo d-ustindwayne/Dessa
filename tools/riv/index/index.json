@@ -3,7 +3,8 @@
     "ashwee": {
       "description": "Desktop windows and controls (GUI) on Windows, Linux (GTK 3) and macOS",
       "versions": [
-        "0.2.0"
+        "0.2.0",
+        "0.3.0"
       ]
     },
     "codes": {
@@ -21,7 +22,8 @@
     "json": {
       "description": "Read and write JSON (the Json type)",
       "versions": [
-        "1.0.0"
+        "1.0.0",
+        "1.1.0"
       ]
     },
     "numbers": {
@@ -33,19 +35,22 @@
     "phl": {
       "description": "Read and write PHL, the readable data format",
       "versions": [
-        "1.0.0"
+        "1.0.0",
+        "1.1.0"
       ]
     },
     "request": {
       "description": "HTTP requests (get, post, ...) through curl",
       "versions": [
-        "1.0.0"
+        "1.0.0",
+        "1.1.0"
       ]
     },
     "sql": {
       "description": "SQLite and SQL Server / ODBC databases",
       "versions": [
-        "1.0.0"
+        "1.0.0",
+        "1.1.0"
       ]
     },
     "textfx": {

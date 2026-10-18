@@ -338,6 +338,7 @@ void Codegen::emitClass(const ClassInfo& info) {
     line("dessa::Str ds_str() const override;");
     line("bool ds_get(const dessa::Str& ds_name, dessa::Obj& ds_out) const override;");
     line("bool ds_set(const dessa::Str& ds_name, const dessa::Obj& ds_value) override;");
+    line("void ds_field_names(std::vector<dessa::Str>& ds_out) const override;");
     indentLevel--;
     line("};");
     line("} // namespace " + ns(info.moduleId));
@@ -513,6 +514,10 @@ void Codegen::emitClassBodies(const ClassInfo& info) {
              "' (" + type.toString() + ")\"); return true; }");
     }
     line("    return " + parent + "::ds_set(ds_name, ds_value);");
+    line("}");
+    line("void " + name + "::ds_field_names(std::vector<dessa::Str>& ds_out) const {");
+    line("    " + parent + "::ds_field_names(ds_out);");
+    for (const auto& f : info.fieldOrder) line("    ds_out.push_back(\"" + f + "\");");
     line("}");
     line("");
 
@@ -754,7 +759,7 @@ void Codegen::forIn(const ForInStmt* s) {
         line("auto&& " + seq + " = " + expr(s->iterable.get()) + ";");
         line("for (size_t " + i + " = 0; " + i + " < " + seq + ".size(); ++" + i + ") {");
         indentLevel++;
-        line(varType + " " + name + " = " + seq + "[" + i + "];");
+        line(varType + " " + name + " = " + loopItem(seq + "[" + i + "]", iterable, t, decl) + ";");
         block(s->body.get());
         indentLevel--;
         line("}");
@@ -774,12 +779,25 @@ void Codegen::forIn(const ForInStmt* s) {
         // Sets over a copy; Str character by character (not byte by byte)
         const std::string items = iterable.is(SemanticTypeKind::Str) ? "dessa::m_chars(" + expr(s->iterable.get()) + ")"
                                                                      : "dessa::m_copy(" + expr(s->iterable.get()) + ")";
-        line("for (" + varType + " " + name + " : " + items + ") {");
+        const bool fromObj = iterable.elementType && iterable.elementType->is(SemanticTypeKind::Obj) && t && !t->is(SemanticTypeKind::Obj);
+        if (fromObj) {
+            line("for (const dessa::Obj& ds_each : " + items + ") {");
+            line("    " + varType + " " + name + " = " + loopItem("ds_each", iterable, t, decl) + ";");
+        } else {
+            line("for (" + varType + " " + name + " : " + items + ") {");
+        }
         indentLevel++;
         block(s->body.get());
         indentLevel--;
         line("}");
     }
+}
+
+// for (var[Person] p in objs): an Obj item, checked and converted
+std::string Codegen::loopItem(const std::string& item, const SemanticType& iterable, const SemanticType* declared, const VarDeclStmt* decl) {
+    if (!declared || !iterable.elementType || !iterable.elementType->is(SemanticTypeKind::Obj) || declared->is(SemanticTypeKind::Obj)) return item;
+    return "dessa::obj_to<" + cppType(*declared) + ">(" + item + ", \"loop variable '" + decl->name.value_or("") + "' (" +
+           declared->toString() + ")\")";
 }
 
 void Codegen::switchStmt(const SwitchStmt* s) {

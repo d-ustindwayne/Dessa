@@ -1,4 +1,4 @@
 name = ashwee
-version = 0.2.0
+version = 0.3.0
 entry = ashwee.dm
 description = Desktop windows and controls (GUI) on Windows, Linux (GTK 3) and macOS

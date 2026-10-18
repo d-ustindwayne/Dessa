@@ -4,6 +4,15 @@
 { connectMssql, drivers, Database, SqlError } from $("sql");
 { Json } from $("json");
 
+class Person {
+    var[Int] id = 0;
+    var[Str] name = "";
+    var[Int] age = 0;
+    var[Dbl] salary = 0;
+    var[Bul] active = false;
+    var[Str | Nil] joined = nil;
+}
+
 print(drivers().includes("ODBC Driver 17 for SQL Server") || drivers().includes("ODBC Driver 18 for SQL Server"));
 
 var[Database] db = connectMssql("Server=localhost;Database=tempdb;Trusted_Connection=yes;");
@@ -22,6 +31,9 @@ for (var[Json] row in db.query("SELECT * FROM #people ORDER BY id")) {
 var[Json | Nil] ann = db.queryOne("SELECT name, age FROM #people WHERE age > ?", 28);
 if (ann != nil) {
     print(ann.get("name").asStr(), ann.get("age").asInt());
+}
+for (var[Person] p in db.queryAs(() := new Person(), "SELECT * FROM #people ORDER BY id")) {
+    print(p);
 }
 print(db.execute("UPDATE #people SET age = age + 1"));
 print(db.queryOne("SELECT COUNT(*) AS n, AVG(CAST(age AS FLOAT)) AS avgAge FROM #people"));

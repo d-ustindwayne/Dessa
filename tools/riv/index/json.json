@@ -8,6 +8,13 @@
       "manifest": "name = json\nversion = 1.0.0\nentry = json.dm\ndescription = Read and write JSON (the Json type)\n\n[dependencies]\n",
       "files": 2,
       "bytes": 14327
+    },
+    "1.1.0": {
+      "infohash": "b3e7da2ebeb3b7a64af1e033266cf882bebe5bec",
+      "torrent": "ZDg6YW5ub3VuY2U0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2UxMzphbm5vdW5jZS1saXN0bGw0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2VlbDMzOnVkcDovL29wZW4uc3RlYWx0aC5zaTo4MC9hbm5vdW5jZWVsNDE6dWRwOi8vdHJhY2tlci50b3JyZW50LmV1Lm9yZzo0NTEvYW5ub3VuY2VlbDM3OnVkcDovL2V4b2R1cy5kZXN5bmMuY29tOjY5NjkvYW5ub3VuY2VlZTEwOmNyZWF0ZWQgYnkxMTpyaXYgKERlc3NhKTQ6aW5mb2Q1OmZpbGVzbGQ2Omxlbmd0aGkxNDIzM2U0OnBhdGhsNzpqc29uLmRtZWVkNjpsZW5ndGhpOTRlNDpwYXRobDc6cml2LnBrZ2VlZTQ6bmFtZTQ6anNvbjEyOnBpZWNlIGxlbmd0aGkxNjM4NGU2OnBpZWNlczIwOq1MVDaz8+BS+3fv4BMgK2RF8YaWZTg6dXJsLWxpc3RsNzg6aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2QtdXN0aW5kd2F5bmUvRGVzc2EvbWFpbi90b29scy9yaXYvcGFja2FnZXMvZWU=",
+      "manifest": "name = json\nversion = 1.1.0\nentry = json.dm\ndescription = Read and write JSON (the Json type)\n\n[dependencies]\n",
+      "files": 2,
+      "bytes": 14327
     }
   }
 }

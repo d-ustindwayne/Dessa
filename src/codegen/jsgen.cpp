@@ -428,6 +428,11 @@ void JsCodegen::emitClass(const ClassInfo& info) {
     line("return super.$get(name);");
     indentLevel--;
     line("}");
+    {
+        std::string names;
+        for (const auto& f : info.fieldOrder) names += ", " + jsString(f);
+        line("$fieldNames() { return [...super.$fieldNames()" + names + "]; }");
+    }
     line("$set(name, v) {");
     indentLevel++;
     for (const auto& f : info.fieldOrder) {
@@ -704,6 +709,9 @@ void JsCodegen::forIn(const ForInStmt* s) {
         std::string item = seq + "[" + i + "]";
         if (t && needsCopy(*t)) item = "$.copy(" + item + ")";
         if (t && iterable.elementType) item = convert(item, *iterable.elementType, *t);
+        if (t && iterable.elementType && iterable.elementType->is(SemanticTypeKind::Obj) && !t->is(SemanticTypeKind::Obj)) {
+            item = objItem(item, *t, "loop variable '" + decl->name.value_or("") + "' (" + t->toString() + ")");
+        }
         line("let " + name + " = " + item + ";");
         block(s->body.get());
         indentLevel--;
@@ -718,6 +726,14 @@ void JsCodegen::forIn(const ForInStmt* s) {
         line("}");
     } else if (iterable.is(SemanticTypeKind::Str)) {
         line("for (const " + name + " of $.m_chars(" + expr(s->iterable.get()) + ")) {");
+        indentLevel++;
+        block(s->body.get());
+        indentLevel--;
+        line("}");
+    } else if (t && iterable.elementType && iterable.elementType->is(SemanticTypeKind::Obj) && !t->is(SemanticTypeKind::Obj)) {
+        // A set of Obj into a typed variable
+        line("for (const $each of $.copy(" + expr(s->iterable.get()) + ").items) {");
+        line("    const " + name + " = " + objItem("$each", *t, "loop variable '" + decl->name.value_or("") + "' (" + t->toString() + ")") + ";");
         indentLevel++;
         block(s->body.get());
         indentLevel--;
@@ -990,6 +1006,15 @@ std::string JsCodegen::isCheck(const std::string& value, const SemanticType& tar
             return "$.isClass(" + value + ", " + className(target) + ")";
         default: return "false";
     }
+}
+
+// An Obj's value for a typed place: checked, numbers made the right kind
+std::string JsCodegen::objItem(const std::string& code, const SemanticType& target, const std::string& what) const {
+    const SemanticType base = withoutNil(target);
+    std::string value = "v";
+    if (base.is(SemanticTypeKind::Dbl) || base.is(SemanticTypeKind::Flt)) value = "(typeof v === \"bigint\" ? Number(v) : v)";
+    if (base.is(SemanticTypeKind::Flt)) value = "Math.fround" + value;
+    return "((v) => { if (!(" + fitsCheck("v", target) + ")) $.storeFail(v, " + jsString(what) + "); return " + value + "; })(" + code + ")";
 }
 
 std::string JsCodegen::fitsCheck(const std::string& value, const SemanticType& target) const {

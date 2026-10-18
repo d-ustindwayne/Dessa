@@ -47,6 +47,7 @@ SemanticType parseBuiltinType(const std::string& raw) {
     if (text == "Chr") return SemanticType::simple(SemanticTypeKind::Chr);
     if (text == "Emp") return SemanticType::simple(SemanticTypeKind::Emp);
     if (text == "Nil") return SemanticType::simple(SemanticTypeKind::Nil);
+    if (text == "Obj") return SemanticType::simple(SemanticTypeKind::Obj);
 
     SemanticType pseudo = SemanticType::unknown();
     pseudo.name = text; // "Num", "T", "Any"
@@ -59,6 +60,10 @@ const std::vector<BuiltinFunction>& globalBuiltins() {
         {"input", {{"prompt", "Str"}}, "Str", "dessa::input", false},
         {"typeof", {{"value", "Any"}}, "Str", "dessa::type_of", false},
         {"zip", {{"a", "Any"}, {"b", "Any"}}, "Any", "dessa::zip", false},   // typed by Analyser::analyseZip
+        // Fields by name (class instances and anonymous objects)
+        {"fieldsOf", {{"value", "Any"}}, "Str<>", "dessa::fields_of", false},
+        {"getField", {{"value", "Any"}, {"name", "Str"}}, "Obj", "dessa::get_field", false},
+        {"setField", {{"value", "Any"}, {"name", "Str"}, {"newValue", "Any"}}, "Emp", "dessa::set_field", false},
     };
     return functions;
 }

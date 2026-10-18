@@ -43,3 +43,21 @@ func[Str] typeof(value[Str]) {
 func[Str<><>] zip(a[Str<>], b[Str<>]) {
     ...
 }
+
+// The field names of a class instance or an anonymous object, in order:
+//     fieldsOf(new { name = "Ann", age = 30 })   is ["name", "age"]
+func[Str<>] fieldsOf(value[Obj]) {
+    ...
+}
+
+// A field by name (an Obj). Error if there is no such field.
+//     getField(person, "name")
+func[Obj] getField(value[Obj], name[Str]) {
+    ...
+}
+
+// Sets a field by name. The value must fit the field's type.
+//     setField(person, "age", 31)
+func[Emp] setField(value[Obj], name[Str], newValue[Obj]) {
+    ...
+}

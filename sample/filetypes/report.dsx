@@ -5,7 +5,7 @@
  */
 
 { Shape } from $("geometry");
-{ round } from $(<math>);
+{ round } from $("math");
 
 // Rounds to 2 decimal places for display: 3.14159 -> 3.14
 func[Dbl] twoDecimals(x[Dbl]) {

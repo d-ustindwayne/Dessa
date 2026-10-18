@@ -76,6 +76,7 @@ private:
     void block(const Stmt* statement);
     void varDecl(const VarDeclStmt* decl, bool asGlobalAssignment);
     void forIn(const ForInStmt* statement);
+    std::string loopItem(const std::string& item, const SemanticType& iterable, const SemanticType* declared, const VarDeclStmt* decl);
     void switchStmt(const SwitchStmt* statement);
     void tryStmt(const TryStmt* statement);
 

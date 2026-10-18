@@ -5,6 +5,8 @@ true
 {"id":1,"name":"Ann","age":30,"salary":52000.5,"active":true,"joined":"2024-03-01"}
 {"id":2,"name":"Bo Ñúñez 😀","age":25,"salary":41000,"active":false,"joined":null}
 Ann 30
+Person(id: 1, name: "Ann", age: 30, salary: 52000.5, active: true, joined: "2024-03-01")
+Person(id: 2, name: "Bo Ñúñez 😀", age: 25, salary: 41000, active: false, joined: Nil)
 2
 {"n":2,"avgAge":28.5}
 SQL error: Invalid object name 'table_that_does_not_exist'.
