@@ -9,6 +9,7 @@ dessa run app.ds                     compile and run (the result is cached, so t
 dessa run app.ds -- one two          pass arguments to the program (read them with args() from $("sys"))
 dessa build app.ds                   make a program: app.exe on Windows, app elsewhere
 dessa build app.ds -o tools/app.exe  choose the output file
+dessa build app.ds --release         fully optimized: slower to build, a little faster to run
 dessa check app.ds                   only look for errors
 ```
 
@@ -80,6 +81,7 @@ dessa emit app.ds -o app.cpp
 | Variable | What it does |
 |---|---|
 | `DESSA_CXX` | the C++ compiler to use (default `g++`), e.g. `C:/mingw64/bin/g++.exe` or `clang++` |
+| `DESSA_NO_PCH` | set to 1 to compile without the precompiled runtime (it is made once and kept in the temp folder) |
 | `DESSA_HOME` | the Dessa folder, if `dessa` can't find its `runtime` and `include` folders by itself |
 | `DESSA_PACKAGES` | extra folders to look for packages in (separated by `;` on Windows, `:` elsewhere) |
 | `DESSA_VERBOSE` | set to `1` to see the C++ compiler's own messages when something goes wrong inside Dessa |

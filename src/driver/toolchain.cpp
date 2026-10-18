@@ -163,6 +163,33 @@ static bool cObject(const fs::path& source, std::string& object, std::string& er
     return true;
 }
 
+// The runtime header precompiled once (it's most of what g++ compiles for a
+// program): a folder holding a copy of dessa_runtime.hpp and its .gch, to put
+// first on the include path. "" if it can't be made (then programs compile
+// without it).
+static std::string precompiledRuntime(const std::string& runtime, const std::string& include, const char* optimize) {
+    if (const char* off = std::getenv("DESSA_NO_PCH"); off && *off) return "";
+    std::error_code ec;
+    const std::string header = readFile(fs::path(runtime) / "dessa_runtime.hpp");
+    if (header.empty()) return "";
+    const fs::path dir = workDir() / "pch" / hex(fnv1a(compiler() + optimize + include, fnv1a(header)));
+    const fs::path gch = dir / "dessa_runtime.hpp.gch";
+    if (fs::exists(gch, ec)) return dir.string();
+    fs::create_directories(dir, ec);
+    {
+        std::ofstream copy(dir / "dessa_runtime.hpp", std::ios::binary);
+        copy << header;
+    }
+    std::cerr << "dessa: preparing the runtime (only needed once)...\n";
+    const fs::path partial = dir / "dessa_runtime.hpp.gch.part";
+    std::string command = quoteArg(compiler()) + " -std=c++20 " + optimize + " -I" + quoteArg(include) + " -x c++-header " +
+                          quoteArg((dir / "dessa_runtime.hpp").string()) + " -o " + quoteArg(partial.string()) + " > " +
+                          quoteArg((dir / "pch.log").string()) + " 2>&1";
+    if (system(command) != 0) return "";
+    fs::rename(partial, gch, ec);   // only a complete .gch is ever used
+    return ec ? "" : dir.string();
+}
+
 bool compile(const std::string& cpp, const std::string& outputExe, const char* argv0, std::string& error, bool fast,
              const std::vector<std::string>& libraries) {
     std::string runtime = runtimeDir(argv0);
@@ -195,7 +222,9 @@ bool compile(const std::string& cpp, const std::string& outputExe, const char* a
         out << cpp;
     }
 
-    std::string command = quoteArg(compiler()) + " -std=c++20 " + (fast ? "-O1" : "-O2") +
+    const char* optimize = fast ? "-O1" : "-O2";
+    const std::string pch = precompiledRuntime(runtime, includeDir(argv0), optimize);
+    std::string command = quoteArg(compiler()) + " -std=c++20 " + optimize + (pch.empty() ? "" : " -I" + quoteArg(pch)) +
                           " -I" + quoteArg(runtime) + " -I" + quoteArg(includeDir(argv0)) + " " + quoteArg(source.string()) +
                           " -o " + quoteArg(outputExe) + extra;
 #ifdef _WIN32

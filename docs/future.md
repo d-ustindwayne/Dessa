@@ -35,10 +35,10 @@ below.
 
 In order of value for the effort:
 
-1. **Precompile the runtime header once** (a `.gch` next to the cache).
-   Measured: hello-world 2.6 s to 1.3 s. Small change in `toolchain.cpp`.
-2. **`dessa build` at -O1 by default, -O2 with `--release`.** Most of the 14 s
-   is -O2 optimizing code that doesn't need it while developing.
+1. **Done (0.1.x):** the runtime header is precompiled once and reused, and
+   `dessa build` uses -O1 unless `--release` is given. Hello-world went from
+   about 14 s to 1.5 s (5 s the very first time, while the runtime is prepared).
+2. (part of 1)
 3. **Split the runtime**: Obj, Map, text helpers and conversions in separate
    headers, included only when a program uses them (the analyser knows).
 4. **Use a faster C++ compiler when there is one** (clang is usually faster

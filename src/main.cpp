@@ -47,7 +47,7 @@ void printUsage() {
         "Usage:\n"
         "  dessa check   <file.ds> [--json] [--stdin]   type-check and report problems\n"
         "  dessa emit    <file.ds> [-o out.cpp]         show the generated C++\n"
-        "  dessa build   <file.ds> [-o program]         compile to an executable\n"
+        "  dessa build   <file.ds> [-o program]         compile to an executable (--release: fully optimized, slower to build)\n"
         "  dessa run     <file.ds> [-- args...]         compile and run\n"
         "  dessa symbols <file.ds> [--stdin]            symbol table as JSON (for editors)\n"
         "  dessa serve [folder] [--port N]              a web server for pages (.dhtml compiled on each request)\n"
@@ -218,6 +218,7 @@ int cmdCheck(const std::string& path, bool asJson, bool fromStdin) {
 // Generated C++ for the program, or "" (with diagnostics printed) on failure.
 // --target native (C++, the default) or js / web (JavaScript for Node or a browser)
 std::string g_target = "native";
+bool g_release = false;   // dessa build --release: -O2 instead of -O1
 int g_port = 8080;   // dessa serve / dessa run page.dhtml
 bool targetIsJs() { return g_target == "js" || g_target == "web"; }
 
@@ -340,7 +341,7 @@ int cmdBuild(const std::string& path, std::string output, const char* argv0) {
     }
     std::string error;
     std::vector<std::string> libraries(c.analyser.builtinLibrariesUsed().begin(), c.analyser.builtinLibrariesUsed().end());
-    if (!toolchain::compile(cpp, output, argv0, error, false, libraries)) {
+    if (!toolchain::compile(cpp, output, argv0, error, !g_release, libraries)) {
         std::cerr << error;
         return 1;
     }
@@ -851,6 +852,8 @@ int main(int argc, char* argv[]) {
             break;
         } else if (a == "--json") {
             asJson = true;
+        } else if (a == "--release") {
+            g_release = true;
         } else if (a == "--stdin") {
             fromStdin = true;
         } else if (a == "--at" && i + 1 < args.size()) {
