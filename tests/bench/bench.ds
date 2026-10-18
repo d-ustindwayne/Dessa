@@ -1,0 +1,144 @@
+// The Dessa benchmark: the same tasks as bench.py, bench.cpp, Bench.java
+// and bench.js. Prints "task<TAB>result<TAB>milliseconds" per task.
+//
+//     dessa build bench.ds -o bench && ./bench          (native)
+//     dessa build bench.ds --target js -o bench_ds.js && node bench_ds.js
+//     add "quick" for smaller sizes
+
+{ millis } from $("time");
+{ args } from $("sys");
+
+var[Bul] quick = !args().isEmpty() && args()<0> == "quick";
+var[Int] LOOP = quick ? 100000000 : 1000000000;
+
+func[Emp] report(name[Str], result[Int], start[Int]) {
+    print($"{name}\t{result}\t{millis() - start}");
+}
+
+// 1. A billion steps of a loop that can't be skipped (each step needs the last)
+func[Int] loopTask(n[Int]) {
+    var[Int] acc = 0;
+    for (var[Int] i = 0; i < n; i++) {
+        acc = (acc * 31 + i) % 1000000007;
+    }
+    return acc;
+}
+
+// 2. Function calls: naive Fibonacci
+func[Int] fib(n[Int]) {
+    if (n < 2) return n;
+    return fib(n - 1) + fib(n - 2);
+}
+
+// 3. Lists of Bul: primes up to 10 million
+func[Int] sieve(limit[Int]) {
+    var[Bul<>] composite = [];
+    for (var[Int] i = 0; i <= limit; i++) composite.push(false);
+    var[Int] count = 0;
+    for (var[Int] i = 2; i <= limit; i++) {
+        if (!composite<i>) {
+            count++;
+            var[Int] j = i * i;
+            while (j <= limit) {
+                composite<j> = true;
+                j += i;
+            }
+        }
+    }
+    return count;
+}
+
+// 4. Building text
+func[Int] strings(n[Int]) {
+    var[Str] text = "";
+    for (var[Int] i = 0; i < n; i++) {
+        text += Str(i) + ",";
+    }
+    return text.length();
+}
+
+// 5. Sorting a million numbers (MINSTD random numbers)
+func[Int] sorting(n[Int]) {
+    var[Int<>] values = [];
+    var[Int] x = 42;
+    for (var[Int] i = 0; i < n; i++) {
+        x = (x * 48271) % 2147483647;
+        values.push(x);
+    }
+    values.sort();
+    var[Int] middle = n / 2;   // an Int / Int is a decimal; stored in an Int it's cut
+    return values<0> + values<middle> + values<n - 1>;
+}
+
+// 6. A hash map: a million inserts and lookups
+func[Int] maps(n[Int]) {
+    var[Map[Int, Int]] m = {:};
+    for (var[Int] i = 0; i < n; i++) {
+        m<(i * 7919) % 1000003> = i;
+    }
+    var[Int] total = 0;
+    for (var[Int] i = 0; i < n; i++) {
+        total += m.getOr(i, 0);
+    }
+    return total;
+}
+
+// 7. Objects: millions of small ones made and thrown away
+class Vec {
+    var[Int] x = 0;
+    var[Int] y = 0;
+    init(x[Int], y[Int]) {
+        this.x = x;
+        this.y = y;
+    }
+    func[Vec] add(other[Vec]) {
+        return new Vec(this.x + other.x, this.y + other.y);
+    }
+}
+
+func[Int] objects(n[Int]) {
+    var[Vec] v = new Vec(0, 0);
+    for (var[Int] i = 0; i < n; i++) {
+        v = v.add(new Vec(i % 10, i % 7));
+    }
+    return v.x + v.y;
+}
+
+// 8. Decimals: the Mandelbrot set
+func[Int] mandelbrot(width[Int], height[Int], limit[Int]) {
+    var[Int] inside = 0;
+    for (var[Int] py = 0; py < height; py++) {
+        var[Dbl] cy = -1.2 + 2.4 * py / height;
+        for (var[Int] px = 0; px < width; px++) {
+            var[Dbl] cx = -2.0 + 3.0 * px / width;
+            var[Dbl] zx = 0.0;
+            var[Dbl] zy = 0.0;
+            var[Int] k = 0;
+            while (k < limit && zx * zx + zy * zy <= 4.0) {
+                var[Dbl] t = zx * zx - zy * zy + cx;
+                zy = 2.0 * zx * zy + cy;
+                zx = t;
+                k++;
+            }
+            if (k == limit) inside++;
+        }
+    }
+    return inside;
+}
+
+var[Int] start = millis();
+report("loop", loopTask(LOOP), start);
+start = millis();
+report("fib", fib(32), start);
+start = millis();
+report("sieve", sieve(10000000), start);
+start = millis();
+report("strings", strings(1000000), start);
+start = millis();
+report("sorting", sorting(1000000), start);
+start = millis();
+report("maps", maps(1000000), start);
+start = millis();
+report("objects", objects(3000000), start);
+start = millis();
+report("mandelbrot", mandelbrot(800, 600, 100), start);

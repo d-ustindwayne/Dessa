@@ -542,12 +542,13 @@ inline size_t index_of(Int index, size_t size, const char* what) {
     return static_cast<size_t>(index);
 }
 
+// (reference types, not T&: a Bul<> is a std::vector<bool>, packed in bits)
 template <class T>
-T& at(std::vector<T>& list, Int index) {
+typename std::vector<T>::reference at(std::vector<T>& list, Int index) {
     return list[index_of(index, list.size(), "list")];
 }
 template <class T>
-const T& at(const std::vector<T>& list, Int index) {
+typename std::vector<T>::const_reference at(const std::vector<T>& list, Int index) {
     return list[index_of(index, list.size(), "list")];
 }
 // text<i>: the i-th character (not byte)

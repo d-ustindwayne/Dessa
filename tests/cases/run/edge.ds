@@ -87,3 +87,9 @@ print(mask, $"{mask}");
 
 // Hex escapes
 print("\x41\x42", $"\x43{1}");
+
+// Bul lists can be changed by index
+var[Bul<>] flags = [false, false, true];
+flags<0> = true;
+flags<1> = !flags<2>;
+print(flags);
