@@ -59,6 +59,8 @@ struct Symbol {
     int importId = -1;
     // Module: which Analyser::aliasTables holds its names
     int aliasTable = -1;
+    // Function / Method: what it says it may throw (func[Int !! NumberError])
+    std::vector<SemanticType> throws;
 };
 
 enum class ScopeKind {

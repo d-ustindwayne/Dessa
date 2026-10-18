@@ -1,0 +1,32 @@
+// !! : what a function may throw
+
+class NumberError {
+    var[Str] message = "";
+    init(message[Str]) { this.message = message; }
+}
+class DivideByZero(NumberError) {}
+
+func[Int !! NumberError] division(num1[Int], num2[Int]) {
+    if (num2 == 0) throw new DivideByZero("can't divide by zero");
+    if (num1 < 0) throw new NumberError("only positive numbers");
+    return Int(num1 / num2);
+}
+
+func[Str !! Str, NumberError] parse(text[Str]) {
+    if (text.isEmpty()) throw "empty text";
+    try {
+        throw 42 > 1 ? "caught right here" : "never";   // a try may throw anything: it's caught below
+    } catch (e[Str]) {}
+    return text.upper();
+}
+
+print(division(10, 2));
+try { division(1, 0); } catch (e[NumberError]) { print(typeof(e), e.message); }
+try { division(-1, 1); } catch (e[NumberError]) { print(e.message); }
+print(parse("ok"));
+try { parse(""); } catch (e[Str]) { print(e); }
+var[Func[Int, [Int]]] half = (n[Int]) := {
+    if (n < 0) throw "a lambda isn't limited by the function's !!";
+    return n;
+};
+print(half(4));

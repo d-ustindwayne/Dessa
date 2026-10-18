@@ -1,0 +1,11 @@
+// What the compiler checks for !!
+
+class AppError {}
+class Other {}
+func[Int !! AppError] f(x[Int]) {
+    if (x > 1) throw new AppError();
+    if (x > 2) throw new Other();               // error: 'f' says it throws AppError (after !!), not Other
+    if (x > 3) throw "text";                    // error: 'f' says it throws AppError (after !!), not Str
+    return x;
+}
+func[Int !! Int] g() { return 1; }              // error: After !! come what 'g' may throw: Str or classes, not Int

@@ -1750,6 +1750,8 @@ SemanticType Analyser::analyseLambda(const LambdaExpr* expression, std::optional
     inConstructor = false;
     functionDepth++;
     currentFunctionName = "<lambda>";
+    const auto previousThrows = currentThrows;
+    currentThrows.reset();
 
     beginScope(ScopeKind::Lambda);
     for (size_t i = 0; i < expression->params.size(); ++i) {
@@ -1794,6 +1796,7 @@ SemanticType Analyser::analyseLambda(const LambdaExpr* expression, std::optional
 
     endScope();
     functionDepth--;
+    currentThrows = previousThrows;
     currentFunctionName = previousFunction;
     currentReturnType = previousReturn;
     inferringReturn = previousInferring;

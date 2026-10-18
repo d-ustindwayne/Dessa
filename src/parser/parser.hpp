@@ -61,6 +61,7 @@ private:
     StmtPtr importStatement();
     std::vector<ImportName> parseImportNames();
     std::vector<Token> parseAnnotations();
+    std::vector<TypeNode> parseThrows();
     ExprPtr pipe();
     bool isImportAhead() const;
     std::vector<ModuleSpec> parseModuleSpecs();

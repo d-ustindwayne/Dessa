@@ -485,6 +485,10 @@
     "operators": {
       "patterns": [
         {
+          "name": "keyword.operator.throws.dessa",
+          "match": "!!"
+        },
+        {
           "name": "keyword.operator.pipe.dessa",
           "match": "\\|>"
         },

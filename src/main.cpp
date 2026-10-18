@@ -457,6 +457,7 @@ void writeSymbol(std::ostream& out, const std::string& name, const Symbol& s, co
             out << "}";
         }
         std::string ret = s.returnType.isUnknown() && !s.returnType.name.empty() ? s.returnType.name : s.returnType.toString();
+        for (size_t i = 0; i < s.throws.size(); ++i) ret += (i ? ", " : " !! ") + s.throws[i].toString();
         out << "],\"returns\":" << json::quote(ret);
     }
     out << "}";

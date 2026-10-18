@@ -506,6 +506,13 @@ Symbol Analyser::makeFunctionSymbol(const FuncDeclStmt* declaration, SymbolKind 
     symbol.line = declaration->line;
     symbol.column = declaration->column;
     symbol.returnType = resolveType(declaration->returnType, declaration->line, declaration->column);
+    for (const auto& t : declaration->throwsTypes) {
+        SemanticType thrown = resolveType(t, declaration->line, declaration->column);
+        if (!thrown.isUnknown() && !thrown.is(SemanticTypeKind::Str) && !thrown.isClass()) {
+            error(declaration, "After !! come what '" + declaration->name + "' may throw: Str or classes, not " + thrown.toString());
+        }
+        symbol.throws.push_back(thrown);
+    }
     std::vector<SemanticType> params;
     std::unordered_set<std::string> seen;
     bool seenDefault = false;
@@ -1478,6 +1485,10 @@ void Analyser::analyseFunctionBody(const FuncDeclStmt* statement) {
     const bool previousInConstructor = inConstructor;
     currentFunctionName = statement->isConstructor ? "init" : statement->name;
     currentReturnType = signature->returnType;
+    const auto previousThrows = currentThrows;
+    const int previousTryDepth = tryDepth;
+    currentThrows = statement->throwsTypes.empty() ? std::nullopt : std::optional<std::vector<SemanticType>>(signature->throws);
+    tryDepth = 0;
     inferringReturn = false;
     loopDepth = 0;
     inConstructor = statement->isConstructor;
@@ -1534,6 +1545,8 @@ void Analyser::analyseFunctionBody(const FuncDeclStmt* statement) {
 
     endScope();
     functionDepth--;
+    currentThrows = previousThrows;
+    tryDepth = previousTryDepth;
     currentFunctionName = previousFunction;
     currentReturnType = previousReturn;
     inferringReturn = previousInferring;
@@ -1891,7 +1904,9 @@ void Analyser::analyseReturn(const ReturnStmt* statement) {
 }
 
 void Analyser::analyseTry(const TryStmt* statement) {
+    tryDepth++;   // a throw in here may be caught below
     analyseStatement(statement->tryBlock.get());
+    tryDepth--;
 
     std::vector<SemanticType> earlier; // types caught by previous arms
     bool seenCatchAll = false;
@@ -1938,6 +1953,20 @@ void Analyser::analyseThrow(const ThrowStmt* statement) {
     SemanticType thrown = analyseExpression(statement->value.get());
     if (!thrown.isUnknown() && !thrown.is(SemanticTypeKind::Str) && !thrown.isReference()) {
         error(statement->value.get(), "Only Str messages and class instances can be thrown, not " + thrown.toString());
+        return;
+    }
+    // func[Int !! NumberError]: outside a try, only what it says
+    if (currentThrows && tryDepth == 0 && !thrown.isUnknown()) {
+        bool listed = false;
+        std::string names;
+        for (const auto& t : *currentThrows) {
+            listed = listed || isAssignable(t, thrown);
+            names += (names.empty() ? "" : ", ") + t.toString();
+        }
+        if (!listed) {
+            error(statement->value.get(), "'" + currentFunctionName + "' says it throws " + names + " (after !!), not " +
+                                              thrown.toString() + "; add it after !! or catch it here");
+        }
     }
 }
 

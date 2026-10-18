@@ -167,6 +167,10 @@ private:
     bool inferringReturn = false;                 // block lambda without declared return
     std::optional<SemanticType> inferredReturn;
     std::string currentFunctionName;
+    // The function being analysed says what it throws (!!): only those may be
+    // thrown outside a try in its body
+    std::optional<std::vector<SemanticType>> currentThrows;
+    int tryDepth = 0;
     std::string currentClassKey;                  // "" outside classes
     bool inConstructor = false;
     const VarDeclStmt* definingLambda = nullptr;  // `fact` while analysing fact's lambda

@@ -247,9 +247,23 @@ StmtPtr Parser::constDeclaration() {
     return std::make_unique<VarDeclStmt>(true, std::move(type), std::move(name), std::move(initializer));
 }
 
+// func[Int !! NumberError, Str]: what the function may throw
+std::vector<TypeNode> Parser::parseThrows() {
+    std::vector<TypeNode> types;
+    if (check(TokenType::NOT) && checkNext(TokenType::NOT)) {
+        advance();
+        advance();
+        do {
+            types.push_back(parseType());
+        } while (match({TokenType::COMMA}));
+    }
+    return types;
+}
+
 StmtPtr Parser::funcDeclaration() {
     consume(TokenType::L_BRACKET, "Expect '[' before return type.");
     TypeNode returnType = parseType();
+    std::vector<TypeNode> throwsTypes = parseThrows();
     consume(TokenType::R_BRACKET, "Expect ']' after return type.");
 
     std::string name = consume(TokenType::IDENTIFIER, "Expect function name.").lexeme;
@@ -261,7 +275,9 @@ StmtPtr Parser::funcDeclaration() {
     consume(TokenType::L_BRACE, "Expect '{' before function body.");
     StmtPtr body = blockStatement();
 
-    return std::make_unique<FuncDeclStmt>(std::move(returnType), std::move(name), std::move(params), std::move(body));
+    auto fn = std::make_unique<FuncDeclStmt>(std::move(returnType), std::move(name), std::move(params), std::move(body));
+    fn->throwsTypes = std::move(throwsTypes);
+    return fn;
 }
 
 // init(params) { body }
@@ -383,6 +399,7 @@ StmtPtr Parser::interfaceDeclaration() {
         } else if (match({TokenType::FUNC})) {
             consume(TokenType::L_BRACKET, "Expect '[' before return type.");
             TypeNode returnType = parseType();
+            std::vector<TypeNode> throwsTypes = parseThrows();
             consume(TokenType::R_BRACKET, "Expect ']' after return type.");
 
             std::string methodName = consume(TokenType::IDENTIFIER, "Expect interface method name.").lexeme;
@@ -391,8 +408,9 @@ StmtPtr Parser::interfaceDeclaration() {
             consume(TokenType::R_PAREN, "Expect ')' after interface method parameters.");
             consume(TokenType::SEMICOLON, "Expect ';' after interface method declaration.");
 
-            members.push_back(place(std::make_unique<FuncDeclStmt>(
-                std::move(returnType), std::move(methodName), std::move(params), nullptr), start));
+            auto method = std::make_unique<FuncDeclStmt>(std::move(returnType), std::move(methodName), std::move(params), nullptr);
+            method->throwsTypes = std::move(throwsTypes);
+            members.push_back(place(std::move(method), start));
         } else {
             throw error(peek(), "Expect a field (name[Type];) or method (func[Type] name();) inside interface.");
         }

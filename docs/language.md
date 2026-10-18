@@ -406,6 +406,19 @@ try {
 throw "plain text works too";
 ```
 
+A function can say what it may throw, after `!!` in its return type. In its
+body, outside a `try`, it may then only throw those (or subclasses of them):
+
+```dessa
+func[Int !! NumberError] division(a[Int], b[Int]) {
+    if (b == 0) throw new NumberError("can't divide by zero");
+    return Int(a / b);
+}
+func[Str !! Str, ParseError] read(text[Str]) { ... }
+```
+
+Callers don't have to catch it; it tells readers (and the editor shows it).
+
 Runtime errors (an index out of range, a division by zero, an `Int`
 overflow, a failed conversion) can be caught with `catch (e[Str])`. An error
 nobody catches stops the program and shows where it happened:
@@ -484,5 +497,5 @@ class Dog(Animal) {
 
 ## Reserved for later
 
-`with`, `from` and `!!` are reserved: using them is an error now so that they
-can get a meaning later.
+`with` and `from` are reserved: using them is an error now so that they can
+get a meaning later.
