@@ -38,7 +38,7 @@ namespace fs = std::filesystem;
 
 namespace {
 
-constexpr const char* kVersion = "0.1.0";
+constexpr const char* kVersion = "0.1.5";
 const char* g_argv0 = nullptr; // to find runtime/ and include/ next to the compiler
 
 void printUsage() {
