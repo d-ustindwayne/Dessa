@@ -242,7 +242,7 @@
         },
         {
           "name": "keyword.control.import.dessa",
-          "match": "\b(from|as)\b"
+          "match": "\\bas\\b"
         }
       ]
     },

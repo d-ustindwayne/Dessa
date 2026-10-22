@@ -42,6 +42,14 @@ private:
     const ClassInfo* currentClass = nullptr;
     std::optional<SemanticType> returnType;
     std::set<std::string> externClasses;   // class keys mapped onto JS objects (webutils)
+    // Int locals of the function being written that may hold a plain number
+    // (see "Small Ints" in dessa_runtime.js)
+    std::set<std::string> smallLocals;
+    bool isSmall(const Expr* e) const;
+    bool smallVar(const Expr* e) const;
+    std::string small(const Expr* e);        // a small expression's code (a number or a BigInt)
+    std::string intOperand(const Expr* e);   // small(e) when it is small, else expr(e)
+    std::string effect(const Expr* e);       // an expression whose value isn't used
 
     void line(const std::string& text);
     std::string temp(const std::string& base);

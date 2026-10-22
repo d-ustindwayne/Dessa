@@ -111,9 +111,9 @@
     "description": "Try / catch"
   },
   "Import names": {
-    "prefix": "from",
-    "body": "{ ${1:Name} } from \\$(\"${2:folder.file}\");",
-    "description": "Import names from a .ds file"
+    "prefix": "importnames",
+    "body": "\\$(\"${1:folder.file}\") { ${2:Name} }",
+    "description": "Import names from a library or a .ds file"
   },
   "Import builtin": {
     "prefix": "import",

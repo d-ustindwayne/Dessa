@@ -53,6 +53,11 @@ private:
     StmtPtr declarationInner();
     StmtPtr varDeclaration();
     StmtPtr constDeclaration();
+    StmtPtr declarators(bool isConst, const TypeNode& type);
+    // var[Int] x = 1, y = 2; is one statement but several declarations:
+    // the first is returned, the rest wait here for the caller's list
+    std::vector<StmtPtr> moreDeclarations;
+    void takeMoreDeclarations(std::vector<StmtPtr>& into);
     StmtPtr funcDeclaration();
     StmtPtr constructorDeclaration();
     StmtPtr classDeclaration();

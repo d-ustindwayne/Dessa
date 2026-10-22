@@ -10,7 +10,6 @@ namespace {
 bool isReserved(TokenType type) {
     switch (type) {
         case TokenType::WITH:
-        case TokenType::FROM:
             return true;
         default:
             return false;
@@ -64,6 +63,7 @@ std::vector<StmtPtr> Parser::parseProgram() {
     while (!isAtEnd()) {
         StmtPtr stmt = declaration();
         if (stmt) statements.push_back(std::move(stmt));
+        takeMoreDeclarations(statements);
     }
     return statements;
 }
@@ -186,6 +186,7 @@ StmtPtr Parser::declaration() {
     try {
         return place(declarationInner(), start);
     } catch (const ParseError&) {
+        moreDeclarations.clear();
         synchronize();
         return nullptr;
     }
@@ -215,20 +216,46 @@ StmtPtr Parser::varDeclaration() {
     TypeNode type = parseType();
     consume(TokenType::R_BRACKET, "Expect ']' after variable type.");
 
-    std::optional<std::string> name;
-    if (check(TokenType::IDENTIFIER)) {
-        name = advance().lexeme;
-    } else {
-        throw error(peek(), "Expect variable name after type.");
-    }
+    return declarators(false, type);
+}
 
-    ExprPtr initializer = nullptr;
-    if (match({TokenType::EQUAL})) {
-        initializer = expression();
-    }
+void Parser::takeMoreDeclarations(std::vector<StmtPtr>& into) {
+    for (auto& more : moreDeclarations) into.push_back(std::move(more));
+    moreDeclarations.clear();
+}
 
-    consume(TokenType::SEMICOLON, "Expect ';' after variable declaration.");
-    return std::make_unique<VarDeclStmt>(false, std::move(type), std::move(name), std::move(initializer));
+// After var[Type] / const[Type]:
+//   x = 10, y = 20;     two variables
+//   a = b = c = 2;      three variables, all 2 (c is set first, then b, then a)
+StmtPtr Parser::declarators(bool isConst, const TypeNode& type) {
+    std::vector<StmtPtr> made;
+    do {
+        if (!check(TokenType::IDENTIFIER)) {
+            throw error(peek(), isConst ? "Expect constant name." : "Expect variable name after type.");
+        }
+        std::vector<Token> names = {advance()};
+        ExprPtr initializer = nullptr;
+        if (match({TokenType::EQUAL})) {
+            while (check(TokenType::IDENTIFIER) && checkNext(TokenType::EQUAL)) {
+                names.push_back(advance());
+                advance();
+            }
+            initializer = expression();
+        } else if (isConst) {
+            throw error(peek(), "Constant declaration must have an initializer.");
+        }
+        // the last name takes the value; each name before it copies the next
+        for (size_t i = names.size(); i-- > 0;) {
+            ExprPtr value = i + 1 == names.size() ? std::move(initializer)
+                                                  : place(std::make_unique<IdentifierExpr>(names[i + 1]), names[i + 1]);
+            made.push_back(place(std::make_unique<VarDeclStmt>(isConst, type, names[i].lexeme, std::move(value)), names[i]));
+        }
+    } while (match({TokenType::COMMA}));
+
+    consume(TokenType::SEMICOLON, isConst ? "Expect ';' after constant declaration." : "Expect ';' after variable declaration.");
+    StmtPtr first = std::move(made.front());
+    for (size_t i = 1; i < made.size(); ++i) moreDeclarations.push_back(std::move(made[i]));
+    return first;
 }
 
 StmtPtr Parser::constDeclaration() {
@@ -236,15 +263,7 @@ StmtPtr Parser::constDeclaration() {
     TypeNode type = parseType();
     consume(TokenType::R_BRACKET, "Expect ']' after constant type.");
 
-    std::string name = consume(TokenType::IDENTIFIER, "Expect constant name.").lexeme;
-
-    if (!match({TokenType::EQUAL})) {
-        throw error(peek(), "Constant declaration must have an initializer.");
-    }
-    ExprPtr initializer = expression();
-
-    consume(TokenType::SEMICOLON, "Expect ';' after constant declaration.");
-    return std::make_unique<VarDeclStmt>(true, std::move(type), std::move(name), std::move(initializer));
+    return declarators(true, type);
 }
 
 // func[Int !! NumberError, Str]: what the function may throw
@@ -331,7 +350,9 @@ StmtPtr Parser::classDeclaration() {
                 else error(annotations.front(), "Annotations like @override go before methods");
             }
             members.push_back(place(std::move(member), start));
+            takeMoreDeclarations(members);
         } catch (const ParseError&) {
+            moreDeclarations.clear();
             synchronize();
         }
     }
@@ -434,7 +455,8 @@ bool Parser::isImportAhead() const {
         if (peekAt(i).type == TokenType::COMMA) { ++i; continue; }
         break;
     }
-    return peekAt(i).type == TokenType::R_BRACE && peekAt(i + 1).type == TokenType::FROM;
+    // `from` is an ordinary name now; only this old form is recognised (and reported)
+    return peekAt(i).type == TokenType::R_BRACE && peekAt(i + 1).type == TokenType::IDENTIFIER && peekAt(i + 1).lexeme == "from";
 }
 
 // $("a.b", "c")  /  $("math")
@@ -502,7 +524,8 @@ StmtPtr Parser::importStatement() {
     if (check(TokenType::L_BRACE)) {
         Token start = peek();
         names = parseImportNames();
-        consume(TokenType::FROM, "Expect 'from' after imported names.");
+        if (!(check(TokenType::IDENTIFIER) && peek().lexeme == "from")) throw error(peek(), "Expect 'from' after imported names.");
+        advance();
         std::vector<ModuleSpec> modules = parseModuleSpecs();
         match({TokenType::SEMICOLON});
         std::string list;
@@ -553,6 +576,7 @@ StmtPtr Parser::blockStatement() {
     while (!check(TokenType::R_BRACE) && !isAtEnd()) {
         StmtPtr stmt = declaration();
         if (stmt) statements.push_back(std::move(stmt));
+        takeMoreDeclarations(statements);
     }
     consume(TokenType::R_BRACE, "Expect '}' after block.");
     return place(std::make_unique<BlockStmt>(std::move(statements)), open);

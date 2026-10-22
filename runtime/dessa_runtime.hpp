@@ -186,7 +186,7 @@ private:
     std::vector<std::pair<K, V>> entries;
     std::unordered_map<K, size_t> index;
 };
-template <class T> using Ref = std::shared_ptr<T>;
+template <class T> class Ref;
 template <class T> using Opt = std::optional<T>;
 template <class F> using Fn = std::function<F>;
 
@@ -194,6 +194,7 @@ template <class F> using Fn = std::function<F>;
 struct Nil {
     template <class T> operator std::optional<T>() const { return std::nullopt; }
     template <class T> operator std::shared_ptr<T>() const { return nullptr; }
+    template <class T> operator Ref<T>() const { return nullptr; }
     template <class F> operator std::function<F>() const { return nullptr; }
     bool operator==(const Nil&) const { return true; }
     bool operator<(const Nil&) const { return false; }
@@ -202,8 +203,58 @@ inline constexpr Nil nil{};
 
 struct Obj;   // any value (see "Obj" below)
 
+// Small objects come from a pool of reused blocks (up to 512 bytes, in steps
+// of 16). Programs make and drop many small objects; the pool is much faster
+// than asking the system each time. Dessa programs run on one thread, so the
+// pool needs no locking.
+namespace pool {
+inline constexpr std::size_t kStep = 16, kMax = 512, kChunk = 64 * 1024;
+struct Block { Block* next; };
+inline Block* free_blocks[kMax / kStep + 1] = {};
+inline char* chunk = nullptr;
+inline std::size_t chunk_left = 0;
+
+inline void* take(std::size_t size) {
+    if (size > kMax) return ::operator new(size);
+    const std::size_t sizeClass = size == 0 ? 1 : (size + kStep - 1) / kStep;
+    if (Block* block = free_blocks[sizeClass]) {
+        free_blocks[sizeClass] = block->next;
+        return block;
+    }
+    const std::size_t bytes = sizeClass * kStep;
+    if (chunk_left < bytes) {
+        chunk = static_cast<char*>(::operator new(kChunk));
+        chunk_left = kChunk;
+    }
+    void* memory = chunk;
+    chunk += bytes;
+    chunk_left -= bytes;
+    return memory;
+}
+
+inline void give(void* memory, std::size_t size) {
+    if (size > kMax) {
+        ::operator delete(memory);
+        return;
+    }
+    const std::size_t sizeClass = size == 0 ? 1 : (size + kStep - 1) / kStep;
+    auto* block = static_cast<Block*>(memory);
+    block->next = free_blocks[sizeClass];
+    free_blocks[sizeClass] = block;
+}
+} // namespace pool
+
 // Base of every Dessa class and interface.
-struct Object : std::enable_shared_from_this<Object> {
+struct Object {
+    // How many Refs point here (one thread only, so a plain count)
+    mutable long ds_refs = 0;
+
+    Object() = default;
+    Object(const Object&) {}
+    Object& operator=(const Object&) { return *this; }
+    static void* operator new(std::size_t size) { return pool::take(size); }
+    static void operator delete(void* memory, std::size_t size) { pool::give(memory, size); }
+
     virtual ~Object() = default;
     virtual Str ds_str() const { return "<" + ds_class() + ">"; }
     virtual Str ds_class() const { return "Object"; }
@@ -214,11 +265,86 @@ struct Object : std::enable_shared_from_this<Object> {
     virtual bool ds_equals(const Object& other) const { return this == &other; }
 };
 
+// A class instance: a counted pointer to an Object. The object is deleted
+// when the last Ref to it goes away (like std::shared_ptr, but the count lives
+// in the object and isn't atomic, which makes copies much cheaper).
+template <class T>
+class Ref {
+public:
+    using element_type = T;
+
+    Ref() noexcept = default;
+    Ref(std::nullptr_t) noexcept {}
+    explicit Ref(T* object) noexcept : p(object) { retain(p); }
+    Ref(const Ref& other) noexcept : p(other.p) { retain(p); }
+    Ref(Ref&& other) noexcept : p(other.p) { other.p = nullptr; }
+    template <class U, class = std::enable_if_t<std::is_convertible_v<U*, T*>>>
+    Ref(const Ref<U>& other) noexcept : p(other.get()) { retain(p); }
+    template <class U, class = std::enable_if_t<std::is_convertible_v<U*, T*>>>
+    Ref(Ref<U>&& other) noexcept : p(other.get()) { other.forget(); }
+    ~Ref() { release(p); }
+
+    Ref& operator=(const Ref& other) noexcept {
+        T* old = p;
+        p = other.p;
+        retain(p);
+        release(old);
+        return *this;
+    }
+    Ref& operator=(Ref&& other) noexcept {
+        if (this != &other) {
+            T* old = p;
+            p = other.p;
+            other.p = nullptr;
+            release(old);
+        }
+        return *this;
+    }
+    Ref& operator=(std::nullptr_t) noexcept {
+        release(p);
+        p = nullptr;
+        return *this;
+    }
+
+    T* get() const noexcept { return p; }
+    T* operator->() const noexcept { return p; }
+    T& operator*() const noexcept { return *p; }
+    explicit operator bool() const noexcept { return p != nullptr; }
+    long use_count() const noexcept { return p ? static_cast<const Object*>(p)->ds_refs : 0; }
+
+    // Moved-from by a Ref<U> constructor: the count went along with it
+    void forget() noexcept { p = nullptr; }
+
+private:
+    T* p = nullptr;
+
+    static void retain(T* object) noexcept {
+        if (object) ++static_cast<const Object*>(object)->ds_refs;
+    }
+    static void release(T* object) noexcept {
+        if (object && --static_cast<const Object*>(object)->ds_refs == 0) delete static_cast<const Object*>(object);
+    }
+};
+
+template <class A, class B> bool operator==(const Ref<A>& a, const Ref<B>& b) noexcept {
+    return static_cast<const void*>(a.get()) == static_cast<const void*>(b.get());
+}
+template <class A> bool operator==(const Ref<A>& a, std::nullptr_t) noexcept { return !a; }
+template <class A, class B> bool operator<(const Ref<A>& a, const Ref<B>& b) noexcept {
+    return std::less<const void*>()(a.get(), b.get());
+}
+
+// A Ref<U> seen as a Ref<T> (empty if the object isn't a T)
+template <class T, class U>
+Ref<T> ref_cast(const Ref<U>& value) {
+    return Ref<T>(dynamic_cast<T*>(value.get()));
+}
+
 // `new T(args)`: the object is owned by a Ref *before* its init runs, so
 // init can pass `this` around.
 template <class T, class Init>
 Ref<T> create(Init&& init) {
-    auto object = std::make_shared<T>();
+    Ref<T> object(new T());
     init(*object);
     return object;
 }
@@ -226,7 +352,7 @@ Ref<T> create(Init&& init) {
 // `this` used as a value inside a method.
 template <class T>
 Ref<T> self_ref(T* self) {
-    return std::dynamic_pointer_cast<T>(self->shared_from_this());
+    return Ref<T>(self);
 }
 
 // ============================================================
@@ -269,7 +395,7 @@ inline Str trace_location() {
 template <class T> struct is_optional : std::false_type {};
 template <class T> struct is_optional<std::optional<T>> : std::true_type {};
 template <class T> struct is_ref : std::false_type {};
-template <class T> struct is_ref<std::shared_ptr<T>> : std::true_type {};
+template <class T> struct is_ref<Ref<T>> : std::true_type {};
 template <class T> struct is_variant : std::false_type {};
 template <class... T> struct is_variant<std::variant<T...>> : std::true_type {};
 template <class T> struct is_list : std::false_type {};
@@ -388,7 +514,7 @@ Ref<T> as(const V& value) {
     } else if constexpr (is_variant<U>::value) {
         return std::visit([](const auto& v) -> Ref<T> { return as<T>(v); }, value);
     } else if constexpr (is_ref<U>::value) {
-        auto cast = std::dynamic_pointer_cast<T>(value);
+        auto cast = ref_cast<T>(value);
         if (!cast) fail("Value is not the expected class (" + (value ? value->ds_class() : Str("Nil")) + ")");
         return cast;
     } else {
@@ -490,6 +616,11 @@ auto div(A a, B b) -> std::enable_if_t<std::is_arithmetic_v<A> && std::is_arithm
 // a % b follows the mathematical (Euclidean) rule: the result is never
 // negative, 0 <= a % b < |b|.  -7 % 3 == 2,  7 % -3 == 1.
 inline Int mod(Int a, Int b) {
+    // The usual case, both positive: unsigned division is the same and
+    // shorter (and with a constant b, a multiply instead of a divide)
+    if (__builtin_expect(a >= 0 && b > 0, 1)) {
+        return static_cast<Int>(static_cast<unsigned long long>(a) % static_cast<unsigned long long>(b));
+    }
     if (b == 0) fail("Modulo by zero");
     Int r = a % b;
     return r < 0 ? r + (b < 0 ? -b : b) : r;
@@ -522,7 +653,7 @@ inline Int pow(Int base, Int exponent) {
 }
 
 // Int + - * that stop with an error instead of silently wrapping around.
-[[noreturn]] inline void overflow(Int a, const char* op, Int b) {
+[[noreturn]] [[gnu::noinline]] [[gnu::cold]] inline void overflow(Int a, const char* op, Int b) {
     fail("Int overflow: " + std::to_string(a) + " " + op + " " + std::to_string(b) +
          " doesn't fit in an Int (-9223372036854775808 to 9223372036854775807); use Big from $(\"math\") for bigger numbers");
 }
@@ -546,14 +677,16 @@ auto pow(A a, B b) -> std::enable_if_t<std::is_arithmetic_v<A> && std::is_arithm
 template <class T> Str to_str(const T& value);
 template <class T> Str repr(const T& value);
 
-inline size_t index_of(Int index, size_t size, const char* what) {
-    Int n = static_cast<Int>(size);
+[[noreturn]] [[gnu::noinline]] [[gnu::cold]] inline void index_fail(Int index, size_t size, const char* what) {
     if (index < 0) {
         fail("Negative index " + std::to_string(index) + " is not allowed (indexes start at 0)");
     }
-    if (index >= n) {
-        fail("Index " + std::to_string(index) + " is out of range for " + what + " of length " + std::to_string(n));
-    }
+    fail("Index " + std::to_string(index) + " is out of range for " + what + " of length " + std::to_string(size));
+}
+
+inline size_t index_of(Int index, size_t size, const char* what) {
+    // one comparison: a negative index is a huge unsigned number
+    if (__builtin_expect(static_cast<unsigned long long>(index) >= size, 0)) index_fail(index, size, what);
     return static_cast<size_t>(index);
 }
 
@@ -919,7 +1052,7 @@ struct Obj {
             return as<typename T::element_type>();
         } else if constexpr (std::is_base_of_v<Object, T>) {
             if (!holds<T>()) fail("Value is not the expected class (" + type() + ")");
-            return std::dynamic_pointer_cast<T>(*box->object());
+            return ref_cast<T>(*box->object());
         } else {
             if (!holds<T>()) fail("Value is " + type() + ", not " + obj_type_name<T>());
             return *static_cast<const T*>(box->get());
@@ -956,7 +1089,7 @@ private:
                 if constexpr (!std::is_same_v<bare<decltype(v)>, Nil>) set(v);
             }, value);
         } else if constexpr (is_ref<U>::value) {
-            if (value) box = std::make_shared<ObjBoxOf<Ref<Object>>>(std::static_pointer_cast<Object>(value));
+            if (value) box = std::make_shared<ObjBoxOf<Ref<Object>>>(Ref<Object>(value));
         } else if constexpr (is_fn<U>::value) {
             if (value) box = std::make_shared<ObjBoxOf<U>>(value);
         } else {
@@ -1080,7 +1213,7 @@ struct AnonObject final : Object {
 };
 
 inline Obj anon(std::initializer_list<std::pair<Str, Obj>> fields) {
-    auto object = std::make_shared<AnonObject>();
+    Ref<AnonObject> object(new AnonObject());
     for (const auto& [name, value] : fields) object->fields.put(name, value);
     return Obj(Ref<Object>(object));
 }
@@ -1457,6 +1590,11 @@ inline Int m_code(Chr c) { return static_cast<Int>(c); }
 
 // ---- numbers ----
 template <class T, std::enable_if_t<std::is_arithmetic_v<T>, int> = 0> Int m_toInt(T v) { return static_cast<Int>(v); }
+// '7'.toInt() is the digit's value (its code is .code())
+inline Int m_toInt(Chr c) {
+    if (c < U'0' || c > U'9') fail("Cannot convert '" + utf8_encode(c) + "' to Int: only the digits 0 to 9 have a value");
+    return static_cast<Int>(c - U'0');
+}
 template <class T, std::enable_if_t<std::is_arithmetic_v<T>, int> = 0> Dbl m_toDbl(T v) { return static_cast<Dbl>(v); }
 template <class T, std::enable_if_t<std::is_arithmetic_v<T>, int> = 0> Flt m_toFlt(T v) { return static_cast<Flt>(v); }
 inline Chr m_toChr(Int v) { return to_chr(v); }
@@ -1671,4 +1809,8 @@ struct std::hash<dessa::Obj> {
         if (o.box && o.box->numeric()) return std::hash<double>()(o.box->number());   // 1 == 1.0
         return std::hash<std::string>()(o.type() + ":" + o.repr());
     }
+};
+template <class T>
+struct std::hash<dessa::Ref<T>> {
+    size_t operator()(const dessa::Ref<T>& r) const { return std::hash<const void*>()(r.get()); }
 };

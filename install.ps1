@@ -7,7 +7,7 @@
   It checks for a C++ compiler and CMake (and offers to install them with
   winget), builds dessa and riv, copies everything to an install folder,
   puts dessa and riv on your PATH and lets riv use the bundled packages
-  (sql, request, json, phl, ashwee, ...) without downloading them.
+  (sql, request, json, ashwee, ...) without downloading them.
 
   Options:
       -Yes          accept every default, ask nothing
@@ -193,7 +193,7 @@ $mingwFolders = @("C:\mingw64\bin", "C:\msys64\ucrt64\bin", "C:\msys64\mingw64\b
 
 $gxx = Find "g++" $mingwFolders
 if (-not $gxx) {
-    Warn "No C++ compiler (g++) found. Dessa turns your programs into C++ and needs one to build them."
+    Warn "No C++ compiler (g++) found. Dessa turns your programs into C and C++ and needs it to build them."
     if ((Get-Command winget -ErrorAction SilentlyContinue) -and (Ask "Install MinGW g++ (WinLibs) with winget now?")) {
         winget install --exact --id BrechtSanders.WinLibs.POSIX.UCRT --accept-source-agreements --accept-package-agreements
         RefreshPath
@@ -203,6 +203,18 @@ if (-not $gxx) {
 }
 $gxxBin = Split-Path $gxx
 Ok "C++ compiler: $gxx"
+
+# clang (LLVM MinGW) builds the C that Dessa makes; without it gcc does
+$clang = Find "clang"
+if (-not $clang) {
+    Say "  Dessa builds programs through C, with clang when it's installed (gcc otherwise)."
+    if ((Get-Command winget -ErrorAction SilentlyContinue) -and (Ask "Install clang (LLVM MinGW) with winget now?")) {
+        winget install --exact --id MartinStorsjo.LLVM-MinGW.UCRT --accept-source-agreements --accept-package-agreements
+        RefreshPath
+        $clang = Find "clang"
+    }
+}
+if ($clang) { Ok "C compiler: $clang" } else { Ok "C compiler: gcc (next to g++)" }
 
 $cmake = if ($Prebuilt) { "(not needed)" } else { Find "cmake" @("C:\Program Files\CMake\bin") }
 if (-not $cmake) {
@@ -258,6 +270,9 @@ foreach ($folder in @("runtime", "include")) {
 $packages = Join-Path $Prefix "packages"
 if (Test-Path $packages) { Remove-Item $packages -Recurse -Force }
 Copy-Item (Join-Path $Source "tools\riv\packages") $packages -Recurse
+# phl is left out for now (its syntax is being revised)
+$phl = Join-Path $packages "phl"
+if (Test-Path $phl) { Remove-Item $phl -Recurse -Force }
 if (Test-Path (Join-Path $Source "web\dessa.js")) {
     # Dessa in the browser: web\dessa.js and an example page
     $webTarget = Join-Path $Prefix "web"

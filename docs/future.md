@@ -25,11 +25,12 @@ own, so the 9,000 lines would grow by several times and gain memory bugs. The
 better long-term rewrite is the one already started: the compiler in Dessa
 itself (`selfhost/PLAN.md`).
 
-What *could* help is the opposite direction: **generating C instead of C++**.
-C compiles many times faster than template-heavy C++. But the runtime (lists,
-maps, text, Obj, classes) would have to be rewritten in C, which is a large
-job. Worth it only if compile time is still a problem after the cheaper steps
-below.
+**Done (October 2026):** Dessa now **generates C instead of C++** by default
+(runtime/dessa_rt.c, src/codegen/cgen*.cpp), falling back to C++ for what the
+C backend doesn't do yet. Still to move to C: unions other than `T | Nil`,
+`Obj` and anonymous objects, lambdas that call themselves, a builtin passed as
+a function value, `?.` on Str/List/Map, and libraries that call back into
+Dessa (ashwee events).
 
 ## Making `dessa run` and `dessa build` faster
 
@@ -41,28 +42,37 @@ In order of value for the effort:
 2. (part of 1)
 3. **Split the runtime**: Obj, Map, text helpers and conversions in separate
    headers, included only when a program uses them (the analyser knows).
-4. **Use a faster C++ compiler when there is one** (clang is usually faster
-   than g++ on templates); keep g++ as the default.
+4. **clang (done, October 2026):** the C that Dessa makes is compiled with
+   clang when it's installed (the Windows installer offers LLVM MinGW).
+   Measured on the development PC: clang compiles a little faster than gcc,
+   and gcc's programs run about 10% faster (`DESSA_CC=gcc` to use it). The
+   C++ fallback and the library bridges stay on g++ (its standard library has
+   the time zones Dessa needs).
 5. **Link without `-static` while developing** (`dessa run`), static only for
    `dessa build`.
 
 ## Making programs faster
 
-From the benchmark (`tests/bench/RESULTS.md`), Dessa native is 1.8 times C++
-overall. Where the difference comes from:
+The benchmark (`tests/bench/RESULTS.md`, 2026-10-23): Dessa native takes 4.9 s,
+Java 5.2 s, the same program in C++ 5.3 s; Dessa compiled to JavaScript 31 s.
 
-- **Objects** (891 ms against 34 ms in Java): every object is a
-  `std::shared_ptr` with an atomic reference count. A non-atomic count (Dessa
-  programs are single-threaded) or a small object pool would cut most of it.
-- **Lists** (sieve 237 ms against 42 ms): every `list<i>` is bounds-checked.
-  Keep the check, but skip it inside `for (i = 0; i < list.length(); i++)`
+Done in October 2026:
+
+- **Objects**: counted with a plain (not atomic) count, and small objects come
+  from a pool instead of the system allocator (891 ms became about 50 ms).
+- **`%`**: positive numbers take the fast unsigned path.
+- **Errors**: the code that builds error messages is kept out of the fast path.
+- **JavaScript**: Int variables inside functions are plain numbers while they
+  fit, BigInts beyond (the whole benchmark: 13.7 times C++ became 5.9).
+
+Still possible:
+
+- **Lists of Bul** (sieve): C++'s `std::vector<bool>` packs 8 values in a byte
+  and fits in the cache better; the C runtime uses a byte each.
+- **List bounds checks** could be skipped in `for (i = 0; i < list.length(); i++)`
   loops where the compiler can prove `i` is in range.
-- **Int arithmetic**: every `+ - *` checks for overflow. The checks use the
-  CPU's overflow flag already; the remaining cost is small and the safety is
-  worth it.
-- **Compiled to JavaScript** (13.7 times C++): Int is a BigInt so it stays
-  exact to 64 bits. A faster path would use plain numbers when the compiler
-  can tell a value stays small (loop counters, lengths, indexes).
+- **JavaScript**: objects and calls still turn small Ints back into BigInts
+  when they pass them on.
 
 ## Bigger language ideas (to decide)
 

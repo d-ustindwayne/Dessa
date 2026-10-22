@@ -1075,6 +1075,7 @@ std::optional<Symbol> Analyser::builtinMethod(const SemanticType& receiver, cons
         if (name == "isDigit" || name == "isAlpha" || name == "isSpace" || name == "isUpper" || name == "isLower") return make({}, Bul);
         if (name == "upper" || name == "lower") return make({}, Chr);
         if (name == "code") return make({}, Int);
+        if (name == "toInt") return make({}, Int);   // '7'.toInt() is 7
         if (name == "toStr") return make({}, Str);
         return std::nullopt;
     }
@@ -1089,6 +1090,7 @@ std::optional<Symbol> Analyser::builtinMethod(const SemanticType& receiver, cons
     }
     if (receiver.is(K::Bul)) {
         if (name == "toStr") return make({}, Str);
+        if (name == "toInt") return make({}, Int);   // 1 or 0
         return std::nullopt;
     }
     // Every class: how it prints, even without its own toStr

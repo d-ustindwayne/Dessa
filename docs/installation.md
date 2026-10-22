@@ -1,7 +1,9 @@
 # Installing Dessa
 
-Dessa turns your programs into C++, so it needs a C++ compiler on the computer
-(g++ 13 or newer, or clang). The installers check for one and tell you what to
+Dessa turns your programs into C (and some into C++), so it needs gcc and g++
+on the computer (13 or newer; they come together, e.g. MinGW on Windows). When
+clang is installed too, Dessa uses it for the C (on Windows, the LLVM MinGW
+kind; the installer offers it). The installers check for one and tell you what to
 do if it's missing.
 
 There are two ways to install:

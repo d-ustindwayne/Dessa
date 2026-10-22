@@ -880,7 +880,7 @@ void Codegen::tryStmt(const TryStmt* s) {
         for (size_t i = 0; i < classArms.size(); ++i) {
             const CatchClause* arm = classArms[i];
             const std::string name = mangle(*arm->param);
-            line(std::string(i == 0 ? "if" : "} else if") + " (auto " + name + " = std::dynamic_pointer_cast<" +
+            line(std::string(i == 0 ? "if" : "} else if") + " (auto " + name + " = dessa::ref_cast<" +
                  typeName(*analyser.catchTypeOf(arm)) + ">(ds_thrown.value)) {");
             body(arm);
         }

@@ -437,6 +437,46 @@ $.mul = (a, b) => check(a * b, a, "*", b);
 $.neg = (a) => a === MIN ? overflow(0n, "-", a) : -a;
 $.shl = (a, b) => BigInt.asIntN(64, a << b);
 
+// ---- Small Ints ----
+// Int locals of a function hold a plain number while the value fits exactly
+// (up to 2^53); these work on such values (or BigInts) and switch to BigInt
+// when a result gets too big. Anything leaving the function is made a BigInt
+// again ($.big), so the rest of the runtime only ever sees BigInts.
+const SAFE = 9007199254740991;
+$.big = (v) => (typeof v === "number" ? BigInt(v) : v);
+$.istr = (v) => String(v);   // an Int's text: the same digits for a number or a BigInt
+$.small = (v) => (typeof v === "bigint" && v >= -9007199254740991n && v <= 9007199254740991n ? Number(v) : v);
+$.hadd = (a, b) => {
+    if (typeof a === "number" && typeof b === "number") { const r = a + b; if (r >= -SAFE && r <= SAFE) return r; }
+    return $.add($.big(a), $.big(b));
+};
+$.hsub = (a, b) => {
+    if (typeof a === "number" && typeof b === "number") { const r = a - b; if (r >= -SAFE && r <= SAFE) return r; }
+    return $.sub($.big(a), $.big(b));
+};
+$.hmul = (a, b) => {
+    if (typeof a === "number" && typeof b === "number") { const r = a * b; if (r >= -SAFE && r <= SAFE) return r + 0; }
+    return $.mul($.big(a), $.big(b));
+};
+$.hmod = (a, b) => {
+    if (typeof a === "number" && typeof b === "number") {
+        if (b === 0) $.fail("Modulo by zero");
+        const r = a % b;
+        return r < 0 ? r + Math.abs(b) : r + 0;
+    }
+    return $.mod($.big(a), $.big(b));
+};
+$.hdiv = (a, b) => {
+    if (typeof a === "number" && typeof b === "number") {
+        if (b === 0) $.fail("Division by zero");
+        return a / b;
+    }
+    return $.div($.big(a), $.big(b));
+};
+$.hneg = (a) => (typeof a === "number" ? 0 - a : $.neg(a));
+$.hinc = (a) => (typeof a === "number" && a < SAFE ? a + 1 : $.add($.big(a), 1n));
+$.hdec = (a) => (typeof a === "number" && a > -SAFE ? a - 1 : $.sub($.big(a), 1n));
+
 // Int / Int is a real division (7 / 2 == 3.5)
 $.div = (a, b) => {
     if (typeof a === "bigint" && typeof b === "bigint") {
@@ -480,6 +520,7 @@ $.trunc = (n) => {
 // ============================================================
 
 const index = (i, size, what) => {
+    if (typeof i === "number" && i >= 0 && i < size) return i;   // a small Int
     if (i < 0n) $.fail(`Negative index ${i} is not allowed (indexes start at 0)`);
     if (i >= BigInt(size)) $.fail(`Index ${i} is out of range for ${what} of length ${size}`);
     return Number(i);
@@ -842,6 +883,10 @@ $.m_toInt = (v) => {
         const t = trimText(v);
         if (/^-?\d+$/.test(t)) { const r = BigInt(t); if (r >= MIN && r <= MAX) return r; }
         $.fail(`Cannot convert "${v}" to Int`);
+    }
+    if (v instanceof Chr) {
+        if (v.code < 48 || v.code > 57) $.fail(`Cannot convert '${String.fromCodePoint(v.code)}' to Int: only the digits 0 to 9 have a value`);
+        return BigInt(v.code - 48);
     }
     return $.toInt(v);
 };

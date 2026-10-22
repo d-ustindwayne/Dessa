@@ -25,6 +25,9 @@ bool compile(const std::string& cpp, const std::string& outputExe, const char* a
 bool compileCached(const std::string& cpp, const char* argv0, std::string& exe, std::string& error,
                    const std::vector<std::string>& libraries = {});
 
+// Generated C (from CCodegen), not C++
+bool isCSource(const std::string& source);
+
 // Runs an executable, forwarding stdio, and returns its exit code.
 int run(const std::string& exe, const std::vector<std::string>& args);
 

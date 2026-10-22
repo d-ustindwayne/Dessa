@@ -1,0 +1,12 @@
+9007199254741992 992 true
+9223372030926249001 362645239
+2 1 7 -3.5
+0 0
+Int overflow: 9223372036854775800 + 100 doesn't fit in an Int (-9223372036854775808 to 9223372036854775807); use Big from $("math") for bigger numbers
+Modulo by zero
+20 30
+two true ?
+3
+27 true true true
+30 30! 30 7.5
+0 1

@@ -19,6 +19,9 @@ set(DESSA_FRONTEND
     src/analyser/scope.cpp
     src/analyser/semtype.cpp
     src/codegen/codegen.cpp
+    src/codegen/cgen.cpp
+    src/codegen/cgen_expr.cpp
+    src/codegen/cglue.cpp
     src/codegen/jsgen.cpp
     src/driver/loader.cpp
 )
@@ -45,7 +48,6 @@ if(EMSCRIPTEN)
         "SHELL:--embed-file ${S}/include@/dessa/include"
         "SHELL:--embed-file ${S}/runtime/dessa_runtime.js@/dessa/runtime/dessa_runtime.js"
         "SHELL:--embed-file ${P}/json@/dessa/packages/json"
-        "SHELL:--embed-file ${P}/phl@/dessa/packages/phl"
         "SHELL:--embed-file ${P}/colors@/dessa/packages/colors"
         "SHELL:--embed-file ${P}/textfx@/dessa/packages/textfx"
         "SHELL:--embed-file ${P}/numbers@/dessa/packages/numbers"

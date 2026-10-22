@@ -1,0 +1,33 @@
+// Several variables in one declaration, and Bul / Chr .toInt()
+
+var[Int] x = 10, y = 20;
+var[Int] a = b = c = 2;      // three variables, all 2
+print(x, y, a, b, c);
+b = 5;                       // each is its own variable
+print(a, b, c);
+
+var[Str] s, t = "hi";        // s keeps the default ""
+print(s.length(), t);
+
+const[Int] P = 1, Q = 2;
+print(P + Q);
+
+class Point {
+    var[Int] px = 1, py = 2;
+}
+var[Point] p = new Point();
+print(p.px, p.py);
+
+func[Emp] f() {
+    var[Dbl] u = v = 1.5, w = 2.5;
+    print(u, v, w);
+}
+f();
+
+print(true.toInt(), false.toInt());
+print('7'.toInt(), '0'.toInt(), '7'.code());
+try {
+    print('x'.toInt());
+} catch (e[Str]) {
+    print(e);
+}

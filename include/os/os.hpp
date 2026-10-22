@@ -82,7 +82,13 @@ inline Opt<Str> getEnv(const Str& name) {
 // Runs a shell command and returns its exit code.
 inline Int run(const Str& command) {
     std::cout.flush();
+    std::fflush(stdout);
+#ifdef _WIN32
+    // cmd.exe drops the first and last quote of the line: "a b.exe" "x" would break
+    return std::system(("\"" + command + "\"").c_str());
+#else
     return std::system(command.c_str());
+#endif
 }
 
 // ---- helpers for class File in os.dm: open files by number ----

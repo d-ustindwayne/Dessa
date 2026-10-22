@@ -1,0 +1,46 @@
+// Int locals near the edges (the JavaScript output keeps small ones as numbers)
+
+func[Emp] edges() {
+    var[Int] a = 9007199254740990;
+    a++;
+    a++;                      // past 2^53: still exact
+    a += 1000;
+    print(a, a - 9007199254741000, a * 1 == 9007199254741992);
+    var[Int] b = 3037000499;
+    var[Int] sq = b * b;      // 9223372030926249001: near the top of Int
+    print(sq, sq % 1000000007);
+    var[Int] m = -7;
+    print(m % 3, 7 % -3, -m, m / 2);
+    var[Int] z = 0;
+    print(-z, z * -1);
+    var[Int] big = 9223372036854775800;
+    try {
+        big += 100;
+    } catch (e[Str]) {
+        print(e);
+    }
+    var[Int] d = 10;
+    try {
+        print(d % z);
+    } catch (e[Str]) {
+        print(e);
+    }
+    var[Int<>] xs = [10, 20, 30];
+    var[Int] i = 1;
+    print(xs<i>, xs<i + 1>);
+    var[Map[Int, Str]] names = {1: "one", 2: "two"};
+    var[Int] k = 2;
+    print(names<k>, names.has(k - 1), names.getOr(k + 5, "?"));
+    var[Int] x = 7;
+    x /= 2;
+    print(x);
+    x ^= 3;
+    print(x, x == 27, x != 28, x < 9007199254740993);
+    var[Int] total = 0;
+    for (var[Int] j = 0; j < 5; j++) total += j * j;
+    print(total, $"{total}!", Str(total), Dbl(total) / 4);
+    var[Int] c = 0;
+    var[Int] old = c++;
+    print(old, c);
+}
+edges();

@@ -165,13 +165,11 @@ print(data.get("name").asStr(), data.get("tags").at(1).asInt());
 print(stringify(data, 2));      // indented
 ```
 
-### phl
+### phl (left out for now)
 
-> **Being revised.** The PHL syntax is changing, so this package is frozen
-> until the new syntax is final. It reads and writes the old syntax.
-
-PHL is a readable data format (a separate project). `parsePhl(text)` gives a
-`Json`, and `toPhl(json)` writes PHL.
+PHL's syntax is being revised, so the `phl` package isn't in the index and
+doesn't come with Dessa until the new syntax is final. Its source stays in
+`tools/riv/packages/phl` (frozen, old syntax).
 
 ### sql
 

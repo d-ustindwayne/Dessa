@@ -80,6 +80,7 @@ as native programs; `.dhtml` pages are served locally (`dessa run page.dhtml`).
 |---|---|---|
 | `dessa.compilerPath` | `dessa` | the `dessa` executable, if it isn't on PATH |
 | `dessa.checkOnType` | `true` | check while typing (otherwise on open and save) |
+| `dessa.autoBrackets` | `true` | `$` at the start of a line adds `()`; a space after `var`, `const` or `func` becomes `[]` |
 | `dessa.unusedImports` | `dim` | imports the file never uses: `dim` (faded), `warning`, or `off` |
 | `dessa.packageFolders` | `[]` | extra folders with riv packages for `$("lib")` imports (like `DESSA_PACKAGES`) |
 

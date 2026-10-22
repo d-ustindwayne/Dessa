@@ -36,14 +36,6 @@
         "1.1.0"
       ]
     },
-    "phl": {
-      "description": "Read and write PHL (old syntax; being revised)",
-      "versions": [
-        "1.0.0",
-        "1.1.0",
-        "1.2.0"
-      ]
-    },
     "request": {
       "description": "HTTP requests (get, post, ...) through curl",
       "versions": [

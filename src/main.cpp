@@ -10,6 +10,7 @@
 //   dessa ast     <file.ds>                 debug: top-level statements
 #include <algorithm>
 #include <cstdlib>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -24,6 +25,7 @@
 
 #include "analyser.hpp"
 #include "builtins.hpp"
+#include "cgen.hpp"
 #include "codegen.hpp"
 #include "jsgen.hpp"
 #include "web.hpp"
@@ -38,7 +40,7 @@ namespace fs = std::filesystem;
 
 namespace {
 
-constexpr const char* kVersion = "0.1.5";
+constexpr const char* kVersion = "0.2.0";
 const char* g_argv0 = nullptr; // to find runtime/ and include/ next to the compiler
 
 void printUsage() {
@@ -46,8 +48,9 @@ void printUsage() {
         "Dessa " << kVersion << "\n"
         "Usage:\n"
         "  dessa check   <file.ds> [--json] [--stdin]   type-check and report problems\n"
-        "  dessa emit    <file.ds> [-o out.cpp]         show the generated C++\n"
+        "  dessa emit    <file.ds> [-o out.c]           show the generated C (C++ with --cpp)\n"
         "  dessa build   <file.ds> [-o program]         compile to an executable (--release: fully optimized, slower to build)\n"
+        "                                               programs go through C; --cpp uses C++ instead\n"
         "  dessa run     <file.ds> [-- args...]         compile and run\n"
         "  dessa symbols <file.ds> [--stdin]            symbol table as JSON (for editors)\n"
         "  dessa serve [folder] [--port N]              a web server for pages (.dhtml compiled on each request)\n"
@@ -56,7 +59,8 @@ void printUsage() {
         "  dessa tokens  <file.ds>                      debug: print tokens\n"
         "  dessa ast     <file.ds>                      debug: print top-level statements\n"
         "\n"
-        "Environment: DESSA_CXX (C++ compiler, default g++), DESSA_HOME (folder containing runtime/)\n";
+        "Environment: DESSA_CC (C compiler, default gcc), DESSA_CXX (C++ compiler, default g++),\n"
+        "             DESSA_HOME (folder containing runtime/), DESSA_VERBOSE=1 (say when a program is built from C++)\n";
 }
 
 std::string severityName(DiagnosticSeverity s) {
@@ -218,6 +222,7 @@ int cmdCheck(const std::string& path, bool asJson, bool fromStdin) {
 // Generated C++ for the program, or "" (with diagnostics printed) on failure.
 // --target native (C++, the default) or js / web (JavaScript for Node or a browser)
 std::string g_target = "native";
+bool g_cpp = false;       // --cpp: build from C++ instead of C
 bool g_release = false;   // dessa build --release: -O2 instead of -O1
 int g_port = 8080;   // dessa serve / dessa run page.dhtml
 bool targetIsJs() { return g_target == "js" || g_target == "web"; }
@@ -283,8 +288,70 @@ std::string generate(Compilation& c, const std::string& path) {
             return "";
         }
     }
+    // C first: it compiles much faster. What the C backend can't translate
+    // yet is built from C++ instead (--target c insists on C).
+    if (!g_cpp) {
+        CCodegen cgen(c.program, c.analyser);
+        std::string reason;
+        std::string source = cgen.generate(reason);
+        if (!source.empty()) return source;
+        if (g_target == "c") {
+            std::cerr << "dessa: this program can't be built from C yet (it uses " << reason << ")\n";
+            return "";
+        }
+        if (const char* verbose = std::getenv("DESSA_VERBOSE"); verbose && *verbose) {
+            std::cerr << "dessa: building from C++ (the C backend doesn't handle " << reason << " yet)\n";
+        }
+    }
     Codegen codegen(c.program, c.analyser);
     return codegen.generate();
+}
+
+// The C didn't compile: a bug in the C backend, never the user's. The
+// program is built from C++ instead, so it still works (the log is kept).
+bool retryAsCpp(Compilation& c, std::string& code, std::string& error) {
+    if (g_target == "c" || !toolchain::isCSource(code) || error.find("internal compiler error") == std::string::npos) return false;
+    if (const char* verbose = std::getenv("DESSA_VERBOSE"); verbose && *verbose) {
+        std::cerr << error << "dessa: building from C++ instead\n";
+    }
+    Codegen codegen(c.program, c.analyser);
+    code = codegen.generate();
+    error.clear();
+    return true;
+}
+
+// riv checks GitHub for a new Dessa once a day and notes what it found in
+// <riv home>/update.txt ("latest 0.1.6"); this says so once a day
+void updateNotice() {
+    if (const char* off = std::getenv("RIV_NO_UPDATE_CHECK"); off && *off) return;
+    std::string home;
+    if (const char* h = std::getenv("RIV_HOME"); h && *h) home = h;
+    else if (const char* p = std::getenv("USERPROFILE"); p && *p) home = std::string(p) + "/.riv";
+    else if (const char* p2 = std::getenv("HOME"); p2 && *p2) home = std::string(p2) + "/.riv";
+    if (home.empty()) return;
+    std::ifstream in(fs::path(home) / "update.txt");
+    std::string line, latest;
+    while (std::getline(in, line)) {
+        if (line.rfind("latest ", 0) == 0) latest = line.substr(7);
+    }
+    while (!latest.empty() && (latest.back() == '\r' || latest.back() == ' ')) latest.pop_back();
+    if (latest.empty()) return;
+    auto parts = [](const std::string& v) {
+        std::vector<long> out;
+        std::stringstream s(v);
+        for (std::string p; std::getline(s, p, '.');) out.push_back(std::atol(p.c_str()));
+        return out;
+    };
+    if (!(parts(kVersion) < parts(latest))) return;
+    // once a day
+    const fs::path shown = fs::path(home) / "update-shown.txt";
+    const long long today = static_cast<long long>(std::time(nullptr) / 86400);
+    std::ifstream shownIn(shown);
+    long long last = -1;
+    shownIn >> last;
+    if (last == today) return;
+    std::ofstream(shown) << today << "\n";
+    std::cerr << "dessa: Dessa " << latest << " is out (you have " << kVersion << "). Update with: riv update\n";
 }
 
 int cmdEmit(const std::string& path, const std::string& output) {
@@ -342,8 +409,10 @@ int cmdBuild(const std::string& path, std::string output, const char* argv0) {
     std::string error;
     std::vector<std::string> libraries(c.analyser.builtinLibrariesUsed().begin(), c.analyser.builtinLibrariesUsed().end());
     if (!toolchain::compile(cpp, output, argv0, error, !g_release, libraries)) {
-        std::cerr << error;
-        return 1;
+        if (!retryAsCpp(c, cpp, error) || !toolchain::compile(cpp, output, argv0, error, !g_release, libraries)) {
+            std::cerr << error;
+            return 1;
+        }
     }
     return 0;
 }
@@ -379,8 +448,10 @@ int cmdRun(const std::string& path, const std::vector<std::string>& programArgs,
     std::string error;
     std::vector<std::string> libraries(c.analyser.builtinLibrariesUsed().begin(), c.analyser.builtinLibrariesUsed().end());
     if (!toolchain::compileCached(cpp, argv0, exe, error, libraries)) {
-        std::cerr << error;
-        return 1;
+        if (!retryAsCpp(c, cpp, error) || !toolchain::compileCached(cpp, argv0, exe, error, libraries)) {
+            std::cerr << error;
+            return 1;
+        }
     }
     return toolchain::run(exe, programArgs);
 }
@@ -836,6 +907,14 @@ int main(int argc, char* argv[]) {
         std::cout << "dessa " << kVersion << "\n";
         return 0;
     }
+    if (args[0] == "home") {
+        // the install folder (riv update installs the new version there)
+        std::string runtime = toolchain::runtimeDir(g_argv0);
+        if (runtime.empty()) return 1;
+        std::cout << fs::path(runtime).parent_path().string() << "\n";
+        return 0;
+    }
+    if (args[0] == "run" || args[0] == "build") updateNotice();
 
     const std::string command = args[0];
     std::string file;
@@ -855,14 +934,16 @@ int main(int argc, char* argv[]) {
             asJson = true;
         } else if (a == "--release") {
             g_release = true;
+        } else if (a == "--cpp") {
+            g_cpp = true;
         } else if (a == "--stdin") {
             fromStdin = true;
         } else if (a == "--at" && i + 1 < args.size()) {
             at = args[++i];
         } else if (a == "--target" && i + 1 < args.size()) {
             g_target = args[++i];
-            if (g_target != "native" && g_target != "js" && g_target != "web") {
-                std::cerr << "dessa: unknown target '" << g_target << "' (use native, js or web)\n";
+            if (g_target != "native" && g_target != "js" && g_target != "web" && g_target != "c") {
+                std::cerr << "dessa: unknown target '" << g_target << "' (use native, c, js or web)\n";
                 return 1;
             }
         } else if (a == "--port" && i + 1 < args.size()) {

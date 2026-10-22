@@ -735,6 +735,69 @@ function projectModules(doc) {
     return [...new Set(found)].sort();
 }
 
+// The names `$("spec") { ... }` can import: a library's, or a file's
+// (without the _private ones and the builtins everyone has)
+async function importableNames(doc, spec, data) {
+    const names = new Map();
+    const add = (s) => {
+        if (s.name.startsWith('_') || names.has(s.name)) return;
+        names.set(s.name, s);
+    };
+    const lib = data && data.libraries ? data.libraries.find((l) => l.name === spec) : null;
+    if (lib) lib.members.forEach(add);
+    let file = null;
+    const imported = data && data.imports ? data.imports.find((i) => i.spec === spec && i.file) : null;
+    if (imported) file = imported.file;
+    if (!file && !lib) {
+        const base = path.join(path.dirname(doc.fileName), ...spec.split('.'));
+        for (const ext of ['.ds', '.dm', '.dx', '.dz', '.dsx', '.dxx', '.dzx', '.dds', '.dss']) {
+            if (fs.existsSync(base + ext)) {
+                file = base + ext;
+                break;
+            }
+        }
+    }
+    if (file) {
+        const result = await runDessa(['symbols', file], undefined, path.dirname(file));
+        try {
+            for (const g of JSON.parse(result.stdout).globals) if (g.kind !== 'builtin') add(g);
+        } catch {
+            // not readable right now: what the library lists is enough
+        }
+    }
+    return [...names.values()];
+}
+
+// $ at the start of a line becomes $(|); a space right after var, const or
+// func becomes [|] (a type goes there). Then suggestions open.
+function autoBrackets(e) {
+    if (!vscode.workspace.getConfiguration('dessa').get('autoBrackets')) return;
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document !== e.document || e.contentChanges.length !== 1) return;
+    const change = e.contentChanges[0];
+    if (change.rangeLength !== 0 || (change.text !== '$' && change.text !== ' ')) return;
+    const doc = e.document;
+    const at = change.range.start;
+    if (!isDessa(doc) || !inDessaScript(doc, at) || inStringOrComment(doc, at)) return;
+    const text = doc.lineAt(at.line).text;
+    const before = text.slice(0, at.character);
+    const after = text.slice(at.character + 1);
+    let insert = null;
+    if (change.text === '$' && /^\s*$/.test(before) && after.trim() === '') insert = '()';
+    if (change.text === ' ' && /(^|[\s;{(])(var|const|func)$/.test(before) && after.trim() === '') insert = '[]';
+    if (!insert) return;
+    const end = at.translate(0, 1);
+    editor.edit((b) => {
+        if (insert === '[]') b.replace(new vscode.Range(at, end), '[]');
+        else b.insert(end, '()');
+    }, { undoStopBefore: false, undoStopAfter: false }).then((ok) => {
+        if (!ok) return;
+        const inside = insert === '[]' ? at.translate(0, 1) : end.translate(0, 1);
+        editor.selection = new vscode.Selection(inside, inside);
+        vscode.commands.executeCommand('editor.action.triggerSuggest');
+    });
+}
+
 function symbolKind(kind) {
     switch (kind) {
         case 'function': case 'builtin': return vscode.CompletionItemKind.Function;
@@ -760,8 +823,23 @@ const completionProvider = {
         const before = doc.getText(new vscode.Range(new vscode.Position(0, 0), position));
         const data = await symbols(doc);
 
-        // $ at the start of a line: an import
-        if (/^\s*\$$/.test(linePrefix)) {
+        // $("dcrypto") { sha| : what the module offers
+        const braces = /\$\(\s*"([\w.]+)"(?:\s+as\s+\w+)?\s*\)\s*\{([^}]*)$/.exec(linePrefix);
+        if (braces) {
+            const inside = braces[2];
+            if (/\bas\s+\w*$/.test(inside)) return [];   // naming an alias
+            const listed = new Set(inside.split(',').map((s) => s.trim().split(/\s+/)[0]).filter(Boolean));
+            const names = await importableNames(doc, braces[1], data);
+            return names.filter((s) => !listed.has(s.name)).map((s) => {
+                const item = new vscode.CompletionItem(s.name, symbolKind(s.kind));
+                item.detail = s.params ? signatureOf(s) : s.type || s.kind;
+                return item;
+            });
+        }
+        // { and , only open suggestions inside an import's braces
+        if (context && (context.triggerCharacter === '{' || context.triggerCharacter === ',')) return undefined;
+        // $ at the start of a line: an import (with auto brackets, () is typed for you)
+        if (/^\s*\$$/.test(linePrefix) && !vscode.workspace.getConfiguration('dessa').get('autoBrackets')) {
             const item = new vscode.CompletionItem('$("...")', vscode.CompletionItemKind.Module);
             item.insertText = new vscode.SnippetString('("$1")');
             item.detail = 'import a library or a file';
@@ -1152,7 +1230,7 @@ function activate(context) {
     context.subscriptions.push(
         diagnosticCollection,
         output,
-        vscode.languages.registerCompletionItemProvider(selector, completionProvider, '.', '"', '$'),
+        vscode.languages.registerCompletionItemProvider(selector, completionProvider, '.', '"', '$', '{', ','),
         vscode.languages.registerHoverProvider(selector, hoverProvider),
         vscode.languages.registerSignatureHelpProvider(selector, signatureHelpProvider, '(', ','),
         vscode.languages.registerDefinitionProvider(selector, definitionProvider),
@@ -1168,6 +1246,7 @@ function activate(context) {
         vscode.workspace.onDidOpenTextDocument((doc) => scheduleCheck(doc, 0)),
         vscode.workspace.onDidSaveTextDocument((doc) => scheduleCheck(doc, 0)),
         vscode.workspace.onDidChangeTextDocument((e) => {
+            autoBrackets(e);
             if (vscode.workspace.getConfiguration('dessa').get('checkOnType')) scheduleCheck(e.document, 400);
         }),
         vscode.workspace.onDidCloseTextDocument((doc) => {

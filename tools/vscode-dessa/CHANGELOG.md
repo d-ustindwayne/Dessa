@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0
+
+- After `$("dcrypto") {` the names the library or file offers are suggested (not the ones already listed)
+- Typing `$` at the start of a line adds `()` and opens the list of libraries and files
+- A space right after `var`, `const` or `func` becomes `[]` with the cursor inside, for the type (setting `dessa.autoBrackets`)
+- `from` is an ordinary name again (no "reserved" error); the import snippet is `importnames` and writes `$("file") { Name }`
+
 ## 0.1.5
 
 - No hover or go to definition on words inside strings and comments

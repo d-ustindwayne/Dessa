@@ -41,6 +41,7 @@ $("json") { Json, parseJson, stringify, jsonObject, jsonStr, jsonNum }
 $("request") { get as httpGet, Response }
 $("torrent") { makeTorrent, Torrent, download, folderMatches, infoHashOf, DEFAULT_TRACKERS, _seed }
 $("dcrypto") { toBase64 }
+$("time") { now }
 
 const[Str] MANIFEST = "riv.pkg";
 const[Str] MODULES = "riv_modules";
@@ -707,6 +708,13 @@ func[Emp] cmdSeed(rest[Str<>]) {
     _seed(torrents, folders, port, torrentOptions(), seconds);
 }
 
+// <folder>/index-skip.txt: packages left out of indexes and bundles for now
+func[Str<>] skippedPackages(folder[Str]) {
+    var[Str] file = $"{folder}/index-skip.txt";
+    if (!fileExists(file)) return [];
+    return readFile(file).split("\n").map((l[Str]) := l.trim()).filter((l[Str]) := !l.isEmpty() && !l.startsWith("#"));
+}
+
 // riv bundled <folder>: where the packages that came with Dessa are
 func[Emp] cmdBundled(folder[Str]) {
     if (!isDir(folder)) throw new RivError($"no folder '{folder}'");
@@ -717,7 +725,9 @@ func[Emp] cmdBundled(folder[Str]) {
     // Your index lists them too, so riv knows these versions even when the
     // official index doesn't (yet) or there is no internet
     var[Int] count = 0;
+    var[Str<>] skipped = skippedPackages(folder);
     for (var[Str] name in listDir(folder)) {
+        if (skipped.includes(name)) continue;
         var[Str] package = $"{folder}/{name}";
         if (!fileExists($"{package}/{MANIFEST}")) continue;
         var[Manifest] manifest = readManifest($"{package}/{MANIFEST}");
@@ -742,7 +752,9 @@ func[Emp] cmdIndex(rest[Str<>]) {
     }
     var[Int] problems = 0;
     var[Str<>] names = listDir(root);
+    var[Str<>] skipped = skippedPackages(root);
     for (var[Str] name in names) {
+        if (skipped.includes(name)) continue;
         var[Str] folder = $"{root}/{name}";
         if (!fileExists($"{folder}/{MANIFEST}")) continue;
         var[Manifest] manifest = readManifest($"{folder}/{MANIFEST}");
@@ -779,6 +791,135 @@ func[Emp] cmdRun(extra[Str<>]) {
     exit(run(command));
 }
 
+// ============================================================
+// Updates: new releases of Dessa (the compiler and riv) on GitHub
+// ============================================================
+//
+// `riv update` installs the newest release. Every riv command checks for one
+// at most once a day (RIV_NO_UPDATE_CHECK=1 turns that off) and says when
+// there is one. What it found is kept in <riv home>/update.txt, which the
+// dessa command reads too: dessa itself never goes online.
+
+const[Str] LATEST_RELEASE = "https://api.github.com/repos/d-ustindwayne/Dessa/releases/latest";
+
+class Release {
+    var[Str] version = "";
+    var[Str] asset = "";   // the archive for this computer
+    var[Str] url = "";
+}
+
+func[Str] dessaCommand() {
+    return getEnv("DESSA") ?? "dessa";
+}
+
+// The installed Dessa's version ("0.1.5"), or "" if dessa can't be run
+func[Str] installedVersion() {
+    var[Str] text = capture($"\"{dessaCommand()}\" --version");
+    if (!text.startsWith("dessa ")) return "";
+    return text.substr(6, text.length() - 6).trim();
+}
+
+// The release archive's name for this computer: dessa-0.1.6-windows-x64.zip
+func[Str] assetName(version[Str]) {
+    var[Str] system = platform();
+    if (system == "windows") return $"dessa-{version}-windows-x64.zip";
+    if (system == "macos") return $"dessa-{version}-macos-arm64.tar.gz";
+    return $"dessa-{version}-linux-x64.tar.gz";
+}
+
+// The newest release (nil when GitHub can't be reached)
+func[Release | Nil] latestRelease(timeout[Int]) {
+    try {
+        var[Response] response = httpGet(LATEST_RELEASE, {"User-Agent": "riv", "Accept": "application/vnd.github+json"}, timeout);
+        if (!response.ok) return nil;
+        var[Json] data = parseJson(response.text);
+        var[Release] release = new Release();
+        var[Str] tag = data.get("tag_name").asStr();
+        release.version = tag.startsWith("v") ? tag.substr(1, tag.length() - 1) : tag;
+        release.asset = assetName(release.version);
+        var[Json] assets = data.get("assets");
+        for (var[Int] i = 0; i < assets.length(); i++) {
+            if (assets.at(i).get("name").asStr() == release.asset) release.url = assets.at(i).get("browser_download_url").asStr();
+        }
+        return release;
+    } catch {
+        return nil;
+    }
+}
+
+// <riv home>/update.txt: "checked <seconds>" and "latest <version>"
+func[Str] updateFile() {
+    return rivHome() + "/update.txt";
+}
+
+func[Str] savedValue(key[Str]) {
+    if (!fileExists(updateFile())) return "";
+    for (var[Str] line in readFile(updateFile()).split("\n")) {
+        if (line.startsWith(key + " ")) return line.substr(key.length() + 1, line.length() - key.length() - 1).trim();
+    }
+    return "";
+}
+
+// Once a day: is there a newer Dessa? Says so (one line), never fails
+func[Emp] checkForUpdate() {
+    if (getEnv("RIV_NO_UPDATE_CHECK") != nil) return;
+    var[Str] checked = savedValue("checked");
+    var[Dbl] last = checked.isEmpty() ? 0.0 : Dbl(checked);
+    if (now() - last >= 86400.0) {
+        var[Release | Nil] release = latestRelease(4);
+        // remembered even when offline, so the next try is tomorrow
+        var[Str] latest = release == nil ? savedValue("latest") : release.version;
+        writeFile(updateFile(), $"checked {Int(now())}\nlatest {latest}\n");
+    }
+    var[Str] latest = savedValue("latest");
+    if (latest.isEmpty()) return;
+    var[Str] have = installedVersion();
+    if (!have.isEmpty() && newer(latest, have)) {
+        print($"riv: Dessa {latest} is out (you have {have}). Update with: riv update");
+        print();
+    }
+}
+
+// riv update: the newest Dessa and riv, from the GitHub release
+func[Emp] cmdUpdate(rest[Str<>]) {
+    var[Bul] force = rest.includes("--force");
+    print("Looking for a new Dessa...");
+    var[Release | Nil] release = latestRelease(20);
+    if (release == nil) throw new RivError("could not reach GitHub to look for a new version (check the internet connection)");
+    writeFile(updateFile(), $"checked {Int(now())}\nlatest {release.version}\n");
+    var[Str] have = installedVersion();
+    if (!force && !have.isEmpty() && !newer(release.version, have)) {
+        print($"Dessa {have} is the newest version.");
+        return;
+    }
+    if (release.url.isEmpty()) throw new RivError($"the release {release.version} has no {release.asset} for this computer");
+    var[Str] home = capture($"\"{dessaCommand()}\" home");
+    if (home.isEmpty() || !isDir(home)) throw new RivError("could not find where Dessa is installed (is `dessa` on the PATH?)");
+
+    var[Str] folder = $"{rivHome()}/updates/{release.version}";
+    deleteAll(folder);
+    makeDir(folder);
+    var[Str] archive = $"{folder}/{release.asset}";
+    print($"Downloading Dessa {release.version}...");
+    if (run($"curl -fsSL -o \"{archive}\" \"{release.url}\"") != 0 || !fileExists(archive)) {
+        throw new RivError($"could not download {release.url}");
+    }
+    if (run($"tar -xf \"{archive}\" -C \"{folder}\"") != 0) throw new RivError($"could not unpack {archive}");
+    var[Str] unpacked = $"{folder}/dessa-{release.version}-" + (platform() == "windows" ? "windows-x64" : platform() == "macos" ? "macos-arm64" : "linux-x64");
+    if (!isDir(unpacked)) throw new RivError($"{archive} doesn't hold the folder {unpacked}");
+
+    // The installer replaces riv itself, so it runs after riv has finished
+    print($"Installing Dessa {release.version} in {home} ({have.isEmpty() ? "?" : have} -> {release.version})...");
+    if (platform() == "windows") {
+        var[Str] script = unpacked.replaceAll("/", "\\") + "\\install.ps1";
+        run($"start \"Dessa update\" powershell -NoProfile -ExecutionPolicy Bypass -Command \"Start-Sleep 1; & '{script}' -Yes -NoPath -NoFileTypes -NoVSCode -Prefix '{home}'; Read-Host 'Done. Press Enter'\"");
+        print("The installer opened in its own window; it finishes there.");
+    } else {
+        run($"(sleep 1; bash \"{unpacked}/install.sh\" --yes --prefix \"{home}\" > \"{folder}/install.log\" 2>&1) &");
+        print($"Installing in the background; details in {folder}/install.log");
+    }
+}
+
 func[Emp] help() {
     print("riv -- the Dessa package manager");
     print();
@@ -793,6 +934,7 @@ func[Emp] help() {
     print("  riv seed                  share your packages with others (--port <n>, --minutes <n>)");
     print("  riv bundled <folder>      use the packages that came with Dessa from that folder");
     print("  riv run [args...]         run this package's entry file");
+    print("  riv update                install the newest Dessa (compiler and riv), --force to reinstall");
     print();
     print($"Your store and index: {rivHome()}  (set RIV_HOME to change it)");
     print($"Indexes: {indexLocations().join(", ")}  (RIV_INDEX)");
@@ -814,6 +956,7 @@ func[Emp] needArgument(what[Str]) {
 }
 
 try {
+    if (command != "update" && command != "help") checkForUpdate();
     switch (command) {
         case "init" := { cmdInit(argument); }
         case "install" := { cmdInstall(); }
@@ -839,6 +982,7 @@ try {
         }
         case "index" := { cmdIndex(rest); }
         case "run" := { cmdRun(rest); }
+        case "update" := { cmdUpdate(rest); }
         case "help" := { help(); }
         default := {
             print($"riv: unknown command '{command}'");

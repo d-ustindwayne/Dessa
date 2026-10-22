@@ -1,5 +1,8 @@
 #include "jsgen.hpp"
 
+#include <cstdlib>
+#include <functional>
+
 #include <algorithm>
 #include <fstream>
 #include <unordered_set>
@@ -9,6 +12,12 @@ namespace dessa {
 namespace {
 
 const SemanticType kUnknown = SemanticType::unknown();
+
+// DESSA_JS_NO_SMALL=1: every Int a BigInt, as before (to compare)
+static bool smallInts() {
+    static const bool on = [] { const char* v = std::getenv("DESSA_JS_NO_SMALL"); return !(v && *v); }();
+    return on;
+}
 
 const Expr* unwrapGrouping(const Expr* e) {
     while (e && e->kind == ExprKind::Grouping) e = static_cast<const GroupingExpr*>(e)->inner.get();
@@ -512,8 +521,29 @@ void JsCodegen::emitFunction(const FuncDeclStmt* decl, const std::string& name, 
     const Symbol* symbol = analyser.functionOf(decl);
     if (!symbol || !decl->body) return;
     returnType = symbol->returnType;
+    smallLocals.clear();
     line((isMethod ? "" : "function ") + name + "(" + params(*symbol) + ") {");
     indentLevel++;
+    // Int parameters as plain numbers: worth it where a loop uses them (a
+    // function that only calls itself would convert on every call)
+    std::function<bool(const Stmt*)> hasLoop = [&](const Stmt* st) -> bool {
+        if (!st) return false;
+        switch (st->kind) {
+            case StmtKind::For: case StmtKind::ForIn: case StmtKind::While: case StmtKind::Loop: return true;
+            case StmtKind::Block:
+                for (const auto& b : static_cast<const BlockStmt*>(st)->statements) if (hasLoop(b.get())) return true;
+                return false;
+            case StmtKind::If: return hasLoop(static_cast<const IfStmt*>(st)->thenBranch.get()) || hasLoop(static_cast<const IfStmt*>(st)->elseBranch.get());
+            case StmtKind::Try: return hasLoop(static_cast<const TryStmt*>(st)->tryBlock.get());
+            default: return false;
+        }
+    };
+    const bool loops = smallInts() && hasLoop(decl->body.get());
+    for (const auto& p : symbol->parameters) {
+        if (!loops || !p.type.is(SemanticTypeKind::Int) || p.variadic) continue;
+        smallLocals.insert(jsName(p.name));
+        line(jsName(p.name) + " = $.small(" + jsName(p.name) + ");");
+    }
     for (const auto& s : static_cast<const BlockStmt*>(decl->body.get())->statements) stmt(s.get());
     indentLevel--;
     line("}");
@@ -522,6 +552,7 @@ void JsCodegen::emitFunction(const FuncDeclStmt* decl, const std::string& name, 
 
 void JsCodegen::emitModuleEntry(const Module& module) {
     moduleId = module.id;
+    smallLocals.clear();
     line("function " + moduleName(module.id, module.isEntry ? "$run" : "$init") + "() {");
     indentLevel++;
     for (const auto& s : module.ast) {
@@ -566,6 +597,13 @@ void JsCodegen::varDecl(const VarDeclStmt* decl, bool asGlobalAssignment) {
         return;
     }
     const std::string name = jsName(*decl->name);
+    if (declared->is(SemanticTypeKind::Int) && smallInts()) {
+        smallLocals.insert(name);
+        std::string value = !decl->initializer ? "0" : isSmall(decl->initializer.get()) ? small(decl->initializer.get())
+                                                     : "$.small(" + exprAs(decl->initializer.get(), *declared) + ")";
+        line("let " + name + " = " + value + ";");
+        return;
+    }
     line("let " + name + " = " + (decl->initializer ? exprAs(decl->initializer.get(), *declared) : defaultValue(*declared)) + ";");
 }
 
@@ -589,7 +627,7 @@ void JsCodegen::stmt(const Stmt* statement) {
                 return;
             }
             if (isSuperInitCall(statement)) return;   // done by the constructor
-            line(expr(e) + ";");
+            line(effect(e) + ";");
             return;
         }
         case StmtKind::VarDecl:
@@ -629,14 +667,21 @@ void JsCodegen::stmt(const Stmt* statement) {
                 if (s->init->kind == StmtKind::VarDecl) {
                     const auto* d = static_cast<const VarDeclStmt*>(s->init.get());
                     const SemanticType* t = analyser.declaredTypeOf(d);
-                    init = "let " + jsName(d->name.value_or("$i")) + " = " +
-                           (d->initializer ? exprAs(d->initializer.get(), t ? *t : kUnknown) : defaultValue(t ? *t : kUnknown));
+                    if (t && t->is(SemanticTypeKind::Int) && smallInts()) {
+                        const std::string n = jsName(d->name.value_or("$i"));
+                        smallLocals.insert(n);
+                        init = "let " + n + " = " + (!d->initializer ? "0" : isSmall(d->initializer.get()) ? small(d->initializer.get())
+                                                                        : "$.small(" + exprAs(d->initializer.get(), *t) + ")");
+                    } else {
+                        init = "let " + jsName(d->name.value_or("$i")) + " = " +
+                               (d->initializer ? exprAs(d->initializer.get(), t ? *t : kUnknown) : defaultValue(t ? *t : kUnknown));
+                    }
                 } else if (s->init->kind == StmtKind::Expression) {
                     init = expr(static_cast<const ExpressionStmt*>(s->init.get())->expression.get());
                 }
             }
             std::string cond = s->condition ? expr(s->condition.get()) : "";
-            std::string inc = s->increment ? expr(s->increment.get()) : "";
+            std::string inc = s->increment ? effect(s->increment.get()) : "";
             line("for (" + init + "; " + cond + "; " + inc + ") {");
             indentLevel++;
             block(s->body.get());
@@ -896,6 +941,8 @@ std::string JsCodegen::exprAs(const Expr* e, const SemanticType& target) {
 
 std::string JsCodegen::printable(const Expr* e) {
     const SemanticType& t = typeOf(e);
+    // a small Int prints as it is (no BigInt needed); Int[16] keeps its base below
+    if (smallVar(e) && (!t.radix || *t.radix == 10)) return "$.istr(" + small(e) + ")";
     if (t.is(SemanticTypeKind::Int) && t.radix && *t.radix != 10) return "$.radix(" + expr(e) + ", " + std::to_string(*t.radix) + ")";
     std::string shape = fltShape(t);
     if (!shape.empty()) return shape == "\"f\"" ? "$.flt(" + expr(e) + ")" : "$.fview(" + expr(e) + ", " + shape + ")";
@@ -903,11 +950,127 @@ std::string JsCodegen::printable(const Expr* e) {
 }
 
 std::string JsCodegen::number(const Expr* e) {
+    if (isSmall(e)) return "Number(" + small(e) + ")";
     return typeOf(e).isInteger() ? "Number(" + expr(e) + ")" : expr(e);
+}
+
+// ---- Small Ints ----
+
+bool JsCodegen::isSmall(const Expr* e) const {
+    if (!e || !smallInts()) return false;
+    const SemanticType& t = typeOf(e);
+    if (!t.is(SemanticTypeKind::Int)) return false;
+    switch (e->kind) {
+        case ExprKind::Literal: {
+            const Token& tok = static_cast<const LiteralExpr*>(e)->token;
+            if (tok.type != TokenType::INT_LITERAL) return false;
+            return tok.lexeme.size() <= 15;   // well inside 2^53
+        }
+        case ExprKind::Identifier: {
+            const Symbol* s = analyser.symbolOf(e);
+            if (!s || s->isGlobal ||
+                (s->kind != SymbolKind::Variable && s->kind != SymbolKind::Constant && s->kind != SymbolKind::Parameter)) {
+                return false;
+            }
+            return smallLocals.count(jsName(s->name)) != 0;
+        }
+        case ExprKind::Grouping: return isSmall(static_cast<const GroupingExpr*>(e)->inner.get());
+        case ExprKind::Unary: {
+            const auto* u = static_cast<const UnaryExpr*>(e);
+            return u->op.type == TokenType::MINUS && isSmall(u->operand.get());
+        }
+        case ExprKind::Binary: {
+            const auto* b = static_cast<const BinaryExpr*>(e);
+            if (analyser.operatorCallOf(e)) return false;
+            switch (b->op.type) {
+                case TokenType::PLUS: case TokenType::MINUS: case TokenType::MULT: case TokenType::MOD:
+                    // a literal alone doesn't make it small (n - 1 with a BigInt n stays BigInt)
+                    return typeOf(b->left.get()).is(SemanticTypeKind::Int) && typeOf(b->right.get()).is(SemanticTypeKind::Int) &&
+                           (smallVar(b->left.get()) || smallVar(b->right.get()));
+                default: return false;
+            }
+        }
+        case ExprKind::Postfix: return isSmall(static_cast<const PostfixExpr*>(e)->operand.get());
+        case ExprKind::Assign: {
+            const auto* a = static_cast<const AssignExpr*>(e);
+            return a->target->kind == ExprKind::Identifier && isSmall(a->target.get()) && !analyser.operatorCallOf(e) &&
+                   a->op.type != TokenType::QUESTION_EQUAL;
+        }
+        default: return false;
+    }
+}
+
+std::string JsCodegen::effect(const Expr* e) {
+    if (!isSmall(e)) return expr(e);
+    if (e->kind == ExprKind::Postfix) {
+        const auto* p = static_cast<const PostfixExpr*>(e);
+        const std::string v = jsName(analyser.symbolOf(p->operand.get())->name);
+        return v + " = " + (p->op.type == TokenType::PLUS_PLUS ? "$.hinc(" : "$.hdec(") + v + ")";
+    }
+    if (e->kind == ExprKind::Assign) return small(e);
+    return expr(e);
+}
+
+// Small, and not just a literal
+bool JsCodegen::smallVar(const Expr* e) const {
+    const Expr* in = unwrapGrouping(e);
+    return in && in->kind != ExprKind::Literal && isSmall(in);
+}
+
+std::string JsCodegen::intOperand(const Expr* e) {
+    return isSmall(e) ? small(e) : expr(e);
+}
+
+std::string JsCodegen::small(const Expr* e) {
+    switch (e->kind) {
+        case ExprKind::Literal: return static_cast<const LiteralExpr*>(e)->token.lexeme;
+        case ExprKind::Identifier: return jsName(analyser.symbolOf(e)->name);
+        case ExprKind::Grouping: return "(" + small(static_cast<const GroupingExpr*>(e)->inner.get()) + ")";
+        case ExprKind::Unary: return "$.hneg(" + small(static_cast<const UnaryExpr*>(e)->operand.get()) + ")";
+        case ExprKind::Binary: {
+            const auto* b = static_cast<const BinaryExpr*>(e);
+            const char* fn = b->op.type == TokenType::PLUS ? "$.hadd(" : b->op.type == TokenType::MINUS ? "$.hsub("
+                           : b->op.type == TokenType::MULT ? "$.hmul(" : "$.hmod(";
+            return fn + intOperand(b->left.get()) + ", " + intOperand(b->right.get()) + ")";
+        }
+        case ExprKind::Postfix: {
+            const auto* p = static_cast<const PostfixExpr*>(e);
+            const std::string v = jsName(analyser.symbolOf(p->operand.get())->name);
+            const bool inc = p->op.type == TokenType::PLUS_PLUS;
+            // the old value
+            return std::string(inc ? "$.hsub(" : "$.hadd(") + "(" + v + " = " + (inc ? "$.hinc(" : "$.hdec(") + v + ")), 1)";
+        }
+        case ExprKind::Assign: {
+            const auto* a = static_cast<const AssignExpr*>(e);
+            const std::string v = jsName(analyser.symbolOf(a->target.get())->name);
+            const Expr* value = a->value.get();
+            const SemanticType& vt = typeOf(value);
+            std::string rhs = vt.isInteger() ? intOperand(value) : "$.small(" + expr(value) + ")";
+            switch (a->op.type) {
+                case TokenType::EQUAL:
+                    if (!vt.isInteger()) rhs = "$.small(" + exprAs(value, SemanticType::simple(SemanticTypeKind::Int)) + ")";
+                    else if (!isSmall(value)) rhs = "$.small(" + rhs + ")";
+                    return "(" + v + " = " + rhs + ")";
+                case TokenType::PLUS_EQUAL: if (vt.isInteger()) return "(" + v + " = $.hadd(" + v + ", " + rhs + "))"; break;
+                case TokenType::MINUS_EQUAL: if (vt.isInteger()) return "(" + v + " = $.hsub(" + v + ", " + rhs + "))"; break;
+                case TokenType::MULT_EQUAL: if (vt.isInteger()) return "(" + v + " = $.hmul(" + v + ", " + rhs + "))"; break;
+                case TokenType::MOD_EQUAL: if (vt.isInteger()) return "(" + v + " = $.hmod(" + v + ", " + rhs + "))"; break;
+                default: break;
+            }
+            if (a->op.type == TokenType::DIV_EQUAL) {
+                return "(" + v + " = $.small($.trunc(" + (vt.isInteger() ? "$.hdiv(" + v + ", " + rhs + ")" : "Number(" + v + ") / " + expr(value)) + ")))";
+            }
+            // ^= and the rest: with BigInts
+            return "(" + v + " = $.small($.pow($.big(" + v + "), $.big(" + rhs + "))))";
+        }
+        default: return expr(e);
+    }
 }
 
 std::string JsCodegen::expr(const Expr* e) {
     if (!e) return "";
+    // A small Int (a plain number) becomes a BigInt when it leaves arithmetic
+    if (e->kind != ExprKind::Literal && isSmall(e)) return "$.big(" + small(e) + ")";
     switch (e->kind) {
         case ExprKind::Literal: return literal(static_cast<const LiteralExpr*>(e));
         case ExprKind::TemplateString: {
@@ -942,6 +1105,8 @@ std::string JsCodegen::expr(const Expr* e) {
         case ExprKind::Call: return call(static_cast<const CallExpr*>(e));
         case ExprKind::Index: {
             const auto* i = static_cast<const IndexExpr*>(e);
+            const SemanticType& ot = typeOf(i->object.get());
+            if (ot.is(SemanticTypeKind::List) || ot.is(SemanticTypeKind::Str)) return "$.at(" + expr(i->object.get()) + ", " + intOperand(i->index.get()) + ")";
             return "$.at(" + expr(i->object.get()) + ", " + expr(i->index.get()) + ")";
         }
         case ExprKind::Member: return member(static_cast<const MemberExpr*>(e));
@@ -1113,6 +1278,9 @@ std::string JsCodegen::binary(const BinaryExpr* e) {
                 const Expr* other = isNilLiteral(l) ? r : l;
                 return "(" + expr(other) + (negate ? " != null)" : " == null)");
             }
+            if (lt.is(SemanticTypeKind::Int) && rt.is(SemanticTypeKind::Int) && (smallVar(l) || smallVar(r))) {
+                return "(" + intOperand(l) + (negate ? " != " : " == ") + intOperand(r) + ")";   // 1 == 1n
+            }
             if (isPrimitive(lt) && lt == rt && !lt.isUnknown()) return "(" + expr(l) + (negate ? " !== " : " === ") + expr(r) + ")";
             if (lt.isNumeric() && rt.isNumeric()) return "(" + number(l) + (negate ? " !== " : " === ") + number(r) + ")";
             return std::string("(") + (negate ? "!" : "") + "$.eq(" + expr(l) + ", " + expr(r) + "))";
@@ -1126,6 +1294,7 @@ std::string JsCodegen::binary(const BinaryExpr* e) {
         case TokenType::AND_AND: return "(" + expr(l) + " && " + expr(r) + ")";
         case TokenType::OR_OR: return "(" + expr(l) + " || " + expr(r) + ")";
         case TokenType::DIV:
+            if (bothInt && (smallVar(l) || smallVar(r))) return "$.hdiv(" + intOperand(l) + ", " + intOperand(r) + ")";
             if (bothInt) return "$.div(" + expr(l) + ", " + expr(r) + ")";
             return flt("(" + number(l) + " / " + number(r) + ")");
         case TokenType::MOD:
@@ -1152,6 +1321,7 @@ std::string JsCodegen::binary(const BinaryExpr* e) {
                            : e->op.type == TokenType::LESS_EQUAL ? " <= " : " >= ";
             if (lt.is(SemanticTypeKind::Str)) return "($.strCmp(" + expr(l) + ", " + expr(r) + ")" + op + "0)";
             if (lt.is(SemanticTypeKind::Chr)) return "(" + expr(l) + ".code" + op + expr(r) + ".code)";
+            if (lt.isInteger() && rt.isInteger() && (smallVar(l) || smallVar(r))) return "(" + intOperand(l) + op + intOperand(r) + ")";
             return "(" + expr(l) + op + expr(r) + ")";   // BigInt and number compare correctly in JS
         }
         case TokenType::LEFT_SHIFT: return "$.shl(" + expr(l) + ", " + expr(r) + ")";
@@ -1213,8 +1383,8 @@ std::string JsCodegen::assign(const AssignExpr* e) {
         const SemanticType& objectType = typeOf(index->object.get());
         const SemanticType keyType = objectType.is(SemanticTypeKind::Map) && objectType.keyType ? *objectType.keyType : SemanticType::simple(SemanticTypeKind::Int);
         if (e->op.type == TokenType::EQUAL) {
-            return "$.setAt(" + expr(index->object.get()) + ", " + exprAs(index->index.get(), keyType) + ", " +
-                   exprAs(e->value.get(), targetType) + ")";
+            const std::string key = objectType.is(SemanticTypeKind::List) ? intOperand(index->index.get()) : exprAs(index->index.get(), keyType);
+            return "$.setAt(" + expr(index->object.get()) + ", " + key + ", " + exprAs(e->value.get(), targetType) + ")";
         }
         std::string o = temp("o"), i = temp("k");
         return "((" + o + ", " + i + ") => $.setAt(" + o + ", " + i + ", " + combine("$.at(" + o + ", " + i + ")") + "))(" +

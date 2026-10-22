@@ -1,7 +1,8 @@
 # Dessa
 
-Dessa is a statically typed programming language that compiles to C++ (for
-fast native programs) or to JavaScript (for Node and web pages). The goal is
+Dessa is a statically typed programming language that compiles to C (for
+fast native programs; C++ for the few things C can't do yet) or to JavaScript
+(for Node and web pages). The goal is
 C++ speed without C++'s learning curve.
 
 ```dessa

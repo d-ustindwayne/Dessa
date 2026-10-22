@@ -6,7 +6,7 @@
 The build folder must contain dessa and riv (cmake --build <build> --target riv).
 Creates dessa-<version>-<os>-<arch>.zip (Windows) or .tar.gz (Linux/macOS):
 
-    dessa-0.1.5-windows-x64/
+    dessa-0.2.0-windows-x64/
         bin/dessa(.exe) bin/riv(.exe)
         runtime/  include/              the core
         tools/riv/packages/             riv packages (riv installs them from here without downloading)
@@ -63,6 +63,8 @@ def main():
     ignore = shutil.ignore_patterns("riv_modules", "__pycache__", "*.o", "node_modules")
     for folder in ("runtime", "include", "tools/riv/packages", "tools/vscode-dessa"):
         shutil.copytree(ROOT / folder, stage / folder, ignore=ignore)
+    # phl is left out for now (its syntax is being revised)
+    shutil.rmtree(stage / "tools" / "riv" / "packages" / "phl", ignore_errors=True)
     if (ROOT / "web" / "dessa.js").exists():   # the browser build (emcmake ... build-wasm)
         shutil.copytree(ROOT / "web", stage / "web", ignore=ignore)
     for file in ("install.ps1", "install.sh", "LICENSE", "NOTICE", "README.md"):

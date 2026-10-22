@@ -2,7 +2,7 @@
 
 Dessa is statically typed: every variable, parameter and function result has a
 type, and mistakes are reported before the program runs. A program is turned
-into C++ (and from there into a native program) or into JavaScript.
+into C (and from there into a native program) or into JavaScript.
 
 This page covers the whole language. For the libraries see
 [libraries.md](libraries.md).
@@ -70,6 +70,8 @@ var[Int] count = 0;          // can change
 const[Dbl] RATE = 0.07;      // can't change
 var[Str<>] names = [];
 var[Int | Nil] found;         // starts as nil
+var[Int] x = 10, y = 20;     // several at once
+var[Int] a = b = c = 0;      // three variables, all 0
 ```
 
 ## Text
@@ -97,6 +99,8 @@ compare without case use `caseless`: `name.caseless() == "ANN".caseless()`.
 
 ```dessa
 Int("42")      Dbl("2.5")     Str(42)      Bul("yes")     Chr(65)     Int('A')
+true.toInt()   // 1 (false is 0)
+'7'.toInt()    // 7, the digit's value ('7'.code() is 55)
 ```
 
 A conversion that can't work is an error you can catch.
@@ -497,5 +501,6 @@ class Dog(Animal) {
 
 ## Reserved for later
 
-`with` and `from` are reserved: using them is an error now so that they can
-get a meaning later.
+`with` is reserved: using it is an error now so that it can get a meaning
+later. (`from` is an ordinary name; only the old import form
+`{ x } from $("lib")` is pointed out, with the new way to write it.)

@@ -2,7 +2,7 @@
   "name": "dessa",
   "displayName": "Dessa",
   "description": "Dessa language support: highlighting, errors as you type, completion, hover, go to definition and run, for .ds files, .dhtml pages and Dessa scripts inside HTML.",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "publisher": "d-ustindwayne",
   "author": {
     "name": "d-ustindwayne"
@@ -162,6 +162,11 @@
           "type": "boolean",
           "default": true,
           "description": "Check the file for errors while typing (otherwise only on open and save)."
+        },
+        "dessa.autoBrackets": {
+          "type": "boolean",
+          "default": true,
+          "description": "Typing $ at the start of a line adds (), and a space right after var, const or func becomes [] (the cursor goes inside)."
         },
         "dessa.unusedImports": {
           "type": "string",

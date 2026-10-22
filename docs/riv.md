@@ -49,16 +49,35 @@ $("colors") { red, banner }
 | `riv seed` | share your packages with others until you stop it |
 | `riv bundled <folder>` | use the packages that came with Dessa from that folder (the installers do this) |
 | `riv run [args]` | run the entry file |
+| `riv update` | install the newest Dessa (the compiler and riv) from GitHub; `--force` reinstalls it |
 
 Commit `riv.pkg` with your project, but not `riv_modules/`: anyone can recreate
 that folder with `riv install`.
+
+## Keeping Dessa up to date
+
+`riv update` looks at the newest release on GitHub. If it's newer than the
+Dessa you have, it downloads the release for your computer and runs its
+installer into the same folder (on Windows in a window of its own, since riv
+can't replace itself while it runs).
+
+You don't have to remember to check: once a day, the first riv command you run
+asks GitHub whether there is a new release (it gives up after a few seconds
+when there's no internet) and says so:
+
+```
+riv: Dessa 0.2.1 is out (you have 0.2.0). Update with: riv update
+```
+
+`dessa run` and `dessa build` show the same line, at most once a day, from what
+riv found (the compiler itself never goes online). Set `RIV_NO_UPDATE_CHECK=1`
+to turn both off.
 
 ## Packages that come with Dessa
 
 | Package | What it has |
 |---|---|
 | `json` | `Json` values, `parseJson`, `stringify` |
-| `phl` | read and write PHL documents (being revised) |
 | `sql` | SQLite and SQL Server (or any ODBC database) |
 | `request` | HTTP requests (`get`, `post`, ...) through curl |
 | `ashwee` | desktop windows and controls (Windows, Linux, macOS) |
@@ -161,6 +180,8 @@ off), `RIV_TIMEOUT` (seconds to wait for peers, default 60).
 For whoever keeps an index: `riv index <packages folder> --out <index folder>
 --webseed <url>` writes the entries of every package in a folder, and
 `--check` reports packages whose files changed without a new index entry (CI
-runs it for the official index).
+runs it for the official index). Packages named in `index-skip.txt` in the
+packages folder (one per line) are left out of the index and of `riv bundled`;
+`phl` is there for now, while its syntax is being revised.
 
 Not done yet: version ranges (`^1.0`) and a lock file, and signing packages.

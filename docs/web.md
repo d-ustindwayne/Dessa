@@ -104,7 +104,7 @@ error, with its line.
 ## Libraries in the browser
 
 `math`, `time` (with time zones), `sys`, `webutils`, and the packages written
-in Dessa (`json`, `phl`, `numbers`, `codes`, `colors`, `textfx`) work in the
+in Dessa (`json`, `numbers`, `codes`, `colors`, `textfx`) work in the
 browser. The file functions of `os` work in Node only. Packages with C++ code
 (`sql`, `request`, `ashwee`) can't run in a browser, and the compiler says so.
 

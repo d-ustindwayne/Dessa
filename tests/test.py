@@ -21,7 +21,7 @@ Two kinds of tests:
   A first line `// exit: N` expects exit code N instead of 0.
 
 Usage:
-    python tests/test.py [--update] [--js] [filter]
+    python tests/test.py [--update] [--js | --c | --cpp] [filter]
 
 --js runs the run tests through the JavaScript backend (dessa run --target js,
 needs Node) and compares with the same .out files; tests that use libraries
@@ -46,6 +46,7 @@ EXIT_RE = re.compile(r"^//\s*exit:\s*(-?\d+)")
 STDERR_RE = re.compile(r"^//\s*stderr:\s*(.+)$", re.MULTILINE)
 SAMPLES = ROOT / "sample"
 JS = False   # --js: run tests through the JavaScript backend
+MODE = []    # --c: only through C (programs C can't do yet are skipped); --cpp: only through C++
 PACKAGES = ROOT / "tools" / "riv" / "packages"
 # Libraries that are riv packages (sql, request, json, phl, ashwee, ...) are
 # used straight from the source tree, without `riv install`.
@@ -179,10 +180,12 @@ def run_test(path, update):
             return ["SKIP", "native windows"]
         if sys.platform.startswith("linux") and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
             return ["SKIP", "no display"]
-    command = ["run", str(path.relative_to(ROOT))] + (["--target", "js"] if JS else [])
+    command = ["run", str(path.relative_to(ROOT))] + (["--target", "js"] if JS else MODE)
     result = run(command, stdin_file=path.with_suffix(".in"))
     if JS and "has a C++ part" in result.stderr:
         return ["SKIP", "library with a C++ part"]
+    if "can't be built from C yet" in result.stderr:
+        return ["SKIP", result.stderr.strip().split("(it uses ", 1)[-1].rstrip(")")]
     output = result.stdout.replace("\r\n", "\n")
     problems = []
     # `// needs: mssql` tests are skipped where no SQL Server is reachable
@@ -388,8 +391,9 @@ def main():
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     update = "--update" in sys.argv
-    global JS
+    global JS, MODE
     JS = "--js" in sys.argv
+    MODE = ["--target", "c"] if "--c" in sys.argv else ["--cpp"] if "--cpp" in sys.argv else []
     pattern = args[0] if args else ""
 
     if not EXE.exists():

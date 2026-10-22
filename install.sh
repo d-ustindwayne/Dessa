@@ -66,6 +66,8 @@ hint() {
 if command -v g++ >/dev/null 2>&1; then CXX_FOUND=g++; elif command -v clang++ >/dev/null 2>&1; then CXX_FOUND=clang++; else CXX_FOUND=""; fi
 [ -n "$CXX_FOUND" ] || { warn "no C++ compiler found (Dessa needs one to build your programs)"; hint; fail "install a C++20 compiler"; }
 ok "C++ compiler: $(command -v "$CXX_FOUND")"
+if command -v clang >/dev/null 2>&1; then ok "C compiler: $(command -v clang)"
+else say "   C compiler: gcc (installing clang makes Dessa use it for the C it makes)"; fi
 if [ "$PREBUILT" = 0 ]; then
     command -v cmake >/dev/null 2>&1 || { warn "CMake was not found"; hint; fail "install CMake"; }
     ok "CMake: $(command -v cmake)"
@@ -95,6 +97,7 @@ for folder in runtime include; do
 done
 rm -rf "${PREFIX:?}/packages"
 cp -R "$SOURCE/tools/riv/packages" "$PREFIX/packages"
+rm -rf "$PREFIX/packages/phl"   # left out for now (its syntax is being revised)
 cp "$SOURCE/LICENSE" "$PREFIX/"
 if [ -f "$SOURCE/web/dessa.js" ]; then    # Dessa in the browser
     rm -rf "${PREFIX:?}/web"

@@ -78,8 +78,10 @@ def main():
          ["java", "-cp", str(build), "Bench"], version(["java", "-version"])),
         ("JavaScript", [], ["node", str(HERE / "bench.js")], "Node " + version(["node", "--version"])),
         ("Python", [], [sys.executable, str(HERE / "bench.py")], version([sys.executable, "--version"])),
-        ("Dessa", [[str(EXE), "build", str(HERE / "bench.ds"), "-o", str(build / f"bench_ds{exe}")]],
-         [str(build / f"bench_ds{exe}")], version([str(EXE), "--version"]) + " (native, through g++)"),
+        ("Dessa", [[str(EXE), "build", str(HERE / "bench.ds"), "--release", "-o", str(build / f"bench_ds{exe}")]],
+         [str(build / f"bench_ds{exe}")], version([str(EXE), "--version"]) + " (native, through C: the default)"),
+        ("Dessa (C++)", [[str(EXE), "build", str(HERE / "bench.ds"), "--release", "--cpp", "-o", str(build / f"bench_dscpp{exe}")]],
+         [str(build / f"bench_dscpp{exe}")], version([str(EXE), "--version"]) + " (native, through C++: --cpp)"),
         ("Dessa (JS)", [[str(EXE), "build", str(HERE / "bench.ds"), "--target", "js", "-o", str(build / "bench_ds.js")]],
          ["node", str(build / "bench_ds.js")], version([str(EXE), "--version"]) + " compiled to JavaScript, Node"),
     ]
@@ -176,10 +178,12 @@ def write_results(results, totals, languages, quick, problems):
     lines.append("")
     lines.append("## Notes")
     lines.append("")
-    lines.append("- C++ and Dessa are compiled with g++ -O2. Dessa checks every Int operation for overflow")
-    lines.append("  and every list index, which C++ doesn't; that is most of the difference between them.")
-    lines.append("- Dessa compiled to JavaScript keeps Int exact to 64 bits with BigInt, which is slower")
-    lines.append("  than JavaScript's own numbers (bench.js only uses numbers below 2^53).")
+    lines.append("- C++ is compiled with g++ -O2; Dessa with `dessa build --release` (-O2), through C (gcc)")
+    lines.append("  by default and through C++ with --cpp. Dessa checks every Int operation for overflow and")
+    lines.append("  every list index, which the C++ version doesn't.")
+    lines.append("- Dessa compiled to JavaScript keeps Int exact to 64 bits: Int variables inside functions are")
+    lines.append("  plain numbers while they fit (below 2^53) and BigInts beyond; everywhere else Int is a BigInt.")
+    lines.append("  bench.js only uses JavaScript's own numbers.")
     lines.append("- Java's times include the JIT warming up; Python runs in the standard interpreter.")
     if problems:
         lines.append("")
