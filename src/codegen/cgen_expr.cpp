@@ -1277,6 +1277,7 @@ CCodegen::CV CCodegen::builtinMethod(const CallExpr* e, const MemberExpr* m, con
         if (name == "toDbl") return {"((ds_dbl)" + r + ")", false};
         if (name == "toFlt") return {"((ds_flt)" + r + ")", false};
         if (name == "toChr") return {"ds_int_to_chr(" + r + ")", false};
+        if (name == "toHex" || name == "toDec" || name == "toOct" || name == "toBin") return {r, false};   // only the type's base changes
         if (name == "toFixed") return {"ds_to_fixed((ds_dbl)" + r + ", " + arg(0) + ")", true};
     } else if (rt.isEnum()) {
         std::string r = receiver();

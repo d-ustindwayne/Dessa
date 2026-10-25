@@ -33,7 +33,7 @@ const METHODS = {
         ['isDigit', '() := Bul'], ['isAlpha', '() := Bul'], ['isSpace', '() := Bul'], ['isUpper', '() := Bul'],
         ['isLower', '() := Bul'], ['upper', '() := Chr'], ['lower', '() := Chr'], ['code', '() := Int'], ['toStr', '() := Str'],
     ],
-    Num: [['toStr', '() := Str'], ['toInt', '() := Int'], ['toDbl', '() := Dbl'], ['toFlt', '() := Flt'], ['toChr', '() := Chr (Int only)'], ['toFixed', '(digits[Int]) := Str (Flt/Dbl only)']],
+    Num: [['toStr', '() := Str'], ['toInt', '() := Int'], ['toDbl', '() := Dbl'], ['toFlt', '() := Flt'], ['toChr', '() := Chr (Int only)'], ['toHex', '() := Int[16] (Int only)'], ['toDec', '() := Int (Int only)'], ['toOct', '() := Int[8] (Int only)'], ['toBin', '() := Int[2] (Int only)'], ['toFixed', '(digits[Int]) := Str (Flt/Dbl only)']],
     Bul: [['toStr', '() := Str']],
     Enum: [['name', '() := Str'], ['value', '() := Int'], ['toStr', '() := Str']],
     Collection: [
@@ -769,32 +769,87 @@ async function importableNames(doc, spec, data) {
 }
 
 // $ at the start of a line becomes $(|); a space right after var, const or
-// func becomes [|] (a type goes there). Then suggestions open.
+// func becomes [|] (a type goes there); Enter inside $("x"|) puts the list
+// over several lines. Then suggestions open.
 function autoBrackets(e) {
     if (!vscode.workspace.getConfiguration('dessa').get('autoBrackets')) return;
-    const editor = vscode.window.activeTextEditor;
-    if (!editor || editor.document !== e.document || e.contentChanges.length !== 1) return;
+    const editor = vscode.window.visibleTextEditors.find((ed) => ed.document === e.document);
+    if (!editor || e.contentChanges.length !== 1) return;
     const change = e.contentChanges[0];
-    if (change.rangeLength !== 0 || (change.text !== '$' && change.text !== ' ')) return;
     const doc = e.document;
     const at = change.range.start;
+    if (/^\r?\n[ \t]*$/.test(change.text)) {
+        if (isDessa(doc) && inDessaScript(doc, at) && !inStringOrComment(doc, at)) importOnEnter(editor, at.line);
+        return;
+    }
+    if (change.rangeLength !== 0 || (change.text !== '$' && change.text !== ' ')) return;
     if (!isDessa(doc) || !inDessaScript(doc, at) || inStringOrComment(doc, at)) return;
     const text = doc.lineAt(at.line).text;
     const before = text.slice(0, at.character);
     const after = text.slice(at.character + 1);
     let insert = null;
     if (change.text === '$' && /^\s*$/.test(before) && after.trim() === '') insert = '()';
-    if (change.text === ' ' && /(^|[\s;{(])(var|const|func)$/.test(before) && after.trim() === '') insert = '[]';
+    // `var |`, `for (var |)`, and `var |x = 5` (typed in front of a name: the space stays)
+    if (change.text === ' ' && /(^|[\s;{(])(var|const|func)$/.test(before) && !/^\s*\[/.test(after)) {
+        insert = /^\w/.test(after) ? '[] ' : '[]';
+    }
     if (!insert) return;
     const end = at.translate(0, 1);
     editor.edit((b) => {
-        if (insert === '[]') b.replace(new vscode.Range(at, end), '[]');
-        else b.insert(end, '()');
+        if (insert === '()') b.insert(end, '()');
+        else b.replace(new vscode.Range(at, end), insert);
     }, { undoStopBefore: false, undoStopAfter: false }).then((ok) => {
         if (!ok) return;
-        const inside = insert === '[]' ? at.translate(0, 1) : end.translate(0, 1);
+        const inside = insert === '()' ? end.translate(0, 1) : at.translate(0, 1);
         editor.selection = new vscode.Selection(inside, inside);
         vscode.commands.executeCommand('editor.action.triggerSuggest');
+    });
+}
+
+const IMPORT_SPEC = String.raw`"[\w.]+"(?:\s+as\s+\w+)?`;
+
+// Enter was pressed at the end of `line`. Two cases:
+//   $("dcrypto"|)    ->  $(                 a "spec" line inside a      "math"|  ->  "math",
+//                            "dcrypto",     multi-line import:                       |
+//                            |
+//                        )
+function importOnEnter(editor, line) {
+    const doc = editor.document;
+    if (line + 1 >= doc.lineCount) return;
+    const text = doc.lineAt(line).text;
+    const next = doc.lineAt(line + 1).text;
+    const unit = editor.options.insertSpaces ? ' '.repeat(Number(editor.options.tabSize) || 4) : '\t';
+    const suggest = () => vscode.commands.executeCommand('editor.action.triggerSuggest');
+
+    const oneLine = new RegExp(String.raw`^(\s*)\$\(\s*((?:${IMPORT_SPEC}\s*,\s*)*${IMPORT_SPEC})\s*,?\s*$`).exec(text);
+    const close = /^\s*\)/.exec(next);
+    if (oneLine && close) {
+        const indent = oneLine[1];
+        const specs = oneLine[2].match(new RegExp(IMPORT_SPEC, 'g'));
+        const lines = [indent + '$(', ...specs.map((s) => indent + unit + s + ','), indent + unit, indent];
+        const range = new vscode.Range(line, 0, line + 1, close[0].length - 1);
+        editor.edit((b) => b.replace(range, lines.join('\n')), { undoStopBefore: false, undoStopAfter: false }).then((ok) => {
+            if (!ok) return;
+            const cursor = new vscode.Position(line + specs.length + 1, indent.length + unit.length);
+            editor.selection = new vscode.Selection(cursor, cursor);
+            suggest();
+        });
+        return;
+    }
+
+    // A spec on its own line, right after `$(` or after other specs
+    const own = new RegExp(String.raw`^\s*${IMPORT_SPEC}\s*(,?)\s*$`).exec(text);
+    if (!own) return;
+    const start = doc.offsetAt(new vscode.Position(line, 0));
+    const before = doc.getText().slice(Math.max(0, start - 2000), start);
+    if (!new RegExp(String.raw`\$\(\s*(?:${IMPORT_SPEC}\s*,\s*)*$`).test(before)) return;
+    if (own[1]) {
+        suggest();
+        return;
+    }
+    const end = new vscode.Position(line, text.replace(/\s+$/, '').length);
+    editor.edit((b) => b.insert(end, ','), { undoStopBefore: false, undoStopAfter: false }).then((ok) => {
+        if (ok) suggest();
     });
 }
 
@@ -847,7 +902,8 @@ const completionProvider = {
             return [item];
         }
         // $("ma  or  $(ma : libraries and the project's files, with the quotes
-        const inImport = /\$\(\s*(?:"[\w.]*"(?:\s+as\s+\w+)?\s*,\s*)*("?)([\w.]*)$/.exec(linePrefix);
+        // (the list may go over several lines)
+        const inImport = /\$\(\s*(?:"[\w.]*"(?:\s+as\s+\w+)?\s*,\s*)*("?)([\w.]*)$/.exec(before.slice(-2000));
         if (inImport) {
             const quoted = inImport[1] === '"';
             const typed = inImport[2];

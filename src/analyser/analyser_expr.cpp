@@ -373,7 +373,7 @@ std::vector<Symbol> Analyser::membersOf(const SemanticType& type) const {
         "isUpper", "isLower", "code", "toChr", "toFixed", "name", "value", "add", "push", "pop", "insert",
         "remove", "removeAt", "clear", "copy", "first", "last", "get", "getOr", "set", "has", "keys",
         "values", "join", "slice", "sort", "reverse", "filter", "map", "forEach", "toList", "compare",
-        "toStr", "toInt", "toDbl", "toFlt",
+        "toStr", "toInt", "toDbl", "toFlt", "toHex", "toDec", "toOct", "toBin",
     };
     for (const char* n : builtinNames) {
         if (auto m = builtinMethod(type, n)) add(*m);
@@ -1085,6 +1085,14 @@ std::optional<Symbol> Analyser::builtinMethod(const SemanticType& receiver, cons
         if (name == "toDbl") return make({}, Dbl);
         if (name == "toFlt") return make({}, Flt);
         if (name == "toChr" && receiver.isInteger()) return make({}, Chr);
+        // The same number, printed in another base: 255.toHex() prints 0xff
+        if (receiver.isInteger() && (name == "toHex" || name == "toDec" || name == "toOct" || name == "toBin")) {
+            SemanticType based = Int;
+            if (name == "toHex") based.radix = 16;
+            if (name == "toOct") based.radix = 8;
+            if (name == "toBin") based.radix = 2;
+            return make({}, based);
+        }
         if (name == "toFixed" && !receiver.isInteger()) return make({{"digits", Int}}, Str);
         return std::nullopt;
     }

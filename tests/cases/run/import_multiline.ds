@@ -1,0 +1,7 @@
+// An import list over several lines, with a comma after the last one
+$(
+    "math",
+    "time" as t,
+)
+
+print(sqrt(16), t.millis() > 0);

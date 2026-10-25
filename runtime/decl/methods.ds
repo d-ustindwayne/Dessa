@@ -152,6 +152,18 @@ class NumberMethods {
     // Int only: the character with this code: 65.toChr() is 'A'.
     func[Chr] toChr() { ... }
 
+    // Int only: the same number, printed in base 16: 255.toHex() prints 0xff.
+    func[Int[16]] toHex() { ... }
+
+    // Int only: the same number, printed in base 10: 0xff.toDec() prints 255.
+    func[Int] toDec() { ... }
+
+    // Int only: the same number, printed in base 8: 8.toOct() prints 0o10.
+    func[Int[8]] toOct() { ... }
+
+    // Int only: the same number, printed in base 2: 5.toBin() prints 0b101.
+    func[Int[2]] toBin() { ... }
+
     // Flt / Dbl only: text with exactly `digits` decimals, rounded:
     // 3.14159.toFixed(2) is "3.14", 2.5.toFixed(0) is "3".
     func[Str] toFixed(digits[Int]) { ... }

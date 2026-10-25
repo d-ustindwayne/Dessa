@@ -893,6 +893,8 @@ $.m_toInt = (v) => {
 $.m_toDbl = (v) => $.toDbl(v);
 $.m_toFlt = (v) => $.toFlt(v);
 $.m_toChr = (v) => $.toChr(v);
+// The same number; the static type (Int[16], ...) decides how it prints
+$.m_toHex = $.m_toDec = $.m_toOct = $.m_toBin = (v) => v;
 $.m_isDigit = (c) => c.code >= 48 && c.code <= 57;
 $.m_isSpace = (c) => isSpaceCode(c.code);
 $.m_isUpper = (c) => lowerCode(c.code) !== c.code;

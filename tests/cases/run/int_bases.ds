@@ -1,0 +1,11 @@
+// toHex / toOct / toBin / toDec: the same number, printed in another base
+var[Int] x = 255;
+print(x.toHex(), x.toOct(), x.toBin(), x.toDec());
+print(x.toHex() + 1, Str(5.toBin()), 0xff.toDec());
+var[Int[8]] o = x.toOct();
+print(o, o.toHex().toDec());
+var[Int] neg = -10;
+print(neg.toHex(), neg.toBin());
+var[Int<>] xs = [1, 2, 3];
+print(xs.map((v[Int]) := v * 16).length(), (xs<2> * 100).toHex());
+print($"{x.toBin()} {0b11.toDec() + 1}");

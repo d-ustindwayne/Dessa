@@ -465,6 +465,7 @@ std::vector<ModuleSpec> Parser::parseModuleSpecs() {
     consume(TokenType::L_PAREN, "Expect '(' after '$'.");
     std::vector<ModuleSpec> specs;
     do {
+        if (!specs.empty() && check(TokenType::R_PAREN)) break;   // trailing comma
         ModuleSpec spec;
         spec.line = peek().line;
         spec.column = peek().column;

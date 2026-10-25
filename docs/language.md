@@ -56,6 +56,11 @@ Nested types work as you would expect: `Int<><>` is a list of lists,
 `(Int | Str)<>` is a list holding Ints and Strs, `Map[Str, Int<>]` maps text
 to lists.
 
+Any Int can be shown in another base with `toHex()`, `toOct()`, `toBin()` and
+`toDec()`. They give the same number as an `Int[16]`, `Int[8]`, `Int[2]` or
+plain `Int`, so it still works in arithmetic: `255.toHex()` prints `0xff`,
+`0xff.toDec()` prints `255`, `Str(5.toBin())` is `"0b101"`.
+
 `Int` arithmetic never wraps around silently: going past the 64-bit range is
 an error. For bigger numbers use `Big` from `$("math")`.
 
@@ -440,7 +445,15 @@ $("math" as m)                              // the whole module under a name:
 print(m.sqrt(2), m.PI);                     //   m.sqrt, m.PI, var[m.Big], new m.Big("12")
 ```
 
-The semicolon after an import is optional.
+The semicolon after an import is optional. A long list can go over several
+lines, and a comma after the last one is allowed:
+
+```dessa
+$(
+    "math",
+    "time",
+)
+```
 
 A dotted path maps to folders: `$("a.b.c")` is `a/b/c.ds`, looked up next to
 the importing file and then in the project folder. When there is no such file,

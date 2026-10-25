@@ -166,7 +166,7 @@
         "dessa.autoBrackets": {
           "type": "boolean",
           "default": true,
-          "description": "Typing $ at the start of a line adds (), and a space right after var, const or func becomes [] (the cursor goes inside)."
+          "description": "Typing $ at the start of a line adds (), and a space right after var, const or func becomes [] (the cursor goes inside), and Enter inside $(\"x\") puts the import list over several lines."
         },
         "dessa.unusedImports": {
           "type": "string",

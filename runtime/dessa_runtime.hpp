@@ -1598,6 +1598,11 @@ inline Int m_toInt(Chr c) {
 template <class T, std::enable_if_t<std::is_arithmetic_v<T>, int> = 0> Dbl m_toDbl(T v) { return static_cast<Dbl>(v); }
 template <class T, std::enable_if_t<std::is_arithmetic_v<T>, int> = 0> Flt m_toFlt(T v) { return static_cast<Flt>(v); }
 inline Chr m_toChr(Int v) { return to_chr(v); }
+// The same number; the static type (Int[16], ...) decides how it prints
+inline Int m_toHex(Int v) { return v; }
+inline Int m_toDec(Int v) { return v; }
+inline Int m_toOct(Int v) { return v; }
+inline Int m_toBin(Int v) { return v; }
 
 // ---- enums ----
 template <class E, std::enable_if_t<std::is_enum_v<E>, int> = 0> Str m_name(E v) { return ds_enum_name(v); }
