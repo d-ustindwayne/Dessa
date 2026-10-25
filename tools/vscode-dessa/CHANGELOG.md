@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.1
 
 - `var`, `const` or `func` + space also gets `[]` when something follows the cursor: `for (var |)`, or typed in front of a name (`var[|] x = 5`)
 - Enter inside `$("dcrypto"|)` puts the list over several lines (`"dcrypto",` on its own line, the cursor on the next) and suggests libraries and files again; Enter after a library on its own line adds the comma
