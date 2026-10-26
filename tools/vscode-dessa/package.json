@@ -2,7 +2,7 @@
   "name": "dessa",
   "displayName": "Dessa",
   "description": "Dessa language support: highlighting, errors as you type, completion, hover, go to definition and run, for .ds files, .dhtml pages and Dessa scripts inside HTML.",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "publisher": "d-ustindwayne",
   "author": {
     "name": "d-ustindwayne"

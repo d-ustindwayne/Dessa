@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.9
+
+- No changes to the extension (Dessa 0.2.9 makes programs compiled to JavaScript faster)
+
 ## 0.2.8
 
 - Inside `var[|]`, `func[|]`, a parameter's `x[|]` (and `Map[Str, |]`, after `|`) only types are suggested: the built-in ones, `Map`, `Func`, and the classes, interfaces and enums in scope; no variables. Typing `[` opens the list
