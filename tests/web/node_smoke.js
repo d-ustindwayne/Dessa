@@ -17,8 +17,8 @@ class Point {
         this.x = x;
     }
 }
-print([new Point(1), new Point(2)].map((p[Point]) := p.x * 10), 7 / 2, 2 ^ 62, "é".length());`,
-        expect: "[10, 20] 3.5 4611686018427387904 1",
+print(<new Point(1), new Point(2)>.map((p[Point]) := p.x * 10), 7 / 2, 2 ^ 62, "é".length());`,
+        expect: "<10, 20> 3.5 4611686018427387904 1",
     },
     {
         name: "imports, json, time",
@@ -32,7 +32,7 @@ print(twice(21), parseJson("[1, 2]"), dateOf(2026, 1, 1, zone: "UTC").format("EE
     },
     {
         name: "runtime error",
-        source: `var[Int<>] xs = [];\nprint(xs<1>);`,
+        source: `var[Int<>] xs = <>;\nprint(xs<1>);`,
         expectError: "Index 1 is out of range for list of length 0",
     },
 ];

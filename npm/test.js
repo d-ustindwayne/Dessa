@@ -16,7 +16,7 @@ const dessa = require(".");
     fs.writeFileSync(path.join(tmp, "broken.dhtml"), '<p></p>\n<script>\n    var[Int] x = "no";\n</script>\n');
 
     assert.strictEqual(await dessa.version(), "0.2.8");
-    const result = await dessa.compile('print("hi", [1, 2]);');
+    const result = await dessa.compile('print("hi", <1, 2>);');
     assert.ok(result.ok && result.js.includes("$.print"));
 
     const js = await dessa.compileFile(path.join(tmp, "app.ds"));
