@@ -1,0 +1,103 @@
+// Ints and whole Dbls kept apart everywhere (the JavaScript backend keeps Ints as plain numbers)
+class Point {
+    var[Dbl] x = 0.0;
+    var[Int] n = 0;
+    var[Flt] f = 0.0f;
+    init(x[Dbl], n[Int]) {
+        this.x = x;
+        this.n = n;
+    }
+}
+
+enum Level { LOW, MID(5), HIGH }
+
+func[Int] fib(n[Int]) {
+    if (n < 2) return n;
+    return fib(n - 1) + fib(n - 2);
+}
+
+func[Obj] wrap(d[Dbl]) {
+    return d;
+}
+
+// Whole Dbls stay Dbls wherever they go
+var[Dbl] d = 5.0;
+var[Obj] o = d;
+var[Obj] oi = 5;
+print(d, o, oi, typeof(o), typeof(oi), o is Dbl, o is Int, oi is Int, oi is Dbl);
+print(100000.0, 1000000000000000.0, 2.0 ^ 60, -0.0, 3.5);
+var[Dbl<>] ds = <1.0, 2.5, 100000.0>;
+print(ds, ds.join(", "));
+var[Obj<>] mixed = <1, 2.0, "three", 4.5>;
+for (var[Obj] m in mixed) print(m, typeof(m), m is Int, m is Dbl);
+var[Int | Dbl] u = 7.0;
+print(u, typeof(u), u is Dbl);
+if (u is Dbl) {
+    var[Dbl] back = u;
+    print(back + 0.5);
+}
+var[Obj] w = wrap(3.0);
+print(w, typeof(w));
+print(Int(w), Dbl(oi), Str(o));
+
+// Big Ints: past 2^53 and up to the 64-bit edge
+var[Int] big = 9007199254740991;
+big = big + 1;
+print(big, big + 1, big * 2, big - big, -big);
+var[Int] max = 9223372036854775807;
+print(max, max - 1, max / 2, max % 10);
+try {
+    print(max + 1);
+} catch (e[Str]) {
+    print("caught:", e);
+}
+var[Int] p = 2 ^ 62;
+print(p, 3 ^ 39, (-2) ^ 63);
+print(fib(30));
+
+// Bits
+print(5 & 3, 5 | 3, 5 ^^ 3, ~5, 1 << 40, -16 >> 2, 0xFFFFFFFFFF & 0xFF00, max >> 60);
+
+// Division and modulo
+print(7 / 2, -7 % 3, 7 % -3, 10 / 4);
+var[Int] cut = 7 / 2;
+print(cut, -7 / 2);
+var[Int] x = 10;
+x /= 3;
+print(x);
+x ^= 3;
+print(x);
+
+// Maps and sets with Int keys, also from a calculation and from Int()
+var[Map[Int, Str]] names = {1: "one", 2: "two"};
+names<1 + 1> = "TWO";
+names<Int("3")> = "three";
+print(names, names.has(2), names.get(4), names.keys());
+var[Int{}] seen = {3, 1, 2};
+seen.add(1 + 1);
+print(seen, seen.length());
+var[Map[Dbl, Str]] byDbl = {:};
+byDbl<1.0> = "dbl one";
+byDbl<1> = "int one";
+print(byDbl.length(), byDbl<1.0>, byDbl);
+
+// Classes and enums
+var[Point] pt = new Point(2.0, 3);
+print(pt, pt.x, pt.n, getField(pt, "x"), typeof(getField(pt, "x")));
+setField(pt, "x", 4);
+setField(pt, "n", 9);
+print(pt);
+print(Level.MID, Level.HIGH.value(), Level.LOW.value());
+
+// Lists of Ints, indexes and lengths
+var[Int<>] xs = <5, 3, 9, 1>;
+xs.sort();
+print(xs, xs.length(), xs.indexOf(9), xs<xs.length() - 1>, xs.includes(3));
+var[Int] i = 0;
+i++;
+i += 1;
+print(i, i++, i);
+var[Str] text = "héllo";
+print(text.length(), text.substr(1, 3), text.indexOf("l"));
+print(zip(<1, 2>, <1.0, 2.5>));
+print($"{d} and {5} and {2.5f}");

@@ -2,12 +2,20 @@
 // compiler (dessa build --target web / js). The JS twin of dessa_runtime.hpp:
 // every rule here must give the same results as the C++ runtime.
 //
-// Values:   Int -> BigInt (checked to the 64-bit range)   Dbl / Flt -> number
+// Values:   Int -> a number while it fits exactly (|n| <= 2^53 - 1), a BigInt
+//                  beyond that (checked to the 64-bit range); always in that
+//                  form, so === and Map keys work
+//           Dbl / Flt -> number; where the static type doesn't say it's a
+//                  Dbl (Obj, a union) a whole Dbl is a $.DblValue and a Flt a
+//                  FltValue, so it isn't taken for an Int (see "Boxes")
 //           Str -> string (counted in characters, not UTF-16 units)
 //           Chr -> $.Chr (one interned object per character)   Bul -> boolean
 //           nil -> null   List -> Array   Set -> $.DsSet (sorted)   Map -> Map
 //           class instances -> objects of generated classes ($.Obj)
 "use strict";
+// Where the program is (file, line), for error messages: set by the generated
+// code before each statement, as plain variables because that costs nothing
+let $tf = "", $tl = 0;
 const $ = (() => {
 const $ = {};
 
@@ -29,14 +37,14 @@ $.isError = null;
 let makingError = false;
 const asError = (message, runtime) => {
     if (!$.errorHook || makingError) return new DsError(message);
-    const file = traceFile, line = traceLine;   // making it runs code: keep the error's place
+    const file = $tf, line = $tl;   // making it runs code: keep the error's place
     makingError = true;
     try {
         return new Thrown($.errorHook(message, runtime));
     } finally {
         makingError = false;
-        traceFile = file;
-        traceLine = line;
+        $tf = file;
+        $tl = line;
     }
 };
 $.fail = (message) => { throw asError(message, true); };
@@ -58,9 +66,8 @@ $.message = (e) => {
 };
 $.isRuntimeError = (e) => !(e instanceof Thrown) && !(e instanceof Exit);
 
-let traceFile = "", traceLine = 0;
-$.trace = (file, line) => { traceFile = file; traceLine = line; };
-const traceLocation = () => traceLine > 0 ? `\n  at ${traceFile}:${traceLine}` : "";
+$.trace = (file, line) => { $tf = file; $tl = line; };
+const traceLocation = () => $tl > 0 ? `\n  at ${$tf}:${$tl}` : "";
 
 // ============================================================
 // Output (Node: stdout; browser: console / a page element)
@@ -165,10 +172,10 @@ $.set_field = (o, name, v) => { $.objSet(o, name, v); };
 // enum Color { RED, GREEN = 5, BLUE }: values without a number count on (6)
 $.enumType = (name, entries) => {
     const type = { $name: name, $values: [] };
-    let next = 0n;
+    let next = 0;
     for (const [valueName, given] of entries) {
         const value = given ?? next;
-        next = value + 1n;
+        next = $.add(value, 1);
         const v = Object.freeze({ $enum: type, name: valueName, value });
         type[valueName] = v;
         type.$values.push(v);
@@ -198,6 +205,7 @@ const strCmp = (a, b) => {
 $.strCmp = strCmp;
 
 const typeRank = (v) => v === null ? 0 : typeof v === "boolean" ? 1 : typeof v === "bigint" || typeof v === "number" ? 2
+    : v instanceof DblValue || v instanceof FltValue ? 2
     : v instanceof Chr ? 3 : typeof v === "string" ? 4 : Array.isArray(v) ? 5 : isEnum(v) ? 6 : 7;
 let objectIds = new WeakMap(), nextObjectId = 1;
 const objectId = (o) => {
@@ -213,7 +221,7 @@ const cmp = (a, b) => {
     switch (ra) {
         case 0: return 0;
         case 1: return a === b ? 0 : a ? 1 : -1;
-        case 2: return a < b ? -1 : a > b ? 1 : 0;   // bigint and number compare correctly
+        case 2: { a = unbox(a); b = unbox(b); return a < b ? -1 : a > b ? 1 : 0; }   // bigint and number compare correctly
         case 3: return a.code < b.code ? -1 : a.code > b.code ? 1 : 0;
         case 4: return strCmp(a, b);
         case 5: {
@@ -234,6 +242,8 @@ $.cmp = cmp;
 const eq = (a, b) => {
     if (a === b) return true;
     if (a === null || b === null || a === undefined || b === undefined) return (a ?? null) === (b ?? null);
+    a = unbox(a);
+    b = unbox(b);
     const ta = typeof a, tb = typeof b;
     if ((ta === "bigint" || ta === "number") && (tb === "bigint" || tb === "number")) {
         if (ta === tb) return a === b;
@@ -307,7 +317,9 @@ const formatDigits = (negative, digits, exp) => {
     const sci = sciMantissa + "e" + (exp < 0 ? "-" : "+") + (e < 10 ? "0" + e : String(e));
     let fixed;
     if (exp >= 0) {
-        fixed = digits.length <= exp + 1 ? digits + "0".repeat(exp + 1 - digits.length)
+        // a whole number is written with its exact digits, like std::to_chars (2^60 = 1152921504606846976)
+        fixed = digits.length <= exp + 1 ? (exp < 21 ? BigInt(Number((negative ? "-" : "") + digits + "e" + (exp + 1 - digits.length))).toString().replace("-", "")
+                                                     : digits + "0".repeat(exp + 1 - digits.length))
                                          : digits.slice(0, exp + 1) + "." + digits.slice(exp + 1);
     } else {
         fixed = "0." + "0".repeat(-exp - 1) + digits;
@@ -338,32 +350,50 @@ const fmtFlt = (n) => {
 $.fmtDbl = fmtDbl;
 $.fmtFlt = fmtFlt;
 
-// A Flt value carries its kind for printing: the compiler wraps Flt values
-// that reach print / templates with $.flt(x).
+// ---- Boxes ----
+// A plain number is an Int when it is whole and a Dbl when it isn't. Where the
+// static type doesn't tell them apart (an Obj, a union, print), a whole Dbl is
+// kept as a DblValue and a Flt as a FltValue: the compiler boxes them on the
+// way in ($.dv, $.flt, $.rebox) and unboxes them on the way out ($.unbox).
 class FltValue { constructor(v) { this.v = v; } }
+class DblValue { constructor(v) { this.v = v; } }
+$.DblValue = DblValue;
 $.flt = (v) => new FltValue(v);
-// A value with its Flt numbers marked, for printing. `shape` says where they
-// are: "f" a Flt, ["l", s] list items, ["s", s] set items, ["m", k, v] map,
-// ["u", ...members] a union (the member matching the value applies).
-const fview = (v, shape) => {
+// One box per value, so that boxes work as Map keys and with ===
+const dblBoxes = new Map(), negativeZero = new DblValue(-0);
+$.dv = (v) => {
+    if (typeof v !== "number" || !Number.isInteger(v)) return v;
+    if (Object.is(v, -0)) return negativeZero;
+    let box = dblBoxes.get(v);
+    if (!box) {
+        box = new DblValue(v);
+        if (dblBoxes.size < 100000) dblBoxes.set(v, box);
+    }
+    return box;
+};
+// A box's number (an Int that comes where a Dbl is wanted becomes a number)
+const unbox = (v) => v instanceof DblValue || v instanceof FltValue ? v.v : v;
+$.unbox = unbox;
+$.unnum = (v) => typeof v === "bigint" ? Number(v) : unbox(v);
+// A value boxed or unboxed where the static types differ. `shape` says where:
+// "d" a Dbl to box, "f" a Flt to box, "x" a number to unbox, "y" to unbox as a
+// Flt; ["l", s] list items, ["s", s] set items, ["m", k, v] map keys / values.
+const rebox = (v, shape) => {
     if (v === null || v === undefined || !shape) return v;
-    if (shape === "f") return typeof v === "number" ? new FltValue(v) : v;
+    switch (shape) {
+        case "d": return $.dv(v);
+        case "f": return typeof v === "number" ? new FltValue(v) : v;
+        case "x": return $.unnum(v);
+        case "y": return v === null ? v : Math.fround($.unnum(v));
+    }
     switch (shape[0]) {
-        case "l": return Array.isArray(v) ? v.map((x) => fview(x, shape[1])) : v;
-        case "s": { if (!(v instanceof DsSet)) return v; const s = new DsSet(); s.items = v.items.map((x) => fview(x, shape[1])); return s; }
-        case "m": { if (!(v instanceof Map)) return v; const m = new Map(); for (const [k, x] of v) m.set(fview(k, shape[1]), fview(x, shape[2])); return m; }
-        case "u":
-            for (const member of shape.slice(1)) {
-                if ((member === "f" && typeof v === "number") || (Array.isArray(member) &&
-                    ((member[0] === "l" && Array.isArray(v)) || (member[0] === "s" && v instanceof DsSet) || (member[0] === "m" && v instanceof Map)))) {
-                    return fview(v, member);
-                }
-            }
-            return v;
+        case "l": return Array.isArray(v) ? v.map((x) => rebox(x, shape[1])) : v;
+        case "s": { if (!(v instanceof DsSet)) return v; const s = new DsSet(); s.items = v.items.map((x) => rebox(x, shape[1])); return s; }
+        case "m": { if (!(v instanceof Map)) return v; const m = new Map(); for (const [k, x] of v) m.set(rebox(k, shape[1]), rebox(x, shape[2])); return m; }
     }
     return v;
 };
-$.fview = fview;
+$.rebox = rebox;
 
 class Radix { constructor(value, base) { this.value = value; this.base = base; } }
 $.radix = (value, base) => base === 10 ? value : new Radix(value, base);
@@ -390,11 +420,12 @@ const str = (v) => {
     switch (typeof v) {
         case "string": return v;
         case "bigint": return v.toString();
-        case "number": return fmtDbl(v);
+        case "number": return Number.isInteger(v) ? String(v) : fmtDbl(v);   // a whole one is an Int
         case "boolean": return v ? "true" : "false";
         case "function": return "<function>";
     }
     if (v instanceof Chr) return String.fromCodePoint(v.code);
+    if (v instanceof DblValue) return fmtDbl(v.v);
     if (v instanceof FltValue) return fmtFlt(v.v);
     if (v instanceof Radix) return radixStr(v);
     if (isEnum(v)) return v.name;
@@ -450,89 +481,91 @@ $.input = (promptText) => {
 // Int arithmetic (64-bit, checked)
 // ============================================================
 
+// An Int is a plain number while it fits exactly (|n| <= 2^53 - 1) and a
+// BigInt only beyond that, always in that form ($.small): the fast path is
+// plain number arithmetic, a result that leaves the exact range is worked out
+// again with BigInts.
 const MIN = -(2n ** 63n), MAX = 2n ** 63n - 1n;
-const overflow = (a, op, b) => $.fail(`Int overflow: ${a} ${op} ${b} doesn't fit in an Int (-9223372036854775808 to 9223372036854775807); use Big from $("math") for bigger numbers`);
-const check = (r, a, op, b) => (r < MIN || r > MAX) ? overflow(a, op, b) : r;
-$.add = (a, b) => check(a + b, a, "+", b);
-$.sub = (a, b) => check(a - b, a, "-", b);
-$.mul = (a, b) => check(a * b, a, "*", b);
-$.neg = (a) => a === MIN ? overflow(0n, "-", a) : -a;
-$.shl = (a, b) => BigInt.asIntN(64, a << b);
-
-// ---- Small Ints ----
-// Int locals of a function hold a plain number while the value fits exactly
-// (up to 2^53); these work on such values (or BigInts) and switch to BigInt
-// when a result gets too big. Anything leaving the function is made a BigInt
-// again ($.big), so the rest of the runtime only ever sees BigInts.
 const SAFE = 9007199254740991;
+const overflow = (a, op, b) => $.fail(`Int overflow: ${a} ${op} ${b} doesn't fit in an Int (-9223372036854775808 to 9223372036854775807); use Big from $("math") for bigger numbers`);
 $.big = (v) => (typeof v === "number" ? BigInt(v) : v);
-$.istr = (v) => String(v);   // an Int's text: the same digits for a number or a BigInt
 $.small = (v) => (typeof v === "bigint" && v >= -9007199254740991n && v <= 9007199254740991n ? Number(v) : v);
-$.hadd = (a, b) => {
-    if (typeof a === "number" && typeof b === "number") { const r = a + b; if (r >= -SAFE && r <= SAFE) return r; }
-    return $.add($.big(a), $.big(b));
+$.istr = (v) => String(v);   // an Int's text: the same digits for a number or a BigInt
+// A BigInt result: checked, then a number again when it fits
+const checked = (r, a, op, b) => (r < MIN || r > MAX) ? overflow(a, op, b) : $.small(r);
+// The quick path is kept small so that V8 inlines it; the rest is apart
+const addBig = (a, b) => checked($.big(a) + $.big(b), a, "+", b);
+const subBig = (a, b) => checked($.big(a) - $.big(b), a, "-", b);
+const mulBig = (a, b) => checked($.big(a) * $.big(b), a, "*", b);
+$.add = (a, b) => {
+    if (typeof a === "number" && typeof b === "number") { const r = a + b; if (r <= SAFE && r >= -SAFE) return r; }
+    return addBig(a, b);
 };
-$.hsub = (a, b) => {
-    if (typeof a === "number" && typeof b === "number") { const r = a - b; if (r >= -SAFE && r <= SAFE) return r; }
-    return $.sub($.big(a), $.big(b));
+$.sub = (a, b) => {
+    if (typeof a === "number" && typeof b === "number") { const r = a - b; if (r <= SAFE && r >= -SAFE) return r; }
+    return subBig(a, b);
 };
-$.hmul = (a, b) => {
-    if (typeof a === "number" && typeof b === "number") { const r = a * b; if (r >= -SAFE && r <= SAFE) return r + 0; }
-    return $.mul($.big(a), $.big(b));
+$.mul = (a, b) => {
+    if (typeof a === "number" && typeof b === "number") { const r = a * b; if (r <= SAFE && r >= -SAFE) return r + 0; }   // + 0: no -0
+    return mulBig(a, b);
 };
-$.hmod = (a, b) => {
-    if (typeof a === "number" && typeof b === "number") {
-        if (b === 0) $.fail("Modulo by zero");
+$.inc = (a) => (typeof a === "number" && a < SAFE ? a + 1 : addBig(a, 1));
+$.dec = (a) => (typeof a === "number" && a > -SAFE ? a - 1 : subBig(a, 1));
+$.neg = (a) => {
+    if (typeof a === "number") return 0 - a;
+    return a === MIN ? overflow(0, "-", a) : $.small(-a);
+};
+// Euclidean: never negative
+$.imod = (a, b) => {
+    if (typeof a === "number" && typeof b === "number" && b !== 0) {
         const r = a % b;
         return r < 0 ? r + Math.abs(b) : r + 0;
     }
-    return $.mod($.big(a), $.big(b));
+    return modBig(a, b);
 };
-$.hdiv = (a, b) => {
-    if (typeof a === "number" && typeof b === "number") {
-        if (b === 0) $.fail("Division by zero");
-        return a / b;
-    }
-    return $.div($.big(a), $.big(b));
+const modBig = (a, b) => {
+    const x = $.big(a), y = $.big(b);
+    if (y === 0n) $.fail("Modulo by zero");
+    const r = x % y;
+    return $.small(r < 0n ? r + (y < 0n ? -y : y) : r);
 };
-$.hneg = (a) => (typeof a === "number" ? 0 - a : $.neg(a));
-$.hinc = (a) => (typeof a === "number" && a < SAFE ? a + 1 : $.add($.big(a), 1n));
-$.hdec = (a) => (typeof a === "number" && a > -SAFE ? a - 1 : $.sub($.big(a), 1n));
-
 // Int / Int is a real division (7 / 2 == 3.5)
 $.div = (a, b) => {
-    if (typeof a === "bigint" && typeof b === "bigint") {
-        if (b === 0n) $.fail("Division by zero");
-        return Number(a) / Number(b);
-    }
+    if (b === 0 || b === 0n) $.fail("Division by zero");
     return Number(a) / Number(b);
 };
-// Euclidean: never negative
+$.ipow = (a, b) => {
+    if (b < 0) $.fail("Negative exponent in Int ^ Int; use a Dbl base, e.g. 2.0 ^ -1");
+    if (typeof a === "number" && typeof b === "number") { const r = a ** b; if (r <= SAFE && r >= -SAFE) return r + 0; }
+    const x = $.big(a), y = $.big(b);
+    if (y > 64n && x !== 0n && x !== 1n && x !== -1n) $.fail(`Int overflow: ${a} ^ ${b} is too big for Int; use Big from $("math") for bigger numbers, e.g. new Big(${a}).pow(${b})`);
+    const r = x ** y;
+    if (r < MIN || r > MAX) $.fail(`Int overflow: ${a} ^ ${b} is too big for Int; use Big from $("math") for bigger numbers, e.g. new Big(${a}).pow(${b})`);
+    return $.small(r);
+};
+// Bits work on the 64-bit value (a number in the 32-bit range takes the quick way)
+const I32 = (v) => typeof v === "number" && v >= -2147483648 && v <= 2147483647;
+const wrap64 = (r) => $.small(BigInt.asIntN(64, r));
+$.band = (a, b) => I32(a) && I32(b) ? a & b : wrap64($.big(a) & $.big(b));
+$.bor = (a, b) => I32(a) && I32(b) ? a | b : wrap64($.big(a) | $.big(b));
+$.bxor = (a, b) => I32(a) && I32(b) ? a ^ b : wrap64($.big(a) ^ $.big(b));
+$.bnot = (a) => I32(a) ? ~a : wrap64(~$.big(a));
+$.shl = (a, b) => wrap64($.big(a) << $.big(b));
+$.shr = (a, b) => (I32(a) && typeof b === "number" && b >= 0 && b < 32) ? a >> b : wrap64($.big(a) >> $.big(b));
+// Dbl % Dbl and Dbl ^ Dbl
 $.mod = (a, b) => {
-    if (typeof a === "bigint" && typeof b === "bigint") {
-        if (b === 0n) $.fail("Modulo by zero");
-        const r = a % b;
-        return r < 0n ? r + (b < 0n ? -b : b) : r;
-    }
-    a = Number(a); b = Number(b);
     if (b === 0) $.fail("Modulo by zero");
     const r = a % b;
     return r < 0 ? r + Math.abs(b) : r;
 };
-$.pow = (a, b) => {
-    if (typeof a === "bigint" && typeof b === "bigint") {
-        if (b < 0n) $.fail("Negative exponent in Int ^ Int; use a Dbl base, e.g. 2.0 ^ -1");
-        const r = a ** b;
-        if (r < MIN || r > MAX) $.fail(`Int overflow: ${a} ^ ${b} is too big for Int; use Big from $("math") for bigger numbers, e.g. new Big(${a}).pow(${b})`);
-        return r;
-    }
-    return Math.pow(Number(a), Number(b));
-};
+$.pow = (a, b) => Math.pow(a, b);
 // Truncating a decimal into an Int (var[Int] x = 7 / 2)
 $.trunc = (n) => {
-    if (typeof n === "bigint") return n;
+    if (typeof n === "bigint") return $.small(n);
     if (!Number.isFinite(n)) $.fail(`Cannot convert ${fmtDbl(n)} to Int`);
-    const r = BigInt(Math.trunc(n));
+    const t = Math.trunc(n);
+    if (t <= SAFE && t >= -SAFE) return t + 0;
+    const r = BigInt(t);
     if (r < MIN || r > MAX) $.fail(`Cannot convert ${fmtDbl(n)} to Int: it's too big (Int goes up to about 9.22E18)`);
     return r;
 };
@@ -564,6 +597,12 @@ $.setAt = (obj, i, v) => {
     obj[index(i, obj.length, "list")] = v;
     return v;
 };
+// The compiler's choice when it knows the value is a list
+$.lat = (l, i) => (typeof i === "number" && i >= 0 && i < l.length) ? l[i] : $.at(l, i);
+$.lset = (l, i, v) => {
+    if (typeof i === "number" && i >= 0 && i < l.length) { l[i] = v; return v; }
+    return $.setAt(l, i, v);
+};
 
 // ============================================================
 // Conversions: Int("42") Dbl("2.5") Bul(1) Chr(65) Str(x)
@@ -581,31 +620,34 @@ const parseFloatText = (t) => {
 };
 const notConvertible = (v, to) => {
     if (v === null || v === undefined) $.fail(`Cannot convert Nil to ${to}`);
-    if (typeof v === "object" && !(v instanceof Chr) && !isEnum(v) && !(v instanceof FltValue) && !(v instanceof Radix)) {
+    if (typeof v === "object" && !(v instanceof Chr) && !isEnum(v) && !(v instanceof FltValue) && !(v instanceof DblValue) && !(v instanceof Radix)) {
         $.fail(`Cannot convert ${$.typeOf(v, "Obj")} to ${to}`);
     }
 };
 $.toInt = (v) => {
     notConvertible(v, "Int");
+    v = unbox(v);
     if (typeof v === "string") {
         const t = trimText(v);
         if (/^-?\d+$/.test(t)) {
             const r = BigInt(t);
-            if (r >= MIN && r <= MAX) return r;
+            if (r >= MIN && r <= MAX) return $.small(r);
         }
         const d = parseFloatText(t);
-        if (t && d !== undefined && Number.isFinite(d)) return BigInt(Math.trunc(d));
+        if (t && d !== undefined && Number.isFinite(d)) return $.trunc(d);
         $.fail(`Cannot convert "${v}" to Int`);
     }
-    if (typeof v === "bigint") return v;
+    if (typeof v === "bigint") return $.small(v);
     if (typeof v === "number") return $.trunc(v);
-    if (typeof v === "boolean") return v ? 1n : 0n;
-    if (v instanceof Chr) return BigInt(v.code);
+    if (typeof v === "boolean") return v ? 1 : 0;
+    if (v instanceof Chr) return v.code;
     if (isEnum(v)) return v.value;
+    if (v instanceof Radix) return v.value;
     return $.trunc(Number(v));
 };
 $.toDbl = (v) => {
     notConvertible(v, "Dbl");
+    v = unbox(v);
     if (typeof v === "string") {
         const t = trimText(v), d = parseFloatText(t);
         if (!t || d === undefined) $.fail(`Cannot convert "${v}" to Dbl`);
@@ -613,6 +655,7 @@ $.toDbl = (v) => {
     }
     if (typeof v === "boolean") return v ? 1 : 0;
     if (v instanceof Chr) return v.code;
+    if (v instanceof Radix) return Number(v.value);
     return Number(v);
 };
 $.toFlt = (v) => {
@@ -625,6 +668,7 @@ $.toFlt = (v) => {
 };
 $.toBul = (v) => {
     notConvertible(v, "Bul");
+    v = unbox(v);
     if (typeof v === "string") {
         const t = trimText(v).toLowerCase();
         if (t === "true" || t === "1" || t === "yes") return true;
@@ -637,6 +681,7 @@ $.toBul = (v) => {
 };
 $.toChr = (v) => {
     notConvertible(v, "Chr");
+    v = unbox(v);
     if (typeof v === "string") {
         const chars = Array.from(v);
         if (chars.length !== 1) $.fail(`Cannot convert "${v}" to Chr: it must be exactly one character`);
@@ -652,11 +697,13 @@ $.toChr = (v) => {
 $.toStr = (v) => str(v);
 
 // ============================================================
-// Type checks:  x is T
+// Type checks:  x is T   (on values as an Obj or a union holds them: see Boxes)
 // ============================================================
 
-$.isInt = (v) => typeof v === "bigint";
-$.isNum = (v) => typeof v === "number";
+$.isInt = (v) => typeof v === "bigint" || (typeof v === "number" && Number.isInteger(v));
+$.isNum = (v) => (typeof v === "number" && !Number.isInteger(v)) || v instanceof DblValue || v instanceof FltValue;
+// Can it be stored in a Dbl / Flt? (an Int can)
+$.isNumber = (v) => typeof v === "number" || typeof v === "bigint" || v instanceof DblValue || v instanceof FltValue;
 $.isStr = (v) => typeof v === "string";
 $.isBul = (v) => typeof v === "boolean";
 $.isChr = (v) => v instanceof Chr;
@@ -668,11 +715,14 @@ $.isEnumOf = (v, type) => isEnum(v) && v.$enum === type;
 $.isClass = (v, cls) => v instanceof cls;
 $.implements = (v, key) => v instanceof Obj && v.$ifaces.includes(key);
 
-// typeof(x): the static type's name, or what the value is right now
+// typeof(x): the static type's name, or what the value is right now (the
+// compiler hands over the value boxed, as an Obj would hold it)
+const fltName = (known) => known === "Flt" || (known.includes("Flt") && !known.includes("Dbl")) ? "Flt" : "Dbl";
 $.typeOf = (v, known) => {
     if (v === null || v === undefined) return "Nil";
-    if (typeof v === "bigint") return known.startsWith("Int") ? known.split(" ")[0] : "Int";
-    if (typeof v === "number") return known === "Flt" ? "Flt" : known.includes("Flt") && !known.includes("Dbl") ? "Flt" : "Dbl";
+    if ($.isInt(v)) return known.startsWith("Int") ? known.split(" ")[0] : "Int";
+    if (typeof v === "number" || v instanceof DblValue) return fltName(known);
+    if (v instanceof FltValue) return known.includes("Dbl") && !known.includes("Flt") ? "Dbl" : "Flt";
     if (typeof v === "string") return "Str";
     if (typeof v === "boolean") return "Bul";
     if (v instanceof Chr) return "Chr";
@@ -693,7 +743,7 @@ $.chain = (v, f) => (v === null || v === undefined) ? null : f(v);
 $.orThrow = (v, raise) => (v === null || v === undefined) ? raise() : v;
 
 // Values crossing to / from JavaScript objects (webutils' Element, Event, ...)
-$.extInt = (v) => v === null || v === undefined ? null : typeof v === "bigint" ? v : BigInt(Math.trunc(Number(v)));
+$.extInt = (v) => v === null || v === undefined ? null : $.trunc(typeof v === "bigint" ? v : Number(v));
 $.extOut = (v) => typeof v === "bigint" ? Number(v) : v;
 $.extList = (v) => v === null || v === undefined ? null : Array.from(v);
 
@@ -702,11 +752,23 @@ $.extList = (v) => v === null || v === undefined ? null : Array.from(v);
 // ============================================================
 
 const chars = (s) => Array.from(s);
-const big = (n) => BigInt(n);
 const num = (i) => Number(i);
-const sizeOf = (c) => typeof c === "string" ? chars(c).length : Array.isArray(c) ? c.length : c.size;
+// A Str's length in characters (like Array.from(s).length, without the copy):
+// UTF-16 units, a surrogate pair counted once
+const strLength = (s) => {
+    let n = s.length;
+    for (let i = 0; i < s.length - 1; i++) {
+        const c = s.charCodeAt(i);
+        if (c >= 0xD800 && c <= 0xDBFF) {
+            const d = s.charCodeAt(i + 1);
+            if (d >= 0xDC00 && d <= 0xDFFF) { n--; i++; }
+        }
+    }
+    return n;
+};
+const sizeOf = (c) => typeof c === "string" ? strLength(c) : Array.isArray(c) ? c.length : c.size;
 
-$.m_length = (c) => big(sizeOf(c));
+$.m_length = (c) => sizeOf(c);
 $.m_isEmpty = (c) => sizeOf(c) === 0;
 $.m_toStr = (v) => str(v);
 
@@ -877,9 +939,9 @@ $.m_endsWith = (s, p) => s.endsWith(p);
 $.m_indexOf = (c, v) => {
     if (typeof c === "string") {
         const i = c.indexOf(v);
-        return i < 0 ? -1n : big(chars(c.slice(0, i)).length);
+        return i < 0 ? -1 : chars(c.slice(0, i)).length;
     }
-    return big(c.findIndex((x) => eq(x, v)));
+    return c.findIndex((x) => eq(x, v));
 };
 $.m_replace = (s, from, to) => from === "" ? s : s.replace(from, () => to);
 $.m_replaceAll = (s, from, to) => from === "" ? s : s.split(from).join(to);
@@ -892,22 +954,22 @@ $.m_toFixed = (value, digits) => {
 $.m_split = (s, sep) => sep === "" ? chars(s) : s.split(sep);
 $.m_substr = (s, start, length) => {
     const cs = chars(s), total = cs.length;
-    if (start < 0n || start > big(total)) $.fail(`substr start ${start} is out of range for Str of length ${total}`);
-    if (length < 0n) $.fail("substr length cannot be negative");
+    if (start < 0 || start > total) $.fail(`substr start ${start} is out of range for Str of length ${total}`);
+    if (length < 0) $.fail("substr length cannot be negative");
     return cs.slice(num(start), Math.min(total, num(start) + num(length))).join("");
 };
-$.m_repeat = (s, count) => count <= 0n ? "" : s.repeat(num(count));
+$.m_repeat = (s, count) => count <= 0 ? "" : s.repeat(num(count));
 $.m_chars = (s) => chars(s).map((c) => $.chr(c.codePointAt(0)));
-$.m_compare = (a, b) => big(strCmp(a, b));
+$.m_compare = (a, b) => strCmp(a, b);
 $.m_toInt = (v) => {
     if (typeof v === "string") {
         const t = trimText(v);
-        if (/^-?\d+$/.test(t)) { const r = BigInt(t); if (r >= MIN && r <= MAX) return r; }
+        if (/^-?\d+$/.test(t)) { const r = BigInt(t); if (r >= MIN && r <= MAX) return $.small(r); }
         $.fail(`Cannot convert "${v}" to Int`);
     }
     if (v instanceof Chr) {
         if (v.code < 48 || v.code > 57) $.fail(`Cannot convert '${String.fromCodePoint(v.code)}' to Int: only the digits 0 to 9 have a value`);
-        return BigInt(v.code - 48);
+        return v.code - 48;
     }
     return $.toInt(v);
 };
@@ -927,7 +989,7 @@ $.m_isAlpha = (c) => {
     return (x >= 0xAA && x <= 0x24F && x !== 0xD7 && x !== 0xF7) || (x >= 0x3040 && x <= 0x30FF) ||
            (x >= 0x4E00 && x <= 0x9FFF) || (x >= 0xAC00 && x <= 0xD7A3);
 };
-$.m_code = (c) => big(c.code);
+$.m_code = (c) => c.code;
 $.m_name = (e) => e.name;
 $.m_value = (e) => e.value;
 
@@ -938,7 +1000,7 @@ $.m_pop = (l) => { if (l.length === 0) $.fail("pop() on an empty list"); return 
 $.m_first = (l) => { if (l.length === 0) $.fail("first() on an empty list"); return copy(l[0]); };
 $.m_last = (l) => { if (l.length === 0) $.fail("last() on an empty list"); return copy(l[l.length - 1]); };
 $.m_insert = (l, i, v) => {
-    if (i < 0n || i > big(l.length)) $.fail(`insert index ${i} is out of range for list of length ${l.length}`);
+    if (i < 0 || i > l.length) $.fail(`insert index ${i} is out of range for list of length ${l.length}`);
     l.splice(num(i), 0, v);
 };
 $.m_removeAt = (l, i) => l.splice(index(i, l.length, "list"), 1)[0];
@@ -957,7 +1019,7 @@ $.m_sort = (l, compare) => {
         // stable, like std::stable_sort
         const sorted = l.map((v, i) => [v, i]).sort((a, b) => {
             const c = compare(a[0], b[0]);
-            const n = typeof c === "bigint" ? (c < 0n ? -1 : c > 0n ? 1 : 0) : c;
+            const n = c < 0 ? -1 : c > 0 ? 1 : 0;
             return n || a[1] - b[1];
         });
         for (let i = 0; i < l.length; i++) l[i] = sorted[i][0];
@@ -965,8 +1027,14 @@ $.m_sort = (l, compare) => {
     }
     l.sort(cmp);
 };
+// sort() on an Int<>: numbers sort fastest as a Float64Array (the same order)
+$.m_sortInts = (l) => {
+    for (let i = 0; i < l.length; i++) if (typeof l[i] !== "number") { l.sort(cmp); return; }
+    const t = Float64Array.from(l).sort();
+    for (let i = 0; i < l.length; i++) l[i] = t[i];
+};
 $.m_slice = (l, start, end) => {
-    if (start < 0n || end < 0n) $.fail(`slice(${start}, ${end}): negative indexes are not allowed`);
+    if (start < 0 || end < 0) $.fail(`slice(${start}, ${end}): negative indexes are not allowed`);
     if (start > end) $.fail(`slice(${start}, ${end}): start is after end`);
     return copy(l.slice(Math.min(num(start), l.length), Math.min(num(end), l.length)));
 };
@@ -1010,13 +1078,13 @@ $.math = {
     sqrt: (x) => { if (x < 0) $.fail(`sqrt of a negative number (${fmtDbl(x)})`); return Math.sqrt(x); },
     cbrt: Math.cbrt, pow: Math.pow, sin: Math.sin, cos: Math.cos, tan: Math.tan, atan2: Math.atan2,
     log: Math.log, log10: Math.log10, exp: Math.exp,
-    abs: (x) => typeof x === "bigint" ? (x < 0n ? $.neg(x) : x) : Math.abs(x),
+    abs: (x) => typeof x === "bigint" ? (x < 0n ? $.neg(x) : x) : Math.abs(x) + 0,
     min: (a, b) => (a < b ? a : b), max: (a, b) => (a > b ? a : b),
     clamp: (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x),
     floor: (x) => $.trunc(Math.floor(numeric(x))), ceil: (x) => $.trunc(Math.ceil(numeric(x))),
     round: (x) => $.trunc(Math.sign(x) * Math.round(Math.abs(numeric(x)))),
     random: Math.random,
-    randomInt: (lo, hi) => { if (lo > hi) $.fail(`randomInt(${lo}, ${hi}): low is bigger than high`); return lo + BigInt(Math.floor(Math.random() * Number(hi - lo + 1n))); },
+    randomInt: (lo, hi) => { if (lo > hi) $.fail(`randomInt(${lo}, ${hi}): low is bigger than high`); return $.small($.big(lo) + BigInt(Math.floor(Math.random() * Number($.big(hi) - $.big(lo) + 1n)))); },
     // Big helpers (class Big in math.dm): numbers of any size as digit text
     _bigNormalize: (t) => {
         const s = t.trim().replace(/^\+/, "");
@@ -1028,8 +1096,8 @@ $.math = {
     _bigMul: (a, b) => (BigInt(a) * BigInt(b)).toString(),
     _bigDiv: (a, b) => { if (BigInt(b) === 0n) $.fail("Division by zero"); return (BigInt(a) / BigInt(b)).toString(); },
     _bigMod: (a, b) => { const m = BigInt(b); if (m === 0n) $.fail("Modulo by zero"); const r = BigInt(a) % m; return (r < 0n ? r + (m < 0n ? -m : m) : r).toString(); },
-    _bigPow: (a, e) => { if (e < 0n) $.fail("Negative exponent"); return (BigInt(a) ** e).toString(); },
-    _bigCompare: (a, b) => { const x = BigInt(a), y = BigInt(b); return x < y ? -1n : x > y ? 1n : 0n; },
+    _bigPow: (a, e) => { if (e < 0) $.fail("Negative exponent"); return (BigInt(a) ** $.big(e)).toString(); },
+    _bigCompare: (a, b) => { const x = BigInt(a), y = BigInt(b); return x < y ? -1 : x > y ? 1 : 0; },
     _bigSci: (a, digits) => {
         let s = a, sign = "";
         if (s.startsWith("-")) { sign = "-"; s = s.slice(1); }
@@ -1046,7 +1114,7 @@ $.math = {
         const mantissa = keep.length > 1 ? keep[0] + "." + keep.slice(1) : keep;
         return `${sign}${mantissa}E${exponent}`;
     },
-    _bigToInt: (a) => { const v = BigInt(a); if (v < MIN || v > MAX) $.fail(`Cannot convert ${$.math._bigSci(a, 2n)} to Int: it's too big (Int goes up to about 9.22E18)`); return v; },
+    _bigToInt: (a) => { const v = BigInt(a); if (v < MIN || v > MAX) $.fail(`Cannot convert ${$.math._bigSci(a, 2)} to Int: it's too big (Int goes up to about 9.22E18)`); return $.small(v); },
     _bigToDbl: (a) => Number(a),
 };
 
@@ -1080,7 +1148,7 @@ const daysFromCivil = (y, m, d) => {
 };
 $.time = {
     now: () => Date.now() / 1000,
-    millis: () => BigInt(Math.floor(typeof performance !== "undefined" ? performance.now() : Date.now())),
+    millis: () => Math.floor(typeof performance !== "undefined" ? performance.now() : Date.now()),
     sleep: (ms) => {
         const end = Date.now() + Number(ms);
         if (isNode && typeof SharedArrayBuffer !== "undefined") {
@@ -1093,11 +1161,11 @@ $.time = {
         const d = new Date(), p = (n) => String(n).padStart(2, "0");
         return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
     },
-    _epochMillis: () => BigInt(Date.now()),
+    _epochMillis: () => Date.now(),
     _epochOf: (y, mo, d, h, mi, s, ms) =>
-        ((BigInt(daysFromCivil(Number(y), Number(mo), Number(d))) * 24n + h) * 60n + mi) * 60000n + s * 1000n + ms,
+        $.small(((BigInt(daysFromCivil(Number(y), Number(mo), Number(d))) * 24n + $.big(h)) * 60n + $.big(mi)) * 60000n + $.big(s) * 1000n + $.big(ms)),
     _civil: (utc, offsetMinutes) => {
-        const local = utc + offsetMinutes * 60000n;
+        const local = $.big(utc) + $.big(offsetMinutes) * 60000n;
         let days = local / 86400000n;
         if (local % 86400000n < 0n) days -= 1n;
         let rest = local - days * 86400000n;
@@ -1112,14 +1180,14 @@ $.time = {
         const weekday = ((Number(days) % 7 + 7) % 7 + 3) % 7 + 1;
         const yearDay = Number(days) - daysFromCivil(y, 1, 1) + 1;
         const hour = rest / 3600000n; rest %= 3600000n;
-        return [BigInt(y), BigInt(m), BigInt(d), hour, rest / 60000n, (rest % 60000n) / 1000n, rest % 1000n, BigInt(weekday), BigInt(yearDay)];
+        return [y, m, d, Number(hour), Number(rest / 60000n), Number((rest % 60000n) / 1000n), Number(rest % 1000n), weekday, yearDay];
     },
     _offsetMinutes: (zone, utc) => {
         const o = offsetIn(zone, utc);
         if (o === undefined) $.fail(`Unknown time zone '${zone}' (use a name like "Asia/Manila" or "America/New_York", "UTC", "local", or an offset like "+08:00")`);
-        return BigInt(o);
+        return o;
     },
-    _isZone: (zone) => offsetIn(zone, BigInt(Date.now())) !== undefined,
+    _isZone: (zone) => offsetIn(zone, Date.now()) !== undefined,
 };
 
 let programArgs = [];
@@ -1164,7 +1232,7 @@ $.sys = {
         seedWith((BigInt(words[0]) << 32n) ^ BigInt(words[1]) ^ BigInt(Date.now()));
     }
     const rand = () => Number(next() >> 11n) * 2 ** -53;
-    const randInt = (low, high) => {
+    const randBig = (low, high) => {
         if (low > high) $.fail(`randInt: low (${low}) is bigger than high (${high})`);
         const range = (BigInt.asUintN(64, high) - BigInt.asUintN(64, low) + 1n) & M;
         if (range === 0n) return BigInt.asIntN(64, next());
@@ -1176,31 +1244,31 @@ $.sys = {
     const shuffle = (items) => {
         const out = items.slice();
         for (let i = out.length - 1; i > 0; i--) {
-            const j = Number(randInt(0n, BigInt(i)));
+            const j = Number(randBig(0n, BigInt(i)));
             [out[i], out[j]] = [out[j], out[i]];
         }
         return out;
     };
     const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     $.random = {
-        seed: (value) => seedWith(value),
+        seed: (value) => seedWith($.big(value)),
         rand,
-        randInt,
+        randInt: (low, high) => $.small(randBig($.big(low), $.big(high))),
         randDbl: (low, high) => low + rand() * (high - low),
         chance: (p) => rand() < p,
         pick: (items) => {
             if (items.length === 0) $.fail("pick: the list is empty");
-            return items[Number(randInt(0n, BigInt(items.length - 1)))];
+            return items[Number(randBig(0n, BigInt(items.length - 1)))];
         },
         shuffle,
         sample: (items, count) => {
-            if (count < 0n || count > BigInt(items.length)) $.fail(`sample: can't take ${count} items from a list of ${items.length}`);
+            if (count < 0 || count > items.length) $.fail(`sample: can't take ${count} items from a list of ${items.length}`);
             return shuffle(items).slice(0, Number(count));
         },
         randStr: (length) => {
-            if (length < 0n) $.fail("randStr: length can't be negative");
+            if (length < 0) $.fail("randStr: length can't be negative");
             let out = "";
-            for (let i = 0n; i < length; i++) out += alphabet[Number(randInt(0n, 61n))];
+            for (let i = 0; i < length; i++) out += alphabet[Number(randBig(0n, 61n))];
             return out;
         },
         uuid: () => {
@@ -1596,7 +1664,7 @@ $.sys = {
             return text(bytes);
         },
         token: (n) => {
-            if (n < 1n || n > 1024n) $.fail("token: bytes must be from 1 to 1024");
+            if (n < 1 || n > 1024) $.fail("token: bytes must be from 1 to 1024");
             return hex(randomBytes(Number(n)));
         },
     };
@@ -1612,13 +1680,13 @@ if (nodeRequire) {
         appendFile: (p, c) => { try { fs.appendFileSync(p, c); } catch (e) { $.fail(`Could not write file '${p}'`); } },
         fileExists: (p) => { try { return fs.statSync(p).isFile(); } catch (e) { return false; } },
         isDir: (p) => { try { return fs.statSync(p).isDirectory(); } catch (e) { return false; } },
-        deleteAll: (p) => { let n = 0; const walk = (q) => { const st = fs.lstatSync(q); if (st.isDirectory()) for (const f of fs.readdirSync(q)) walk(path.join(q, f)); n++; }; try { walk(p); fs.rmSync(p, { recursive: true, force: true }); } catch (e) { return 0n; } return BigInt(n); },
+        deleteAll: (p) => { let n = 0; const walk = (q) => { const st = fs.lstatSync(q); if (st.isDirectory()) for (const f of fs.readdirSync(q)) walk(path.join(q, f)); n++; }; try { walk(p); fs.rmSync(p, { recursive: true, force: true }); } catch (e) { return 0; } return n; },
         deleteFile: (p) => { try { fs.unlinkSync(p); return true; } catch (e) { return false; } },
         listDir: (p) => { try { return fs.readdirSync(p).sort(); } catch (e) { $.fail(`Could not list folder '${p}'`); } },
         makeDir: (p) => { try { const existed = fs.existsSync(p); fs.mkdirSync(p, { recursive: true }); return !existed; } catch (e) { return false; } },
         cwd: () => process.cwd(),
         getEnv: (n) => process.env[n] ?? null,
-        run: (c) => { const r = cp.spawnSync(c, { shell: true, stdio: "inherit" }); return BigInt(r.status ?? 1); },
+        run: (c) => { const r = cp.spawnSync(c, { shell: true, stdio: "inherit" }); return r.status ?? 1; },
     };
     // helpers for class File in os.dm (like os.hpp): a file being read is
     // read whole when it's opened
@@ -1641,7 +1709,7 @@ if (nodeRequire) {
                 $.fail(mode === "r" ? `Cannot read file '${p}'` : `Cannot write file '${p}'`);
             }
             files.push(f);
-            return BigInt(files.length - 1);
+            return files.length - 1;
         },
         _fileReadLine: (h) => {
             const f = openFile(h, true);

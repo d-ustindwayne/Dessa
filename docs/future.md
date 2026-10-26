@@ -53,8 +53,9 @@ In order of value for the effort:
 
 ## Making programs faster
 
-The benchmark (`tests/bench/RESULTS.md`, 2026-10-23): Dessa native takes 4.9 s,
-Java 5.2 s, the same program in C++ 5.3 s; Dessa compiled to JavaScript 31 s.
+The benchmark (`tests/bench/RESULTS.md`, 2026-10-27): Dessa native takes 3.4 s,
+Java 3.6 s, the same program in C++ 3.7 s, plain JavaScript 11.5 s; Dessa
+compiled to JavaScript 17.8 s (31 s before the changes below).
 
 Done in October 2026:
 
@@ -64,6 +65,11 @@ Done in October 2026:
 - **Errors**: the code that builds error messages is kept out of the fast path.
 - **JavaScript**: Int variables inside functions are plain numbers while they
   fit, BigInts beyond (the whole benchmark: 13.7 times C++ became 5.9).
+- **JavaScript, again**: every Int is a plain number while it fits (fields,
+  lists, map keys, parameters too), whole Dbls in an Obj or a union are boxed
+  instead; the line for error messages is two plain variables; the runtime's
+  helpers are local constants; `sort()` on an Int<> uses a Float64Array; a
+  Str's length doesn't copy it (30.8 s became 17.8 s; plain JavaScript 11.5 s).
 
 Still possible:
 
@@ -71,8 +77,15 @@ Still possible:
   and fits in the cache better; the C runtime uses a byte each.
 - **List bounds checks** could be skipped in `for (i = 0; i < list.length(); i++)`
   loops where the compiler can prove `i` is in range.
-- **JavaScript**: objects and calls still turn small Ints back into BigInts
-  when they pass them on.
+- **JavaScript, the loop task** (most of the remaining gap): every Int
+  operation checks for overflow, plain JavaScript checks nothing. The compiler
+  could prove where a value can't overflow (`acc % 1000000007` stays small)
+  and leave the check out.
+- **JavaScript, lists of Bul** (sieve: 446 ms, plain JavaScript 58 ms with a
+  Uint8Array): Bul<> as a typed array touches every list operation.
+- **WebAssembly**: the benchmark's C, compiled with Emscripten, runs in 6.0 s
+  in Node (twice as fast as plain JavaScript). For pages it needs Emscripten on
+  the computer and a way for C to reach the page (webutils is JavaScript only).
 
 ## Bigger language ideas (to decide)
 

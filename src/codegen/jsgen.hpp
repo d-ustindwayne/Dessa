@@ -42,14 +42,8 @@ private:
     const ClassInfo* currentClass = nullptr;
     std::optional<SemanticType> returnType;
     std::set<std::string> externClasses;   // class keys mapped onto JS objects (webutils)
-    // Int locals of the function being written that may hold a plain number
-    // (see "Small Ints" in dessa_runtime.js)
-    std::set<std::string> smallLocals;
-    bool isSmall(const Expr* e) const;
-    bool smallVar(const Expr* e) const;
-    std::string small(const Expr* e);        // a small expression's code (a number or a BigInt)
-    std::string intOperand(const Expr* e);   // small(e) when it is small, else expr(e)
     std::string effect(const Expr* e);       // an expression whose value isn't used
+    std::string trace(int line) const;       // "$tf = ...; $tl = line;"
 
     void line(const std::string& text);
     std::string temp(const std::string& base);
@@ -68,7 +62,15 @@ private:
     bool isExtern(const SemanticType& type) const;
     bool isExternMember(const Symbol* symbol) const;
     std::string defaultValue(const SemanticType& type) const;
-    std::string fltShape(const SemanticType& type) const;
+    // Boxes (see "Boxes" in dessa_runtime.js): an Obj or a union keeps a whole
+    // Dbl as a DblValue so it isn't taken for an Int.
+    static bool isDynamic(const SemanticType& type);   // Obj, or a union of two or more types
+    // Where the Dbl / Flt numbers are inside a value of this type ("d" / "f"
+    // leaves, or "x" / "y" to unbox them), "" if nowhere
+    static std::string numShape(const SemanticType& type, bool unboxing);
+    static std::string reboxShape(const SemanticType& from, const SemanticType& to);
+    static std::string rebox(const std::string& code, const std::string& shape);
+    std::string toDynamic(const std::string& code, const SemanticType& type) const;
     static bool needsCopy(const SemanticType& type);
     static bool isNumber(const SemanticType& type);   // Dbl / Flt
     static bool isPrimitive(const SemanticType& type);
@@ -117,6 +119,9 @@ private:
     std::string operatorCall(const Analyser::OperatorCall& call, const std::string& left, const Expr* right);
     std::string objItem(const std::string& code, const SemanticType& target, const std::string& what) const;
     std::string number(const Expr* e);   // the operand as a JS number (Int converted)
+    // A variable or field read whose static type was narrowed (if (x is Dbl)):
+    // the value unboxed for its narrowed type
+    std::string narrowed(const std::string& code, const Expr* e, const SemanticType& declared);
     std::string fromExtern(const std::string& code, const SemanticType& type) const;
     std::string toExtern(const std::string& code, const SemanticType& type) const;
     // Plain-variable / field reads that would share a list instead of copying it.

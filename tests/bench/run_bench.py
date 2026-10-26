@@ -181,8 +181,8 @@ def write_results(results, totals, languages, quick, problems):
     lines.append("- C++ is compiled with g++ -O2; Dessa with `dessa build --release` (-O2), through C (gcc)")
     lines.append("  by default and through C++ with --cpp. Dessa checks every Int operation for overflow and")
     lines.append("  every list index, which the C++ version doesn't.")
-    lines.append("- Dessa compiled to JavaScript keeps Int exact to 64 bits: Int variables inside functions are")
-    lines.append("  plain numbers while they fit (below 2^53) and BigInts beyond; everywhere else Int is a BigInt.")
+    lines.append("- Dessa compiled to JavaScript keeps Int exact to 64 bits: an Int is a plain number while it")
+    lines.append("  fits exactly (up to 2^53 - 1) and a BigInt beyond, and every Int operation is checked.")
     lines.append("  bench.js only uses JavaScript's own numbers.")
     lines.append("- Java's times include the JIT warming up; Python runs in the standard interpreter.")
     if problems:

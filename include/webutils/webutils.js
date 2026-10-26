@@ -1,6 +1,6 @@
 // webutils.js -- the JavaScript part of $("webutils") (see webutils.dm).
 // Added to programs built with --target web that import webutils. Values
-// arrive as Dessa represents them (Int = BigInt, nil = null).
+// arrive as Dessa represents them (Int = a number, nil = null).
 $.webutils = (() => {
     const browser = typeof window !== "undefined" && typeof document !== "undefined";
     const need = (what) => { if (!browser) $.fail(`${what} needs a web browser (it isn't available in Node)`); };
@@ -14,8 +14,8 @@ $.webutils = (() => {
         log: (parts) => console.log(text(parts)),
         warn: (parts) => console.warn(text(parts)),
         error: (parts) => console.error(text(parts)),
-        setTimeout: (action, ms) => { need("setTimeout()"); return BigInt(window.setTimeout($.callback(action), Number(ms))); },
-        setInterval: (action, ms) => { need("setInterval()"); return BigInt(window.setInterval($.callback(action), Number(ms))); },
+        setTimeout: (action, ms) => { need("setTimeout()"); return window.setTimeout($.callback(action), Number(ms)); },
+        setInterval: (action, ms) => { need("setInterval()"); return window.setInterval($.callback(action), Number(ms)); },
         clearTimer: (id) => { if (browser) { window.clearTimeout(Number(id)); window.clearInterval(Number(id)); } },
         fetchText: (url) => {
             need("fetchText()");

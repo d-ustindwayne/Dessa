@@ -49,10 +49,11 @@ All of them give the same output for the same program. Libraries with a C++
 part (`sql`, `request`, `ashwee`) only work natively. `webutils` only works in
 JavaScript.
 
-In JavaScript, an `Int` is exact to 64 bits like everywhere else. `Int`
-variables inside functions are plain JavaScript numbers while their value fits
-(below 2^53), which is much faster, and become BigInts beyond that by
-themselves. `DESSA_JS_NO_SMALL=1` makes every `Int` a BigInt (to compare).
+In JavaScript, an `Int` is exact to 64 bits like everywhere else. It is a
+plain JavaScript number while its value fits exactly (up to 2^53 - 1), which is
+much faster, and a BigInt beyond that, by itself. Where Dessa needs to tell a
+whole `Dbl` from an `Int` at run time (in an `Obj`, a union, `typeof`), the
+`Dbl` is kept in a small box.
 
 ## Pages
 
