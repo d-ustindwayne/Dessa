@@ -72,9 +72,9 @@ func[Int] utf8Size(c[Chr]) {
 }
 
 class Lexer {
-    var[Chr<>] _source = [];
-    var[Token<>] tokens = [];
-    var[Str<>] errors = [];
+    var[Chr<>] _source = <>;
+    var[Token<>] tokens = <>;
+    var[Str<>] errors = <>;
     var[Int] _start = 0;
     var[Int] _current = 0;
     var[Int] _line = 1;
@@ -496,7 +496,7 @@ func[Str] dedentTriple(raw[Str]) {
     var[Str] indent = lines.last();
     if (indent.trim() != "" ) return text;   // the closing """ follows text
     lines.pop();
-    var[Str<>] out = [];
+    var[Str<>] out = <>;
     for (var[Str] line in lines) {
         if (line.startsWith(indent)) {
             out.push(line.substr(indent.length(), line.length() - indent.length()));

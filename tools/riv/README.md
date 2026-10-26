@@ -26,8 +26,12 @@ entry = lib.ds
 description = Terminal colours
 
 [dependencies]
-textfx = 0.2.0
+textfx = ^0.2.0
 ```
+
+A dependency is a version or a range (`^1.2.0`, `~1.2.0`, `>=1.0 <2.0`, `1.x`,
+`*`); `riv install` writes the exact versions and the sha256 of their files to
+`riv.lock` (see docs/riv.md).
 
 A package with C++ code also has a `<name>.native` file (see `include/README.md`).
 `packages/` holds the packages that come with Dessa:
@@ -46,9 +50,10 @@ A package with C++ code also has a `<name>.native` file (see `include/README.md`
 | Command | What it does |
 |---|---|
 | `riv init [name]` | create `riv.pkg` (and `main.ds`) in the current folder |
-| `riv add sql` / `riv add sql@1.0.0` | add a dependency (latest version by default) and install it |
+| `riv add sql` / `riv add sql@1.0.0` | add a dependency (`^` the latest version by default, or a version or range) and install it |
 | `riv remove sql` | remove a dependency |
-| `riv install` | install every dependency (and theirs) into `riv_modules/`; skips ones already there |
+| `riv install` | install every dependency (and theirs) into `riv_modules/`, as in `riv.lock`; skips ones already there |
+| `riv upgrade [sql]` | the newest versions `riv.pkg` allows, instead of `riv.lock`'s |
 | `riv list` | show the dependencies and whether they're installed |
 | `riv search [text]` | list the packages in the index |
 | `riv info sql` | versions, size, infohash and magnet link |

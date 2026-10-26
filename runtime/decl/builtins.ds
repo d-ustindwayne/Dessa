@@ -25,7 +25,7 @@ func[Str] input(prompt[Str]) {
 }
 
 // The name of a value's type, as Dessa writes it:
-//     typeof(42) is "Int", typeof([1, 2]) is "Int<>", typeof({"a": 1}) is "Map[Str, Int]".
+//     typeof(42) is "Int", typeof(<1, 2>) is "Int<>", typeof({"a": 1}) is "Map[Str, Int]".
 // For a union, a nullable or an object it's the type the value has right now:
 //     var[Int | Str] x = "hi";      typeof(x) is "Str"
 //     var[Animal] a = new Dog();    typeof(a) is "Dog"
@@ -35,8 +35,8 @@ func[Str] typeof(value[Str]) {
 }
 
 // Pairs up two lists, item by item, stopping at the shorter one:
-//     zip(["Ann", "Bea"], [31, 27])   is [["Ann", 31], ["Bea", 27]]   (a (Str | Int)<><>)
-//     zip([1, 2], [10, 20])           is [[1, 10], [2, 20]]           (an Int<><>)
+//     zip(<"Ann", "Bea">, <31, 27>)   is [["Ann", 31], ["Bea", 27]]   (a (Str | Int)<><>)
+//     zip(<1, 2>, <10, 20>)           is [[1, 10], [2, 20]]           (an Int<><>)
 // With a function, each pair is combined into one value instead:
 //     zip(names, ages, (n[Str], a[Int]) := $"{n} is {a}")   is ["Ann is 31", "Bea is 27"]
 // (Declared with Str<> for readability; any two lists work.)

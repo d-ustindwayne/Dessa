@@ -25,7 +25,7 @@ func[Emp] edges() {
     } catch (e[Str]) {
         print(e);
     }
-    var[Int<>] xs = [10, 20, 30];
+    var[Int<>] xs = <10, 20, 30>;
     var[Int] i = 1;
     print(xs<i>, xs<i + 1>);
     var[Map[Int, Str]] names = {1: "one", 2: "two"};

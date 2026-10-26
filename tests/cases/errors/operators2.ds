@@ -20,7 +20,7 @@ func[Emp] loose() {}
 
 var[Int | Nil] n = nil;
 var[Int] a = n ?! 42;                           // error: After ?! comes what to throw
-var[(Int | Nil)<>] list = [nil];
+var[(Int | Nil)<>] list = <nil>;
 list<0> ?= 5;                                   // error: ?= works on variables and fields
 var[Str] text = 5 |> describe;                  // error: Cannot convert Int to Str
 func[Str] describe(s[Str]) { return s; }

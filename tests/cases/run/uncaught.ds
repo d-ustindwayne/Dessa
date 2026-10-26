@@ -4,6 +4,6 @@
 // stderr: at tests/cases/run/uncaught.ds:8
 
 print("before");
-var[Int<>] empty = [];
+var[Int<>] empty = <>;
 print(empty.pop());
 print("after");

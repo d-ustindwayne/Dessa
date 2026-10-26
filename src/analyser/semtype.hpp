@@ -72,6 +72,9 @@ struct SemanticType {
 
     // A unique key for a user-defined type across modules: "<module>:<name>"
     std::string key() const;
+    // A filled-in generic class (Box$1) is shown as Box:Int
+    static void setShownName(const std::string& key, const std::string& shown);
+    static void clearShownNames();
 
     std::string toString() const;
 };

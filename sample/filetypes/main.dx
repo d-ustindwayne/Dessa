@@ -9,7 +9,7 @@
 $("geometry") { Circle, Rectangle, Shape, totalArea }     // geometry.dm
 $("report") { report, twoDecimals }                       // report.dsx
 
-var[Shape<>] shapes = [new Circle(1.0), new Rectangle(2.0, 3.0), new Rectangle(4.0)];
+var[Shape<>] shapes = <new Circle(1.0), new Rectangle(2.0, 3.0), new Rectangle(4.0)>;
 report("Shapes", shapes);
 
 var[Dbl] total = totalArea(new Circle(2.0), new Rectangle(5.0));

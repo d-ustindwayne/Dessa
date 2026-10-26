@@ -40,15 +40,15 @@ try {
 // Rows into objects of a class
 db.execute("CREATE TABLE staff (staff_id INTEGER, first_name TEXT, rate REAL, active INTEGER, note TEXT, extra TEXT)");
 db.execute("INSERT INTO staff VALUES (1, 'Ann', 52.5, 1, NULL, 'x'), (2, 'Bo', 40, 0, 'new', 'y')");
-for (var[Staff] person in db.queryAllAs(() := new Staff(), "SELECT * FROM staff ORDER BY staff_id")) {
+for (var[Staff] person in db.queryAllAs:Staff("SELECT * FROM staff ORDER BY staff_id")) {
     print(person, person.firstName.upper());
 }
-var[Obj] bo = db.queryAs(() := new Staff(), "SELECT * FROM staff WHERE staff_id = ?", 2);
-if (bo is Staff) print(bo.rate * 2);
-print(db.queryAs(() := new Staff(), "SELECT * FROM staff WHERE staff_id = 99"));
-db.queryAllAs(() := new Staff(), "SELECT * FROM staff").forEach((s[Staff]) := print(s.firstName, s.active));
+var[Staff | Nil] bo = db.queryAs:Staff("SELECT * FROM staff WHERE staff_id = ?", 2);
+if (bo != nil) print(bo.rate * 2);
+print(db.queryAs:Staff("SELECT * FROM staff WHERE staff_id = 99"));
+db.queryAllAs:Staff("SELECT * FROM staff").forEach((s[Staff]) := print(s.firstName, s.active));
 try {
-    db.queryAllAs(() := new Staff(), "SELECT 'not a number' AS staff_id");
+    db.queryAllAs:Staff("SELECT 'not a number' AS staff_id");
 } catch (e[SqlError]) {
     print(e.message);
 }

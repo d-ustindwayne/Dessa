@@ -43,7 +43,7 @@ doesn't run.
 | `Bul` | true or false | `true` |
 | `Emp` | no value (a function that returns nothing) | |
 | `Nil` | the empty value | `nil` |
-| `T<>` | list of T | `[1, 2, 3]` |
+| `T<>` | list of T | `<1, 2, 3>` |
 | `T{}` | set of T (sorted, no duplicates) | `{3, 1, 2}` |
 | `Map[K, V]` | keys to values, in the order they were added | `{"a": 1, "b": 2}` |
 | `A \| B` | either an A or a B | `Int \| Str` |
@@ -73,7 +73,7 @@ negative result (`-7 % 3` is 2). `^` is power (`2 ^ 10` is 1024).
 ```dessa
 var[Int] count = 0;          // can change
 const[Dbl] RATE = 0.07;      // can't change
-var[Str<>] names = [];
+var[Str<>] names = <>;
 var[Int | Nil] found;         // starts as nil
 var[Int] x = 10, y = 20;     // several at once
 var[Int] a = b = c = 0;      // three variables, all 0
@@ -95,7 +95,7 @@ Text counts characters, not bytes: `"héllo".length()` is 5 and `"héllo"<1>`
 is `'é'`. Useful methods: `length`, `upper`, `lower`, `title`, `trim`, `includes`,
 `startsWith`, `endsWith`, `indexOf`, `replace` (first match), `replaceAll`,
 `split`, `substr(start, length)`, `repeat`, `chars`, `compare`, `toInt`,
-`toDbl`. Decimals: `3.14159.toFixed(2)` is `"3.14"`.
+`toDbl`. Decimals: `3.14159.toFixed(2)` is `3.14` (rounded; a `Flt` stays a `Flt`, a `Dbl` a `Dbl`).
 
 `"Café Niño".plain()` removes accents (`"Cafe Nino"`). `==` is exact, so to
 compare without case use `caseless`: `name.caseless() == "ANN".caseless()`.
@@ -124,14 +124,14 @@ var[Str] answer = input("Name? ");
 ## Lists, sets and maps
 
 ```dessa
-var[Int<>] xs = [5, 3, 8];
+var[Int<>] xs = <5, 3, 8>;
 xs.push(1);
 print(xs<0>, xs.length(), xs.includes(8));     // 5 4 true
-xs.sort();                                       // [1, 3, 5, 8]
+xs.sort();                                       // <1, 3, 5, 8>
 xs.sort((a[Int], b[Int]) := b - a);              // biggest first
 var[Int<>] doubled = xs.map((x[Int]) := x * 2);
 var[Int<>] big = xs.filter((x[Int]) := x > 3);
-var[Int<>] all = [...xs, ...doubled, 100];       // spread
+var[Int<>] all = <...xs, ...doubled, 100>;       // spread
 
 var[Str{}] tags = {"red", "blue", "red"};        // {"blue", "red"}
 tags.add("green");
@@ -141,6 +141,12 @@ ages<"Bea"> = 27;                                // add or replace
 print(ages<"Ann">, ages.has("Cy"), ages.getOr("Cy", 0));
 for (var[Str] name in ages) print(name, ages<name>);
 ```
+
+A list is written `<1, 2, 3>`, an empty one `<>`, a list of lists
+`<<1, 2>, <3>>`. Inside a list a `>` ends it, so a comparison there needs
+brackets: `<(a > b), (c < d)>`. Lists printed by `print` still look like
+`[1, 2, 3]`. The old way, `[1, 2, 3]`, still works but gets a warning;
+`dessa fix-lists app.ds` rewrites a file's old lists.
 
 Indexes start at 0. Negative indexes are errors, and so is a missing map key
 (use `has`, `get` or `getOr` to check first).
@@ -197,7 +203,7 @@ func[Int] total(numbers[Int*]) {                          // any number of argum
     return sum;
 }
 
-print(add(2, 3), greet("Ann"), greet(greeting: "Hi", name: "Bea"), total(1, 2, 3), total(...[4, 5]));
+print(add(2, 3), greet("Ann"), greet(greeting: "Hi", name: "Bea"), total(1, 2, 3), total(...<4, 5>));
 ```
 
 Functions can be called before the place they are written. Parameters write
@@ -316,6 +322,59 @@ print(total == new Money(355), total > new Money(1));
 | `< > <= >=` | `_lt _gt _le _ge` (return Bul), or one `_cmp` returning negative, 0 or positive |
 - Without a `toStr()`, an object prints as `Dog(name: "Rex", age: 3)`.
 
+## Generics
+
+A class or function can leave a type open and say it when it is used. The
+open types come after a `:` behind the name: `:T` for one, `:[K, V]` for
+several.
+
+```dessa
+class Box:T {
+    var[T] value;
+    init(value[T]) {
+        this.value = value;
+    }
+    func[Box:U] map:U(f[Func[U, [T]]]) {     // a generic method
+        return new Box(f(this.value));
+    }
+}
+
+class Pair:[K, V] {
+    var[K] key;
+    var[V] value;
+    init(key[K], value[V]) {
+        this.key = key;
+        this.value = value;
+    }
+}
+
+func[T] first:T(items[T<>]) {
+    return items<0>;
+}
+
+var[Box:Int] a = new Box(5);                // the type comes from var[Box:Int]
+var[Box:Str] b = new Box:Str("hi");         // or is written out
+var[Pair:[Str, Int]] age = new Pair("Ann", 31);
+print(first(<1, 2, 3>), first:Str(<"x">));  // from the arguments, or written out
+var[Box:Str] shown = a.map((n[Int]) := $"#{n}");
+print(a, typeof(b));                        // Box:Int(value: 5) Box:Str
+```
+
+- When the types can be told from the arguments or from where the value goes
+  (`var[Box:Int] a = new Box(5)`), they can be left out; otherwise the
+  compiler asks for them: `first:Int(...)`.
+- `Box:Int<>` is a list of `Box:Int`; a `Box` of a list is `Box:[Int<>]`.
+- Inside a generic, `new T()` makes a `T` (T must be a class with an `init()`
+  without arguments).
+- A class can extend a filled-in generic: `class IntBox(Box:Int) { ... }`, or
+  stay generic: `class Named:T(Box:T) { ... }`.
+- Each use with other types is compiled separately, like C++ templates, so
+  generics cost nothing while the program runs.
+- In call arguments, `name: value` (with a space) is a named argument and
+  `first:Int(...)` (no spaces) a generic call.
+
+`Lst[Int | Str]` is another way to write the list type `(Int | Str)<>`.
+
 ## Interfaces
 
 An interface lists what a class must have. A class names it in square brackets:
@@ -360,7 +419,7 @@ print(reply);                           // {message = "Message to the world!", c
 reply.code = 404;                       // fields can be changed and added
 var[Int] code = Int(reply.code);        // a field is an Obj too: convert it to use it
 
-var[Obj<>] things = [1, "two", 3.5, new Dog("Rex")];
+var[Obj<>] things = <1, "two", 3.5, new Dog("Rex")>;
 for (var[Obj] t in things) print(typeof(t), t);
 
 var[Obj] pet = new Dog("Rex");
@@ -385,7 +444,7 @@ A loop over `Obj` values may give its variable a class type, and so may a
 lambda that gets `Obj` values; each item is checked when it arrives:
 
 ```dessa
-var[Obj<>] pets = [new Dog("Rex"), new Dog("Bo")];
+var[Obj<>] pets = <new Dog("Rex"), new Dog("Bo")>;
 for (var[Dog] d in pets) print(d.speak());
 pets.forEach((d[Dog]) := print(d.speak()));
 ```
@@ -397,23 +456,40 @@ class instances and anonymous objects.
 ## Errors
 
 ```dessa
-class NotFound {
-    var[Str] what = "";
-    init(what[Str]) { this.what = what; }
-}
+class NotFound(Error) {}             // an Error: e.message, prints as NotFound: ...
 
 try {
     throw new NotFound("user 7");
 } catch (e[NotFound]) {
-    print("missing:", e.what);
+    print("missing:", e.message);
+} catch (e[IndexError]) {
+    print("bad index:", e.message);  // a runtime error
 } catch (e[Str]) {
-    print("error:", e);              // runtime errors and thrown text
+    print("error:", e);              // any other Error (its message) and thrown text
 } catch {
     print("something else");         // anything left (must be last)
 }
 
-throw "plain text works too";
+throw "plain text works too";        // thrown as an Error with that message
 ```
+
+Every file has these error classes without importing them:
+
+| Class | For |
+|---|---|
+| `Error` | the base of all errors; `message`, prints as `ClassName: message` |
+| `DessaError` | errors Dessa itself raises while running (all the ones below) |
+| `IndexError` | a list index out of range, an empty list (`pop()`, `pick`) |
+| `KeyError` | a missing map key or object field |
+| `ValueError` | a value that can't be used: `Int("abc")`, `sqrt(-1)` |
+| `OverflowError` | an `Int` too big for an `Int` |
+| `DivisionError` | division or modulo by zero |
+| `NilError` | using nil as a value |
+| `FileError` | a file that can't be read or written |
+
+Library errors (`JsonError`, `SqlError`, `RequestError`) are `Error`s too, so
+`catch (e[Error])` catches every error, and so does `catch (e[Str])` (as the
+message).
 
 A function can say what it may throw, after `!!` in its return type. In its
 body, outside a `try`, it may then only throw those (or subclasses of them):
@@ -428,10 +504,8 @@ func[Str !! Str, ParseError] read(text[Str]) { ... }
 
 Callers don't have to catch it; it tells readers (and the editor shows it).
 
-Runtime errors (an index out of range, a division by zero, an `Int`
-overflow, a failed conversion) can be caught with `catch (e[Str])`. An error
-nobody catches stops the program and shows where it happened:
-`Error: Index 3 is out of range for list of length 2 at app.ds:12`.
+An error nobody catches stops the program and shows where it happened:
+`IndexError: Index 3 is out of range for list of length 2 at app.ds:12`.
 
 ## Modules
 
@@ -444,6 +518,9 @@ $("math", "time");                          // several at once
 $("math" as m)                              // the whole module under a name:
 print(m.sqrt(2), m.PI);                     //   m.sqrt, m.PI, var[m.Big], new m.Big("12")
 ```
+
+Names in `{ }` come from one module: `$("math", "time") { PI }` is an error,
+write one `$("...") { ... }` per module.
 
 The semicolon after an import is optional. A long list can go over several
 lines, and a comma after the last one is allowed:

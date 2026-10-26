@@ -37,7 +37,7 @@ try {
 }
 
 // Maps of lists, maps of objects, enum keys
-var[Map[Str, Int<>]] scores = {"math": [90, 85], "art": []};
+var[Map[Str, Int<>]] scores = {"math": <90, 85>, "art": <>};
 scores<"art">.push(70);
 scores<"math">.push(100);
 print(scores);

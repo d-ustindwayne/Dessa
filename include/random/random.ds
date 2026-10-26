@@ -4,8 +4,8 @@
  *     $("random") { randInt, pick, shuffle, seed }
  *
  *     print(randInt(1, 6));                     // a dice roll
- *     print(pick(["rock", "paper", "scissors"]));
- *     print(shuffle([1, 2, 3, 4, 5]));
+ *     print(pick(<"rock", "paper", "scissors">));
+ *     print(shuffle(<1, 2, 3, 4, 5>));
  *     seed(42);                                 // the same numbers every run
  *
  * Declaration file: documentation only. Bodies are `...`; the real
@@ -39,7 +39,7 @@ func[Bul] chance(p[Dbl]) {
     ...
 }
 
-// One item of a list (any list), e.g. pick(["a", "b"]).
+// One item of a list (any list), e.g. pick(<"a", "b">).
 func[Obj] pick(items[Obj<>]) {
     ...
 }

@@ -21,6 +21,7 @@ public:
     // Folder of the builtin libraries. `$("json")` also loads
     // <includeDir>/json/json.dm when a library has a Dessa part.
     void setIncludeDir(std::string dir) { includeDir = std::move(dir); }
+    std::string preludePath() const;
 
     // Always returns a Program (possibly partial); check the diagnostics.
     Program load(const std::string& entryPath);

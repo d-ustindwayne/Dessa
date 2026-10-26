@@ -17,8 +17,8 @@ func[Int] sum(first[Int], rest[Int*]) {
 sum();                                           // error: Missing argument(s) for 'sum': first
 sum(1, 2, "3");                                  // error: Cannot convert Str to Int
 sum(1, rest: 2);                                 // error: can't be passed by name
-sum(...[1, 2]);                                  // error: Missing argument(s) for 'sum': first
-apply(...[1]);                                   // error: can only pass a list to a variadic parameter
+sum(...<1, 2>);                                  // error: Missing argument(s) for 'sum': first
+apply(...<1>);                                   // error: can only pass a list to a variadic parameter
 func[Emp] notLast(rest[Int*], x[Int]) {}         // error: must be the last parameter
 
 func[Str] greet(name[Str]="John", n[Int]) {      // error: needs a default value

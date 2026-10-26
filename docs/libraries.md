@@ -7,7 +7,7 @@ import such as `$("math")` to open the library's file.
 
 `print`, `input`, `typeof`, `zip` and the conversions (`Int(...)`, `Str(...)`,
 ...) need no import. Every type has its own methods, such as
-`"text".upper()`, `[3, 1].sort()` and `ages.getOr("Ann", 0)`. The full list is
+`"text".upper()`, `<3, 1>.sort()` and `ages.getOr("Ann", 0)`. The full list is
 in `runtime/decl/methods.ds`.
 
 ## Core libraries
@@ -80,8 +80,8 @@ A `File` has `readLine()` (nil at the end), `lines()`, `read()` (the rest),
 ```dessa
 $("random") { randInt, pick, shuffle, seed }
 print(randInt(1, 6));                          // 1 to 6
-print(pick(["rock", "paper", "scissors"]));
-print(shuffle([1, 2, 3, 4, 5]));
+print(pick(<"rock", "paper", "scissors">));
+print(shuffle(<1, 2, 3, 4, 5>));
 seed(42);                                      // the same numbers every run
 ```
 
@@ -92,15 +92,16 @@ program and in JavaScript. For passwords and keys use `dcrypto` instead.
 
 ### dsds
 
-Data structures, written in Dessa. They hold `Obj` values, so anything fits:
+Data structures, written in Dessa. All but `Graph` are generic: say what
+they hold, e.g. `Stack:Str` (`Stack:Obj` holds anything):
 
 ```dessa
 $("dsds") { Stack, Queue, PriorityQueue, Graph }
-var[Stack] undo = new Stack();
+var[Stack:Str] undo = new Stack();
 undo.push("typed a");
 print(undo.pop());
 
-var[PriorityQueue] tasks = new PriorityQueue();      // smallest first
+var[PriorityQueue:Int] tasks = new PriorityQueue();  // smallest first
 tasks.push(5); tasks.push(1);
 print(tasks.pop());                                  // 1
 
@@ -165,6 +166,27 @@ print(data.get("name").asStr(), data.get("tags").at(1).asInt());
 print(stringify(data, 2));      // indented
 ```
 
+JSON can go straight into your classes and back. Each field gets the key with
+the same name (case and `_` don't matter); the class needs an `init()`
+without arguments:
+
+```dessa
+$("json");
+class User {
+    var[Str] name = "";
+    var[Int] age = 0;
+    var[Str<>] tags = <>;
+}
+var[User] ann = parseJsonAs:User("{\"name\": \"Ann\", \"age\": 31}");
+var[User<>] all = parseJsonListAs:User("[{\"name\": \"Bo\"}, {\"name\": \"Cy\"}]");
+var[User] di = parseJson(text).get("user").to:User();   // a part of a bigger JSON value
+print(toJson(ann));                                      // {"name":"Ann","age":31,"tags":[]}
+```
+
+Fields that are `Str`, `Int`, `Dbl`, `Flt`, `Bul`, `Json` or lists of `Str`,
+`Int`, `Dbl`, `Bul` are filled; a value that doesn't fit its field is a
+`JsonError` naming the key.
+
 ### phl (left out for now)
 
 PHL's syntax is being revised, so the `phl` package isn't in the index and
@@ -188,8 +210,8 @@ var[Obj] cheapest = db.query("SELECT name FROM items ORDER BY price");   // the 
 |---|---|
 | `queryAll(sql, ...)` | every row, as objects (`row.name`) |
 | `query(sql, ...)` | the first row, or nil |
-| `queryAllAs(make, sql, ...)` | every row, as objects of your class |
-| `queryAs(make, sql, ...)` | the first row as your class, or nil |
+| `queryAllAs:T(sql, ...)` | every row, as objects of your class `T` (a `T<>`) |
+| `queryAs:T(sql, ...)` | the first row as your class, or nil (a `T \| Nil`) |
 | `execute(sql, ...)` | how many rows changed (INSERT, UPDATE, DELETE, CREATE ...) |
 
 Rows can also go straight into objects of your own class. The columns fill
@@ -202,17 +224,17 @@ class Person {
     var[Str] firstName = "";
     var[Bul] active = false;
 }
-for (var[Person] p in db.queryAllAs(() := new Person(), "SELECT * FROM people WHERE id > ?", 10)) {
+for (var[Person] p in db.queryAllAs:Person("SELECT * FROM people WHERE id > ?", 10)) {
     print(p.firstName);
 }
-db.queryAllAs(() := new Person(), "SELECT * FROM people").forEach((p[Person]) := print(p.id));
-var[Obj] one = db.queryAs(() := new Person(), "SELECT * FROM people WHERE id = ?", 1);
-if (one is Person) print(one.firstName);
+var[Person<>] everyone = db.queryAllAs:Person("SELECT * FROM people");
+var[Person | Nil] one = db.queryAs:Person("SELECT * FROM people WHERE id = ?", 1);
+if (one != nil) print(one.firstName);
 ```
 
-`() := new Person()` tells `queryAllAs` what to make (there are no generics).
-0/1 columns fill `Bul` fields, and a column that doesn't fit its field is an
-error naming the column.
+The class needs an `init()` without arguments (or no `init`; parameters
+with defaults are fine). 0/1 columns fill `Bul` fields, and a column that
+doesn't fit its field is an error naming the column.
 
 Values passed after the SQL fill the `?` places safely. `connect(...)` takes any
 ODBC connection string, and `drivers()` lists the installed ODBC drivers.

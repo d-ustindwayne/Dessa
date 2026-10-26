@@ -22,6 +22,13 @@
       "manifest": "name = ashwee\nversion = 0.4.0\nentry = ashwee.dm\ndescription = Desktop windows and controls (GUI) on Windows, Linux (GTK 3) and macOS\n\n[dependencies]\n",
       "files": 8,
       "bytes": 45594
+    },
+    "0.5.0": {
+      "infohash": "268a0d5e0d2f76349227914c6d58e07b52283306",
+      "torrent": "ZDg6YW5ub3VuY2U0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2UxMzphbm5vdW5jZS1saXN0bGw0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2VlbDMzOnVkcDovL29wZW4uc3RlYWx0aC5zaTo4MC9hbm5vdW5jZWVsNDE6dWRwOi8vdHJhY2tlci50b3JyZW50LmV1Lm9yZzo0NTEvYW5ub3VuY2VlbDM3OnVkcDovL2V4b2R1cy5kZXN5bmMuY29tOjY5NjkvYW5ub3VuY2VlZTEwOmNyZWF0ZWQgYnkxMTpyaXYgKERlc3NhKTQ6aW5mb2Q1OmZpbGVzbGQ2Omxlbmd0aGkxMDY3OGU0OnBhdGhsMTA6YXNod2VlLmNwcGVlZDY6bGVuZ3RoaTY1OThlNDpwYXRobDk6YXNod2VlLmRtZWVkNjpsZW5ndGhpMTE5MGU0OnBhdGhsMTA6YXNod2VlLmhwcGVlZDY6bGVuZ3RoaTkzNmU0OnBhdGhsMTM6YXNod2VlLm5hdGl2ZWVlZDY6bGVuZ3RoaTEzODY3ZTQ6cGF0aGwxNDphc2h3ZWVfZ3RrLmluY2VlZDY6bGVuZ3RoaTEwNjg3ZTQ6cGF0aGwxMzphc2h3ZWVfbWFjLm1tZWVkNjpsZW5ndGhpMTUwNWU0OnBhdGhsODpleGFtcGxlczc6dG9kby5kc2VlZDY6bGVuZ3RoaTEzM2U0OnBhdGhsNzpyaXYucGtnZWVlNDpuYW1lNjphc2h3ZWUxMjpwaWVjZSBsZW5ndGhpMTYzODRlNjpwaWVjZXM2MDr4qXM5sk0T4KLrf9mWhghEov7dywYqv/aDz8KdyFbtNxk+IjMYKV/PqmRFRADry4IlVtzFZNeihwvoXHBlODp1cmwtbGlzdGw3ODpodHRwczovL3Jhdy5naXRodWJ1c2VyY29udGVudC5jb20vZC11c3RpbmR3YXluZS9EZXNzYS9tYWluL3Rvb2xzL3Jpdi9wYWNrYWdlcy9lZQ==",
+      "manifest": "name = ashwee\nversion = 0.5.0\nentry = ashwee.dm\ndescription = Desktop windows and controls (GUI) on Windows, Linux (GTK 3) and macOS\n\n[dependencies]\n",
+      "files": 8,
+      "bytes": 45594
     }
   }
 }

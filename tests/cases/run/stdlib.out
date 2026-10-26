@@ -1,22 +1,22 @@
 4 2 3 3 2.5 9 1.5 10
 314
 true
-[]
+<>
 Hello, Dessa 12 HELLO, DESSA hello, dessa
 true true false 7
-Hello, World ["Hello", "Dessa"] Hello ababab
+Hello, World <"Hello", "Dessa"> Hello ababab
 43 5 A 97 X true
 H a 12
-[9, 5, 3, 8, 1] 5 true 2
-[1, 3, 5, 8, 9] 1 9
-[9, 8, 5, 3, 1]
-1 9 [8, 5, 3] true [8, 5]
-[8] [3, 4] false 0
+<9, 5, 3, 8, 1> 5 true 2
+<1, 3, 5, 8, 9> 1 9
+<9, 8, 5, 3, 1>
+1 9 <8, 5, 3> true <8, 5>
+<8> <3, 4> false 0
 a-b-c
-[8, 5, 100, 7, 7]
+<8, 5, 100, 7, 7>
 {"blue", "green", "red"} 3 true true {"green", "red"}
 3 3 10! true
 true line one
 true false
 a+b-c a+b+c true true false
-3.14 3 2.333 10.0 1 3
+3.14 3 2.333 10 1 3

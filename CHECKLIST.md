@@ -42,8 +42,3 @@ to check that everything still works.
 - Installers for Windows (wizard), Linux and macOS; prebuilt releases
 - VS Code: highlighting (also in HTML and `.dhtml`), errors as you type, completion, hover with links, go to definition, links on imports, parameter hints, HTML help in `.dhtml`
 - CI on Windows, Linux and macOS; releases on tags
-
-## Later
-
-- Pipe operator `|>` (the token is reserved)
-- riv: version ranges, a lock file, signed packages

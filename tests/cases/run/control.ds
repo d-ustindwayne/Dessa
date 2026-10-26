@@ -40,7 +40,7 @@ for (var[Int] i = 0; i < 5; i++) {
     print(i);
 }
 
-var[Str<>] students = ["Dustin", "Dwayne", "Diaz"];
+var[Str<>] students = <"Dustin", "Dwayne", "Diaz">;
 for (var[Str] p in students) {
     print(p);
 }
@@ -71,7 +71,7 @@ loop {
 print(l);
 
 // Appending inside a for-in over a list is safe
-var[Int<>] grow = [1, 2, 3];
+var[Int<>] grow = <1, 2, 3>;
 for (var[Int] g in grow) {
     if (g < 3) grow.push(g * 10);
 }

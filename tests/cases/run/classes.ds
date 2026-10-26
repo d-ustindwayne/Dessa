@@ -8,7 +8,7 @@ interface Named {
 class[Named] Person {
     var[Str] name = "anon";
     var[Int] age = 0;
-    var[Str<>] tags = [];
+    var[Str<>] tags = <>;
 
     init(name[Str], age[Int]) {
         this.name = name;
@@ -76,7 +76,7 @@ p.x = 3;
 print(p);
 print(new Money(1250));
 
-var[Person<>] people = [ann, bo];
+var[Person<>] people = <ann, bo>;
 for (var[Person] person in people) {
     print(person.describe());
 }

@@ -7,7 +7,7 @@
  *     print(background(" WARNING ", "yellow", bright: false));
  *     print(red("error"), stripColors(red("plain again")));
  *     rgbToHex(123, 45, 167)      "#7B2DA7"
- *     hexToRgb("#A1B2C3")         [161, 178, 195]
+ *     hexToRgb("#A1B2C3")         <161, 178, 195>
  *
  * Colour names: black, red, green, yellow, blue, magenta, cyan, white.
  * Most terminals show these; Windows Terminal and VS Code do.
@@ -100,7 +100,7 @@ func[Str] rgbToHex(red[Int], green[Int], blue[Int]) {
     return "#" + _hex2(red) + _hex2(green) + _hex2(blue);
 }
 
-// "#A1B2C3" or "#ABC" (with or without #) -> [red, green, blue]
+// "#A1B2C3" or "#ABC" (with or without #) -> <red, green, blue>
 func[Int<>] hexToRgb(hex[Str]) {
     var[Str] h = hex.trim().upper();
     if (h.startsWith("#")) h = h.substr(1, h.length() - 1);
@@ -109,7 +109,7 @@ func[Int<>] hexToRgb(hex[Str]) {
         h = Str(c<0>) + Str(c<0>) + Str(c<1>) + Str(c<1>) + Str(c<2>) + Str(c<2>);
     }
     if (h.length() != 6) throw $"hexToRgb: '{hex}' is not a colour like #A1B2C3";
-    var[Int<>] rgb = [];
+    var[Int<>] rgb = <>;
     for (var[Int] i = 0; i < 6; i += 2) {
         var[Int] value = 0;
         for (var[Chr] c in h.substr(i, 2)) {

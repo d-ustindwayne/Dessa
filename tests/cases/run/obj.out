@@ -9,7 +9,7 @@ Dbl 3.5
 Chr c
 Bul true
 Nil Nil
-List [1, 2]
+List <1, 2>
 Dog Dog(name: "Rex", age: 3)
 Color GREEN
 Obj {x = 1}
@@ -23,7 +23,7 @@ true false Nil
 Cebu 4
 Ann lives in Cebu
 20.5 41! true
-{"id": 7, "name": "Bo", "tags": ["a", "b"]} List
+{"id": 7, "name": "Bo", "tags": <"a", "b">} List
 Obj has no field 'missing'
 There is no field 'field' in an Int
 Cannot store Str in field 'age' (Int)

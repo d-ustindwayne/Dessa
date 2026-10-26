@@ -23,7 +23,7 @@ need("ask").addEventListener("click", (e[Event]) := {
 
 // An error inside an event listener is reported, not lost
 need("broken").addEventListener("click", (e[Event]) := {
-    var[Int<>] empty = [];
+    var[Int<>] empty = <>;
     print(empty<3>);
 });
 

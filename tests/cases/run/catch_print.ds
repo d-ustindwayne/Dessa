@@ -25,7 +25,7 @@ func[Emp] attempt(kind[Int]) {
             case 2 := { throw new Timeout(); }
             case 3 := { throw "plain text error"; }
             case 4 := { throw new Other(); }
-            case 5 := { var[Int<>] xs = []; print(xs<0>); }
+            case 5 := { var[Int<>] xs = <>; print(xs<0>); }
             default := { print("no error"); }
         }
     } catch (e[NotFound]) {

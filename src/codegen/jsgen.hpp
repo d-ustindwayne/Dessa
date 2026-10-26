@@ -91,6 +91,7 @@ private:
     void forIn(const ForInStmt* s);
     void switchStmt(const SwitchStmt* s);
     void tryStmt(const TryStmt* s);
+    std::optional<SemanticType> preludeError() const;
 
     // ---- Expressions ----
     std::string expr(const Expr* e);

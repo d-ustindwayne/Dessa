@@ -28,7 +28,7 @@ var[Dbl] score = 95.6d;
 
 var[Chr] grade = 'A';
 
-var[Str<>] students = ["Dustin", "Dwayne", "Diaz"];
+var[Str<>] students = <"Dustin", "Dwayne", "Diaz">;
 var[Int | Nil] a;
 
 // Integer bases
@@ -188,7 +188,7 @@ loop {
 // Collections
 // ============================================================
 
-var[Str<>] names = ["ABC", "DEF", "GHI"];
+var[Str<>] names = <"ABC", "DEF", "GHI">;
 var[Int{}] numbers = {1, 5, 2, 7};
 
 // ============================================================

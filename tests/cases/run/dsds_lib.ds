@@ -1,22 +1,22 @@
-// $("dsds"): data structures holding any value
+// $("dsds"): data structures; generic (Stack:Str), Stack:Obj holds anything
 $("dsds") { Stack, Queue, Deque, LinkedList, PriorityQueue, SearchTree, Graph, compareValues }
 
-var[Stack] s = new Stack();
+var[Stack:Obj] s = new Stack();
 s.push(1); s.push("two"); s.push(3.5);
 print(s, s.size(), s.peek());
 print(s.pop(), s.pop(), s.size(), s.isEmpty());
 
-var[Queue] q = new Queue();
+var[Queue:Int] q = new Queue();
 for (var[Int] i = 0; i < 100; i++) q.enqueue(i);
 var[Int] total = 0;
-while (q.size() > 3) total += Int(q.dequeue());
+while (q.size() > 3) total += q.dequeue();
 print(q, total, q.peek());
 
-var[Deque] d = new Deque();
+var[Deque:Str] d = new Deque();
 d.pushBack("b"); d.pushFront("a"); d.pushBack("c");
 print(d, d.popFront(), d.popBack(), d.peekFront(), d.peekBack());
 
-var[LinkedList] l = new LinkedList();
+var[LinkedList:Obj] l = new LinkedList();
 l.addLast(2); l.addLast(3); l.addFirst(1); l.insertAt(3, 4); l.insertAt(1, 1.5);
 print(l, l.size(), l.get(1), l.indexOf(3), l.includes(9));
 print(l.removeAt(1), l.removeFirst(), l.removeLast(), l);
@@ -24,15 +24,15 @@ l.set(0, "x");
 l.reverse();
 print(l);
 
-var[PriorityQueue] pq = new PriorityQueue();
-for (var[Int] n in [5, 1, 4, 2, 3]) pq.push(n);
+var[PriorityQueue:Int] pq = new PriorityQueue();
+for (var[Int] n in <5, 1, 4, 2, 3>) pq.push(n);
 print(pq, pq.peek(), pq.pop(), pq.pop(), pq.size());
-var[PriorityQueue] largest = new PriorityQueue((a[Obj], b[Obj]) := compareValues(b, a));
-for (var[Str] w in ["pear", "apple", "fig"]) largest.push(w);
+var[PriorityQueue:Str] largest = new PriorityQueue((a[Str], b[Str]) := compareValues(b, a));
+for (var[Str] w in <"pear", "apple", "fig">) largest.push(w);
 print(largest.pop(), largest.pop());
 
-var[SearchTree] t = new SearchTree();
-for (var[Int] n in [50, 30, 70, 20, 40, 60, 80, 30]) t.add(n);
+var[SearchTree:Int] t = new SearchTree();
+for (var[Int] n in <50, 30, 70, 20, 40, 60, 80, 30>) t.add(n);
 print(t, t.size(), t.has(40), t.has(45), t.min(), t.max());
 print(t.remove(50), t.remove(20), t.remove(99), t);
 
@@ -51,5 +51,5 @@ var[Graph] oneWay = new Graph(true);
 oneWay.addEdge("a", "b");
 print(oneWay.hasPath("a", "b"), oneWay.hasPath("b", "a"));
 
-try { new Stack().pop(); } catch (e[Str]) { print(e); }
+try { new Stack:Int().pop(); } catch (e[Str]) { print(e); }
 try { l.get(10); } catch (e[Str]) { print(e); }

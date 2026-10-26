@@ -30,7 +30,7 @@ func[Emp] addTask(text[Str]) {
     refresh();
 }
 
-for (var[Str] task in ["Learn Dessa", "Build something"]) addTask(task);
+for (var[Str] task in <"Learn Dessa", "Build something">) addTask(task);
 
 need("todo-form").addEventListener("submit", (e[Event]) := {
     e.preventDefault();

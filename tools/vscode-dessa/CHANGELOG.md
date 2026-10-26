@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.8
+
+- Inside `var[|]`, `func[|]`, a parameter's `x[|]` (and `Map[Str, |]`, after `|`) only types are suggested: the built-in ones, `Map`, `Func`, and the classes, interfaces and enums in scope; no variables. Typing `[` opens the list
+- `if`, `while`, `for`, `switch` or `catch` + space becomes `if (|)`
+- `{` after an import becomes `{ | }`: `$("math") { | }`
+- `!!` typed in a type gets spaces: `func[Dbl !! |]`
+- `!!` is coloured like `throw`
+- `$("` suggests riv packages in `riv_modules` (and in `dessa.packageFolders`) before the file imports them, and `$("colors") {` lists their names
+- ```` ```dessa ```` code blocks in Markdown are highlighted (also ```` ```ds ````)
+- `var`, `const` and `func` at the start of a statement get `[]` as soon as the word is typed (a lowercase letter typed right after takes them away again, for names like `variable`)
+- Enter inside `$("math") { PI, | }` puts the names over several lines; Enter after a name there adds the comma
+- `:` after a generic's name (`func[T] first:`, `class Box:`, `new Box:`) or in a type (`var[Box:|]`) suggests the types
+- Generics are highlighted: `class Box:T`, `func[T] first:T(`, `Box:Int`, `first:Int(`; `Lst` is a type
+
 ## 0.2.1
 
 - `var`, `const` or `func` + space also gets `[]` when something follows the cursor: `for (var |)`, or typed in front of a name (`var[|] x = 5`)

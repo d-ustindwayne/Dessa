@@ -329,6 +329,10 @@ std::string JsCodegen::generate(const std::string& runtime) {
 
     line("if (typeof process !== \"undefined\" && process.argv) $.setArgs(process.argv.slice(2));");
     std::string calls;
+    // Runtime errors and thrown text become Error objects (include/prelude/errors.ds)
+    if (const auto error = preludeError()) {
+        calls += "$.errorHook = " + moduleName(error->moduleId, "_error") + "; $.isError = (v) => v instanceof " + className(*error) + "; ";
+    }
     for (const auto& module : program.modules) {
         calls += moduleName(module->id, module->isEntry ? "$run" : "$init") + "(); ";
     }
@@ -481,11 +485,11 @@ void JsCodegen::emitClass(const ClassInfo& info) {
                 firstField = false;
             }
         }
-        line("$str() { return " + jsString(info.name + "(") + parts + " + \")\"; }");
+        line("$str() { return " + jsString(info.type().toString() + "(") + parts + " + \")\"; }");
     }
     indentLevel--;
     line("}");
-    line(name + ".prototype.$class = " + jsString(info.name) + ";");
+    line(name + ".prototype.$class = " + jsString(info.type().toString()) + ";");
     std::string ifaces = base + ".prototype.$ifaces";
     if (info.interface) ifaces = "[..." + ifaces + ", " + jsString(info.interface->key()) + "]";
     line(name + ".prototype.$ifaces = " + ifaces + ";");
@@ -729,8 +733,11 @@ void JsCodegen::stmt(const Stmt* statement) {
             return;
         case StmtKind::Throw: {
             const Expr* value = static_cast<const ThrowStmt*>(statement)->value.get();
-            if (typeOf(value).is(SemanticTypeKind::Str)) line("throw new $.DsError(" + expr(value) + ");");
-            else line("throw new $.Thrown(" + expr(value) + ");");
+            // The value may call constructors that move the trace line; point it back at the throw.
+            line("{ const $thrown = " + expr(value) + ";");
+            if (statement->line > 0) line("$.trace(" + fileVar(moduleId) + ", " + std::to_string(statement->line) + ");");
+            if (typeOf(value).is(SemanticTypeKind::Str)) line("$.raise($thrown); }");
+            else line("throw new $.Thrown($thrown); }");
             return;
         }
         default:
@@ -830,6 +837,14 @@ void JsCodegen::switchStmt(const SwitchStmt* s) {
     line("}");
 }
 
+// The prelude's Error class (include/prelude/errors.ds), when it is loaded
+std::optional<SemanticType> JsCodegen::preludeError() const {
+    for (const auto& module : program.modules) {
+        if (module->isPrelude) return SemanticType::userDefined("Error", module->id, UserTypeKind::Class);
+    }
+    return std::nullopt;
+}
+
 void JsCodegen::tryStmt(const TryStmt* s) {
     line("try {");
     indentLevel++;
@@ -854,6 +869,7 @@ void JsCodegen::tryStmt(const TryStmt* s) {
     line("} catch (" + error + ") {");
     indentLevel++;
     line("if (" + error + " instanceof $.Exit) throw " + error + ";");
+    line(error + " = $.caught(" + error + ");");
     bool first = true;
     auto arm = [&](const std::string& test, const CatchClause* clause, const std::string& binding) {
         line(std::string(first ? "if (" : "} else if (") + test + ") {");
@@ -869,7 +885,15 @@ void JsCodegen::tryStmt(const TryStmt* s) {
             "const " + jsName(*c->param) + " = " + error + ".value;");
     }
     if (strArm) {
-        arm("$.isRuntimeError(" + error + ")", strArm, "const " + jsName(*strArm->param) + " = $.message(" + error + ");");
+        // Text, and any Error (runtime errors are IndexError, ... objects): its message
+        if (const auto type = preludeError()) {
+            const std::string isError = error + " instanceof $.Thrown && " + error + ".value instanceof " + className(*type);
+            arm("$.isRuntimeError(" + error + ") || (" + isError + ")", strArm,
+                "const " + jsName(*strArm->param) + " = " + error + " instanceof $.Thrown ? " + error + ".value." + memberName("message") +
+                    " : $.message(" + error + ");");
+        } else {
+            arm("$.isRuntimeError(" + error + ")", strArm, "const " + jsName(*strArm->param) + " = $.message(" + error + ");");
+        }
     }
     if (catchAll) {
         line(first ? "{" : "} else {");
@@ -1288,7 +1312,7 @@ std::string JsCodegen::binary(const BinaryExpr* e) {
         case TokenType::QUESTION_QUESTION: return "(" + expr(l) + " ?? " + exprAs(r, result) + ")";
         case TokenType::QUESTION_BANG: {
             // value ?! error
-            std::string raise = typeOf(r).is(SemanticTypeKind::Str) ? "throw new $.DsError(" + expr(r) + ");" : "throw new $.Thrown(" + expr(r) + ");";
+            std::string raise = typeOf(r).is(SemanticTypeKind::Str) ? "$.raise(" + expr(r) + ");" : "throw new $.Thrown(" + expr(r) + ");";
             return "$.orThrow(" + expr(l) + ", () => { " + raise + " })";
         }
         case TokenType::AND_AND: return "(" + expr(l) + " && " + expr(r) + ")";

@@ -26,6 +26,7 @@ struct ClassInfo {
     std::unordered_map<std::string, Symbol> fields;     // own fields only
     std::unordered_map<std::string, Symbol> methods;    // own methods only
     std::optional<Symbol> constructor;                  // init(...)
+    std::unordered_map<std::string, int> methodTemplates;   // generic methods -> Analyser::templates
     SemanticType type() const { return SemanticType::userDefined(name, moduleId, UserTypeKind::Class); }
 };
 
@@ -60,6 +61,14 @@ public:
 
     bool hasErrors() const;
     const std::vector<Diagnostic>& getDiagnostics() const;
+    // The filled-in generic functions and classes (module id, declaration):
+    // add them to their modules before generating code
+    std::vector<std::pair<int, StmtPtr>> takeInstances();
+    // first$1 -> first:Int (empty for other names)
+    std::string shownFunctionName(const std::string& name) const {
+        auto it = functionShownNames.find(name);
+        return it == functionShownNames.end() ? "" : it->second;
+    }
 
     // ---- Results consumed by codegen ----
     // Type of an expression after narrowing (e.g. `a` after `a = 6` is Int,
@@ -204,6 +213,7 @@ private:
     void error(const Stmt* at, const std::string& message);
     void error(int line, int column, const std::string& message);
     void warning(const Expr* at, const std::string& message);
+    std::unordered_set<const Expr*> warnedOldLists;
 
     // ---- Pipeline ----
     void declareTypeNames(const Module& module);
@@ -228,6 +238,73 @@ private:
     void collectFunctionSignatures(const Module& module);
     void collectExports(const Module& module);
     void checkClassHierarchy(const Module& module);
+    void checkClassMembers(ClassInfo& info);
+
+    // ---- Generics (generics.cpp) ----
+    struct GenericTemplate {
+        const Stmt* decl = nullptr;              // in Module::templates
+        int moduleId = 0;
+        std::string name;
+        std::vector<std::string> params;         // T, or K and V
+        const std::vector<Token>* tokens = nullptr;
+        bool isClass = false;
+        // A generic method: its class, and that class's own filled-in types
+        std::string ownerClass;
+        const std::vector<std::pair<std::string, TypeNode>>* classTypes = nullptr;
+    };
+    std::vector<GenericTemplate> templates;
+    std::unordered_map<std::string, SemanticType> classInstanceByKey;   // "template|types" -> Box$1
+    std::unordered_map<std::string, std::pair<int, std::vector<SemanticType>>> classInstances;   // Box$1's key -> template, types
+    std::unordered_map<std::string, Symbol> functionInstances;         // "template|types" -> first$1
+    std::unordered_map<std::string, std::string> functionShownNames;   // first$1 -> first:Int
+    std::unordered_map<int, int> instanceCounts;
+    std::vector<std::pair<int, StmtPtr>> instanceDecls;                 // module id, filled-in declaration
+    // Bodies to analyse (module, declaration, the class of a method) and where
+    // the generic was used, for its errors
+    struct PendingBody {
+        int moduleId;
+        const Stmt* statement;
+        std::string ownerClass;
+        std::string usedAt;
+    };
+    std::vector<PendingBody> pendingBodies;
+    std::vector<std::pair<const ClassDeclStmt*, StmtPtr>> methodInstanceDecls;
+    std::unordered_map<std::string, Symbol> methodInstances;   // "template|types" -> all$1
+    std::string fillNote;   // " (in all:Person, used at app.ds:12)" while analysing a filled-in body
+    std::string usedAtHere(int line) const;
+    const Symbol* instantiateMethod(int templateId, const std::vector<SemanticType>& args, int line, int column);
+    void analyseMethodBody(const ClassInfo& info, const FuncDeclStmt* method);
+    int instanceDepth = 0;
+    // What an expression's value goes into (var[Box:Int] b = new Box()): lets
+    // a generic `new` or call without its types find them
+    std::unordered_map<const Expr*, SemanticType> typeHints;
+    struct FillInContext {
+        int module;
+        Scope* scope;
+        std::string classKey;
+        bool inConstructor;
+        int loopDepth, functionDepth;
+        std::optional<SemanticType> returnType;
+        bool inferringReturn;
+        std::optional<SemanticType> inferredReturn;
+        std::string functionName;
+        std::optional<std::vector<SemanticType>> throws;
+        int tryDepth;
+        const VarDeclStmt* definingLambda;
+    };
+    FillInContext enterTemplateModule(int moduleId);
+    void leaveTemplateModule(const FillInContext& saved);
+    void declareTemplates(const Module& module);
+    std::vector<SemanticType> resolveTypeArgs(const std::vector<TypeNode>& nodes, int line, int column);
+    StmtPtr fillIn(const GenericTemplate& t, const std::vector<SemanticType>& args, int line, int column);
+    SemanticType instantiateClass(int templateId, const std::vector<SemanticType>& args, int line, int column);
+    const Symbol* instantiateFunction(int templateId, const std::vector<SemanticType>& args, int line, int column);
+    void analysePendingBodies();
+    bool unify(const TypeNode& node, const SemanticType& actual, const std::vector<std::string>& params,
+               std::vector<std::optional<SemanticType>>& found);
+    std::optional<std::vector<SemanticType>> inferTypeArgs(const GenericTemplate& t, const std::vector<Param>& params,
+                                                           const std::vector<Argument>& args, const TypeNode* result,
+                                                           const Expr* at, const std::string& written);
     void analyseModuleBody(const Module& module);
 
     // ---- Scopes ----

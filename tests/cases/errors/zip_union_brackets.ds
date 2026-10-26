@@ -1,0 +1,5 @@
+// zip of two different list types gives a list of a union: (A | B)<><>
+var[Str<>] names = <"a", "b">;
+var[Int<>] nums = <1, 2>;
+var[Str | Int<><>] pairs = zip(names, nums); // error: a list of a union needs brackets: write (Str | Int)<><>
+var[(Str | Int)<><>] ok = zip(names, nums);

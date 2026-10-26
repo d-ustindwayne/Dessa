@@ -9,6 +9,7 @@ $("nosuchlib") { foo }                        // error: Cannot find module or li
 $(<math>) { cbrt }                            // error: Libraries are imported by name without < >: $("math")
 $("lib.geo.shapes", "lib.geo.other");         // error: exported by more than one imported module
 $("lib.geo.other") { area as area2 }
+$("math", "lib.geo.other") { floor }          // error: Names in { } can come from one module only
 { floor } from $("math");                     // error: Imports are written $("math") { floor } now
 $("math" as m)
 $("time" as clock)

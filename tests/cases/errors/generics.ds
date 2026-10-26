@@ -1,0 +1,27 @@
+// Generics: the types a generic needs, and when they can't be told
+class Box:T {
+    var[T] value;
+    init(value[T]) {
+        this.value = value;
+    }
+}
+class Plain {}
+func[T] make:T() {
+    var[T<>] none = <>;
+    return none<0>;
+}
+func[T] same:T(a[T], b[T]) {
+    return a;
+}
+var[Box] b1 = new Box(1);                       // error: 'Box' is generic: say its type, e.g. Box:Int
+var[Box:[Int, Str]] b2 = new Box(1);            // error: 'Box' takes 1 type (Box:T), got 2
+var[Plain:Int] p = new Plain();                 // error: 'Plain' is not a generic class
+print(make());                                  // error: Can't tell what T is in make; write it, e.g. make:Int(...)
+print(same(1, "x"));                            // error: The arguments of same don't agree on what T is
+var[Box:Str] b3 = new Box(5);                   // error: Cannot convert Int to Str for parameter 'value'
+var[Int] x = make:Int();
+var[Box:Int] b4 = new Box:Str("s");             // error: Cannot convert Box:Str to Box:Int
+func[T] build:T() {
+    return new T();                             // error: new T() needs T to be a class, not Int (in tests/cases/errors/generics.ds:27 as build:Int)
+}
+var[Int] built = build:Int();

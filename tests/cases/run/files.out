@@ -2,7 +2,7 @@
 <File dessa_files_test.txt (r)>
 first line
 false
-["sécond line 😀", "third"]
+<"sécond line 😀", "third">
 Nil true
 31 true
 4

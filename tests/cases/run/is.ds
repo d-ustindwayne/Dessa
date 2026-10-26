@@ -29,7 +29,7 @@ class[Pet] Hamster(Animal) {
     }
 }
 
-var[Animal<>] zoo = [new Dog("Rex"), new Cat("Tom"), new Animal("Generic"), new Hamster("Ham")];
+var[Animal<>] zoo = <new Dog("Rex"), new Cat("Tom"), new Animal("Generic"), new Hamster("Ham")>;
 for (var[Animal] a in zoo) {
     print(a.name, a is Dog, a is Cat, a is Animal, a is Pet);
     if (a is Dog) {

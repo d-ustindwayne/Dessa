@@ -82,7 +82,7 @@ func[Int] inc(x[Int]) {
 print(pipeline(1, inc, (x[Int]) := x * 10, inc));
 
 // Switch on strings inside loops with break / continue
-var[Str<>] words = ["skip", "keep", "stop", "never"];
+var[Str<>] words = <"skip", "keep", "stop", "never">;
 for (var[Str] word in words) {
     switch (word) {
         case "skip" := { continue; }
@@ -97,7 +97,7 @@ enum Op {
     SUB
 }
 var[Map[Op, Func[Int, [Int, Int]]]] table = {Op.ADD: (x[Int], y[Int]) := x + y, Op.SUB: (x[Int], y[Int]) := x - y};
-print(table<Op.SUB>(10, 3), [Op.ADD, Op.SUB].map((o[Op]) := o.name()));
+print(table<Op.SUB>(10, 3), <Op.ADD, Op.SUB>.map((o[Op]) := o.name()));
 
 // Deep optional chains through maps and objects
 class Tree {

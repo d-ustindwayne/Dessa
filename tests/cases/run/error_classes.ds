@@ -1,0 +1,40 @@
+// exit: 1
+// Runtime errors are Error objects: IndexError, KeyError, ValueError, ... (all DessaError)
+// stderr: IndexError: Index 3 is out of range for list of length 2
+var[Int<>] xs = <1, 2>;
+var[Map[Str, Int]] m = {"a": 1};
+func[Emp] attempt(name[Str], f[Func[Emp]]) {
+    try {
+        f();
+    } catch (e[IndexError]) {
+        print(name, "IndexError:", e.message);
+    } catch (e[DessaError]) {
+        print(name, typeof(e), e.message, e is Error);
+    } catch (e[Error]) {
+        print(name, "Error", e);
+    }
+}
+attempt("index", () := { print(xs<5>); });
+attempt("key", () := { print(m<"z">); });
+attempt("value", () := { print(Int("abc")); });
+attempt("div", () := { var[Int] z = 0; print(5 % z); });
+attempt("overflow", () := { var[Int] big = 9223372036854775807; print(big + 1); });
+attempt("text", () := { throw "plain"; });
+attempt("own", () := { throw new KeyError("mine"); });
+try {
+    print(xs<9>);
+} catch (e[Str]) {
+    print("as text:", e);
+}
+try {
+    throw new ValueError("bad");
+} catch (e[Str]) {
+    print("as text:", e);
+}
+class NotFound(Error) {}
+try {
+    throw new NotFound("user 7");
+} catch (e[Error]) {
+    print(e, e is NotFound);
+}
+print(xs<3>);

@@ -11,7 +11,12 @@
  *     description = Terminal colours
  *
  *     [dependencies]
- *     textfx = 0.2.0
+ *     textfx = ^0.2.0         a version or a range: 0.2.0, ^0.2.0, ~0.2.0, >=0.2 <1.0, 0.x, *
+ *
+ * `riv install` writes riv.lock: the exact versions it installed and the
+ * sha256 of their files. Later installs take those versions (while they
+ * still fit riv.pkg) and stop if a package's files are not the same any
+ * more; `riv upgrade` takes the newest versions riv.pkg allows.
  *
  * `riv install` puts the packages a project needs into
  * <project>/riv_modules/<name>/, where imports find them:
@@ -40,7 +45,7 @@ $("sys") { args, exit, platform }
 $("json") { Json, parseJson, stringify, jsonObject, jsonStr, jsonNum }
 $("request") { get as httpGet, Response }
 $("torrent") { makeTorrent, Torrent, download, folderMatches, infoHashOf, DEFAULT_TRACKERS, _seed }
-$("dcrypto") { toBase64 }
+$("dcrypto") { toBase64, sha256 }
 $("time") { now }
 
 const[Str] MANIFEST = "riv.pkg";
@@ -54,12 +59,7 @@ const[Int] DEFAULT_PORT = 6881;
 // Errors
 // ============================================================
 
-class RivError {
-    var[Str] message = "";
-    init(message[Str]) {
-        this.message = message;
-    }
-}
+class RivError(Error) {}
 
 // ============================================================
 // riv.pkg
@@ -137,7 +137,7 @@ func[Manifest] readManifest(path[Str]="riv.pkg") {
 // ============================================================
 
 func[Int<>] versionParts(version[Str]) {
-    var[Int<>] parts = [];
+    var[Int<>] parts = <>;
     try {
         for (var[Str] part in version.split(".")) {
             parts.push(part.toInt());
@@ -159,7 +159,7 @@ func[Bul] newer(a[Str], b[Str]) {
 }
 
 func[Str<>] sortVersions(versions[Str<>]) {
-    var[Str<>] sorted = [];
+    var[Str<>] sorted = <>;
     for (var[Str] v in versions) {
         var[Int] at = 0;
         while (at < sorted.length() && newer(v, sorted<at>)) at++;
@@ -168,13 +168,146 @@ func[Str<>] sortVersions(versions[Str<>]) {
     return sorted;
 }
 
+// -1, 0 or 1: 1.2 is 1.2.0
+func[Int] compareVersions(a[Str], b[Str]) {
+    var[Int<>] x = versionParts(a);
+    var[Int<>] y = versionParts(b);
+    for (var[Int] i = 0; i < x.length() || i < y.length(); i++) {
+        var[Int] p = i < x.length() ? x<i> : 0;
+        var[Int] q = i < y.length() ? y<i> : 0;
+        if (p != q) return p < q ? -1 : 1;
+    }
+    return 0;
+}
+
+// ============================================================
+// Version ranges:  1.2.0  ^1.2.0  ~1.2.0  >=1.0 <2.0  1.x  *
+// ============================================================
+
+// Does `version` fit `range`?
+//   1.2.0          exactly that version
+//   ^1.2.0         1.2.0 or newer, below 2.0.0 (^0.4.1: below 0.5.0)
+//   ~1.2.0         1.2.0 or newer, below 1.3.0
+//   >=1.0 <2.0     each condition (>, >=, <, <=, =), separated by spaces
+//   1.x, 1.2.x     any version starting that way
+//   *              any version
+func[Bul] fits(version[Str], range[Str]) {
+    var[Str] r = range.trim();
+    if (r.isEmpty() || r == "*" || r == "latest") return true;
+    for (var[Str] part in r.split(" ")) {
+        var[Str] condition = part.trim();
+        if (condition.isEmpty()) continue;
+        if (!fitsOne(version, condition)) return false;
+    }
+    return true;
+}
+
+func[Bul] fitsOne(version[Str], condition[Str]) {
+    if (condition.startsWith("^")) {
+        var[Str] low = condition.substr(1, condition.length() - 1);
+        var[Int<>] parts = versionParts(low);
+        while (parts.length() < 3) parts.push(0);
+        // The first part that isn't 0 may not change
+        var[Str] high = parts<0> > 0 ? $"{parts<0> + 1}.0.0" : parts<1> > 0 ? $"0.{parts<1> + 1}.0" : $"0.0.{parts<2> + 1}";
+        return compareVersions(version, low) >= 0 && compareVersions(version, high) < 0;
+    }
+    if (condition.startsWith("~")) {
+        var[Str] low = condition.substr(1, condition.length() - 1);
+        var[Int<>] parts = versionParts(low);
+        while (parts.length() < 2) parts.push(0);
+        return compareVersions(version, low) >= 0 && compareVersions(version, $"{parts<0>}.{parts<1> + 1}.0") < 0;
+    }
+    for (var[Str] op in <">=", "<=", ">", "<", "=">) {
+        if (condition.startsWith(op)) {
+            var[Int] order = compareVersions(version, condition.substr(op.length(), condition.length() - op.length()).trim());
+            switch (op) {
+                case ">=" := { return order >= 0; }
+                case "<=" := { return order <= 0; }
+                case ">" := { return order > 0; }
+                case "<" := { return order < 0; }
+                default := { return order == 0; }
+            }
+        }
+    }
+    if (condition.endsWith(".x") || condition.endsWith(".*")) {
+        var[Str] prefix = condition.substr(0, condition.length() - 1);
+        versionParts(prefix.substr(0, prefix.length() - 1));   // a valid start
+        return (version + ".").startsWith(prefix);
+    }
+    return compareVersions(version, condition) == 0;
+}
+
+// The newest version of `name` that fits `range`
+func[Str] bestVersion(name[Str], range[Str]) {
+    var[PackageInfo] info = packageInfo(name);
+    if (info.versions.isEmpty()) {
+        throw new RivError($"There is no package '{name}'. Try `riv search`.");
+    }
+    var[Str<>] versions = info.sortedVersions();
+    for (var[Int] i = versions.length() - 1; i >= 0; i--) {
+        if (fits(versions<i>, range)) return versions<i>;
+    }
+    throw new RivError($"No version of {name} fits '{range}' (available: {versions.join(", ")})");
+}
+
+// ============================================================
+// riv.lock: the exact versions installed, and what their files were
+// ============================================================
+
+const[Str] LOCK = "riv.lock";
+
+class Locked {
+    var[Str] version = "";
+    var[Str] hash = "";
+}
+
+func[Map[Str, Locked]] readLock() {
+    var[Map[Str, Locked]] lock = {:};
+    if (!fileExists(LOCK)) return lock;
+    var[Int] number = 0;
+    for (var[Str] raw in readFile(LOCK).split("\n")) {
+        number++;
+        var[Str] line = raw.trim();
+        if (line.isEmpty() || line.startsWith("#")) continue;
+        // colors = 1.2.0 sha256:...
+        var[Int] equals = line.indexOf("=");
+        if (equals < 0) throw new RivError($"{LOCK}:{number}: expected `name = version sha256:...`, got `{line}`");
+        var[Str<>] value = line.substr(equals + 1, line.length() - equals - 1).trim().split(" ");
+        var[Locked] entry = new Locked();
+        entry.version = value<0>;
+        if (value.length() > 1 && value<1>.startsWith("sha256:")) entry.hash = value<1>.substr(7, value<1>.length() - 7);
+        lock<line.substr(0, equals).trim()> = entry;
+    }
+    return lock;
+}
+
+func[Emp] writeLock(lock[Map[Str, Locked]]) {
+    var[Str] text = "# riv.lock -- written by riv install: the exact versions in riv_modules and\n# the sha256 of their files. Keep it with your project; riv upgrade renews it.\n";
+    var[Str<>] names = lock.keys();
+    names.sort();
+    for (var[Str] name in names) text += $"{name} = {lock<name>.version} sha256:{lock<name>.hash}\n";
+    writeFile(LOCK, text);
+}
+
+// The sha256 of a package folder: of each file's path and sha256, in order
+func[Str] folderHash(folder[Str]) {
+    var[Str<>] files = packageFiles(folder);
+    files.sort();
+    var[Str] all = "";
+    for (var[Str] file in files) {
+        var[Str] path = $"{folder}/{file}";
+        all += $"{file}:{sha256(readFile(path))}\n";
+    }
+    return sha256(all);
+}
+
 // ============================================================
 // Files and folders
 // ============================================================
 
 // The files of a package folder (relative paths), skipping riv_modules and hidden files.
 func[Str<>] packageFiles(root[Str], prefix[Str]="") {
-    var[Str<>] files = [];
+    var[Str<>] files = <>;
     var[Str] folder = prefix.isEmpty() ? root : $"{root}/{prefix}";
     for (var[Str] name in listDir(folder)) {
         if (name == MODULES || name.startsWith(".")) continue;
@@ -240,7 +373,7 @@ func[Str<>] pathList(value[Str]) {
 
 // The folders holding the packages that came with Dessa (`riv bundled`), and DESSA_PACKAGES
 func[Str<>] bundledFolders() {
-    var[Str<>] folders = [];
+    var[Str<>] folders = <>;
     var[Str] saved = rivHome() + "/bundled.txt";
     if (fileExists(saved)) {
         for (var[Str] line in readFile(saved).split("\n")) {
@@ -270,7 +403,7 @@ func[Str<>] bundledFolders() {
 func[Str<>] indexLocations() {
     var[Str | Nil] custom = getEnv("RIV_INDEX");
     if (custom != nil) return pathList(custom);
-    return [localIndex(), OFFICIAL_INDEX];
+    return <localIndex(), OFFICIAL_INDEX>;
 }
 
 var[Map[Str, Json | Nil]] indexCache = {:};
@@ -375,12 +508,12 @@ func[Emp] updateListing(location[Str], name[Str], description[Str], versions[Str
 
 func[Str<>] givenPeers() {
     var[Str | Nil] peers = getEnv("RIV_PEERS");
-    if (peers == nil) return [];
+    if (peers == nil) return <>;
     return peers.split(",").map((p[Str]) := p.trim()).filter((p[Str]) := !p.isEmpty());
 }
 
 func[Str<>] torrentOptions() {
-    var[Str<>] options = [];
+    var[Str<>] options = <>;
     options.push("trackers=" + (getEnv("RIV_TRACKERS") ?? "1"));
     options.push("lan=" + (getEnv("RIV_LAN") ?? "1"));
     options.push("webseed=" + (getEnv("RIV_WEBSEED") ?? "1"));
@@ -395,14 +528,20 @@ func[Str<>] torrentOptions() {
 // Installs packages and everything they depend on into riv_modules/.
 class Installer {
     var[Map[Str, Str]] installed = {:};   // name -> version
+    var[Map[Str, Locked]] lock = {:};      // riv.lock as it was
+    var[Map[Str, Locked]] newLock = {:};   // riv.lock as it will be
 
-    func[Emp] install(name[Str], version[Str]) {
+    // `wanted` is a version or a range (^1.2.0); riv.lock's version wins
+    // while it still fits
+    func[Emp] install(name[Str], wanted[Str]) {
         if (this.installed.has(name)) {
-            if (this.installed<name> != version) {
-                print($"  ! {name}@{version} also wanted; keeping {name}@{this.installed<name>}");
+            if (!fits(this.installed<name>, wanted)) {
+                print($"  ! {name}@{wanted} also wanted; keeping {name}@{this.installed<name>}");
             }
             return;
         }
+        var[Locked | Nil] locked = this.lock.get(name);
+        var[Str] version = locked != nil && fits(locked.version, wanted) ? locked.version : bestVersion(name, wanted);
         var[Str] target = $"{MODULES}/{name}";
         var[PackageInfo] info = packageInfo(name);
         if (!info.versions.has(version)) {
@@ -411,34 +550,44 @@ class Installer {
         }
         var[Json] entry = info.versions<version>;
         var[Str] torrent = entry.get("torrent").asStr();
+        var[Manifest] manifest = parseManifest(entry.get("manifest").asStr(), $"{name}/{MANIFEST}");
         // Already there: the same version with exactly the same files
+        var[Bul] present = false;
         if (fileExists($"{target}/{MANIFEST}")) {
             var[Manifest] here = readManifest($"{target}/{MANIFEST}");
-            if (here.version == version && folderMatches(target, torrent)) {
-                this.installed<name> = version;
-                print($"  = {name}@{version} (already installed)");
-                for (var[Str] dep in here.dependencies) this.install(dep, here.dependencies<dep>);
-                return;
-            }
-            if (here.version == version) print($"  ! {name}@{version} in {MODULES} has other files than the index says: installing it again");
+            present = here.version == version && folderMatches(target, torrent);
+            if (!present && here.version == version) print($"  ! {name}@{version} in {MODULES} has other files than the index says: installing it again");
         }
-        var[Str] source = this.localCopy(name, version, torrent);
-        var[Str] how = "";
-        if (source.isEmpty()) {
-            source = storeFolder(name, version);
-            deleteAll(source);
-            makeDir(source);
-            print($"  ~ {name}@{version}: looking for people sharing it...");
-            how = download(torrent, source, givenPeers(), torrentOptions());
-            writeFile(storeTorrent(name, version), torrent);
+        if (present) {
+            print($"  = {name}@{version} (already installed)");
         } else {
-            how = source.startsWith(rivHome()) ? "from your store" : "from the packages that came with Dessa";
+            var[Str] source = this.localCopy(name, version, torrent);
+            var[Str] how = "";
+            if (source.isEmpty()) {
+                source = storeFolder(name, version);
+                deleteAll(source);
+                makeDir(source);
+                print($"  ~ {name}@{version}: looking for people sharing it...");
+                how = download(torrent, source, givenPeers(), torrentOptions());
+                writeFile(storeTorrent(name, version), torrent);
+            } else {
+                how = source.startsWith(rivHome()) ? "from your store" : "from the packages that came with Dessa";
+            }
+            copyFolder(source, target);
+            print($"  + {name}@{version}: {how}");
         }
-        copyFolder(source, target);
         this.installed<name> = version;
-        print($"  + {name}@{version}: {how}");
 
-        var[Manifest] manifest = parseManifest(entry.get("manifest").asStr(), $"{name}/{MANIFEST}");
+        // The files must be the ones riv.lock remembers for this version
+        var[Locked] now = new Locked();
+        now.version = version;
+        now.hash = folderHash(target);
+        if (locked != nil && locked.version == version && !locked.hash.isEmpty() && locked.hash != now.hash) {
+            throw new RivError($"{name}@{version} doesn't have the files {LOCK} remembers (sha256 {now.hash.substr(0, 12)}... " +
+                               $"instead of {locked.hash.substr(0, 12)}...). If the package was changed on purpose, run `riv upgrade {name}`.");
+        }
+        this.newLock<name> = now;
+
         for (var[Str] dep in manifest.dependencies) this.install(dep, manifest.dependencies<dep>);
     }
 
@@ -519,7 +668,7 @@ func[Emp] openPullRequest(manifest[Manifest], entry[Json]) {
     if (listing != nil) writeFile($"{work}/index.json", stringify(listing, 2));
     addToIndex(work, manifest, entry);
 
-    for (var[Str] file in [$"{manifest.name}.json", "index.json"]) {
+    for (var[Str] file in <$"{manifest.name}.json", "index.json">) {
         var[Str] path = $"tools/riv/index/{file}";
         writeFile($"{work}/{file}.b64", toBase64(readFile($"{work}/{file}")));
         var[Str] sha = capture($"gh api \"repos/{repo}/contents/{path}?ref={branch}\" --jq .sha");
@@ -558,21 +707,25 @@ func[Emp] cmdInstall() {
     }
     print($"Installing dependencies of {manifest.name}:");
     var[Installer] installer = new Installer();
+    installer.lock = readLock();
     for (var[Str] dep in manifest.dependencies) {
         installer.install(dep, manifest.dependencies<dep>);
     }
-    print($"Done: {installer.installed.length()} package(s) in {MODULES}/");
+    writeLock(installer.newLock);
+    print($"Done: {installer.installed.length()} package(s) in {MODULES}/ (exact versions in {LOCK})");
 }
 
-// riv add colors   /   riv add colors@1.0.0
+// riv add colors   /   riv add colors@1.0.0   /   riv add colors@^1.0
 func[Emp] cmdAdd(spec[Str]) {
     var[Manifest] manifest = readManifest();
     var[Str<>] parts = spec.split("@");
     var[Str] name = parts<0>;
-    var[Str] version = parts.length() > 1 ? parts<1> : latestVersion(name);
-    manifest.dependencies<name> = version;
+    // Without a version: the newest, and the ones after it that don't break it (^)
+    var[Str] wanted = parts.length() > 1 ? parts<1> : "^" + bestVersion(name, "*");
+    bestVersion(name, wanted);   // something fits
+    manifest.dependencies<name> = wanted;
     manifest.save();
-    print($"Added {name}@{version} to {MANIFEST}");
+    print($"Added {name}@{wanted} to {MANIFEST}");
     cmdInstall();
 }
 
@@ -583,7 +736,21 @@ func[Emp] cmdRemove(name[Str]) {
     }
     manifest.save();
     deleteAll($"{MODULES}/{name}");
+    var[Map[Str, Locked]] lock = readLock();
+    if (lock.remove(name)) writeLock(lock);
     print($"Removed {name}");
+}
+
+// riv upgrade [name]: the newest versions riv.pkg allows, instead of riv.lock's
+func[Emp] cmdUpgrade(name[Str]) {
+    var[Map[Str, Locked]] lock = readLock();
+    if (name.isEmpty()) {
+        lock = {:};
+    } else if (!lock.remove(name)) {
+        throw new RivError($"'{name}' is not in {LOCK}");
+    }
+    writeLock(lock);
+    cmdInstall();
 }
 
 func[Emp] cmdList() {
@@ -609,7 +776,7 @@ func[Emp] cmdSearch(text[Str]) {
             if (!name.lower().includes(text.lower())) continue;
             var[Json] item = packages.get(name);
             if (!described.has(name)) described<name> = item.has("description") ? item.get("description").asStr() : "";
-            var[Str<>] known = versions.getOr(name, []);
+            var[Str<>] known = versions.getOr(name, <>);
             for (var[Int] i = 0; i < item.get("versions").length(); i++) {
                 var[Str] v = item.get("versions").at(i).asStr();
                 if (!known.includes(v)) known.push(v);
@@ -645,7 +812,7 @@ func[Emp] cmdInfo(spec[Str]) {
 // riv publish [folder] [--webseed <url>] [--pr]
 func[Emp] cmdPublish(rest[Str<>]) {
     var[Str] folder = ".";
-    var[Str<>] webseeds = [];
+    var[Str<>] webseeds = <>;
     var[Bul] pullRequest = false;
     for (var[Int] i = 0; i < rest.length(); i++) {
         if (rest<i> == "--pr") {
@@ -669,9 +836,9 @@ func[Emp] cmdSeed(rest[Str<>]) {
         if (rest<i> == "--port") port = Int(rest<i + 1>);
         else if (rest<i> == "--minutes") seconds = Int(rest<i + 1>) * 60;
     }
-    var[Str<>] torrents = [];
-    var[Str<>] folders = [];
-    var[Str<>] names = [];
+    var[Str<>] torrents = <>;
+    var[Str<>] folders = <>;
+    var[Str<>] names = <>;
     // The store: everything installed or published from here
     var[Str] store = rivHome() + "/store";
     if (isDir(store)) {
@@ -711,7 +878,7 @@ func[Emp] cmdSeed(rest[Str<>]) {
 // <folder>/index-skip.txt: packages left out of indexes and bundles for now
 func[Str<>] skippedPackages(folder[Str]) {
     var[Str] file = $"{folder}/index-skip.txt";
-    if (!fileExists(file)) return [];
+    if (!fileExists(file)) return <>;
     return readFile(file).split("\n").map((l[Str]) := l.trim()).filter((l[Str]) := !l.isEmpty() && !l.startsWith("#"));
 }
 
@@ -719,7 +886,7 @@ func[Str<>] skippedPackages(folder[Str]) {
 func[Emp] cmdBundled(folder[Str]) {
     if (!isDir(folder)) throw new RivError($"no folder '{folder}'");
     var[Str] saved = rivHome() + "/bundled.txt";
-    var[Str<>] folders = fileExists(saved) ? readFile(saved).split("\n").map((l[Str]) := l.trim()).filter((l[Str]) := !l.isEmpty()) : [];
+    var[Str<>] folders = fileExists(saved) ? readFile(saved).split("\n").map((l[Str]) := l.trim()).filter((l[Str]) := !l.isEmpty()) : <>;
     if (!folders.includes(folder)) folders.push(folder);
     writeFile(saved, folders.join("\n") + "\n");
     // Your index lists them too, so riv knows these versions even when the
@@ -731,7 +898,7 @@ func[Emp] cmdBundled(folder[Str]) {
         var[Str] package = $"{folder}/{name}";
         if (!fileExists($"{package}/{MANIFEST}")) continue;
         var[Manifest] manifest = readManifest($"{package}/{MANIFEST}");
-        addToIndex(localIndex(), manifest, entryFor(package, manifest, [OFFICIAL_WEBSEED]));
+        addToIndex(localIndex(), manifest, entryFor(package, manifest, <OFFICIAL_WEBSEED>));
         count++;
     }
     print($"riv will use the {count} package(s) in {folder} without downloading them, and share them with `riv seed`.");
@@ -743,7 +910,7 @@ func[Emp] cmdIndex(rest[Str<>]) {
     if (rest.isEmpty()) throw new RivError("`riv index` needs a folder of packages");
     var[Str] root = rest<0>;
     var[Str] out = localIndex();
-    var[Str<>] webseeds = [];
+    var[Str<>] webseeds = <>;
     var[Bul] check = false;
     for (var[Int] i = 1; i < rest.length(); i++) {
         if (rest<i> == "--check") check = true;
@@ -924,9 +1091,10 @@ func[Emp] help() {
     print("riv -- the Dessa package manager");
     print();
     print("  riv init [name]           create riv.pkg (and main.ds) in this folder");
-    print("  riv add <pkg>[@version]   add a dependency and install it");
+    print("  riv add <pkg>[@version]   add a dependency and install it (@^1.2, @~1.2, @>=1.0 <2.0 ...)");
     print("  riv remove <pkg>          remove a dependency");
-    print("  riv install               install every dependency into riv_modules/");
+    print("  riv install               install every dependency into riv_modules/ (exact versions: riv.lock)");
+    print("  riv upgrade [pkg]         take the newest versions riv.pkg allows, instead of riv.lock's");
     print("  riv list                  show this package's dependencies");
     print("  riv search [text]         list the packages in the index");
     print("  riv info <pkg>[@version]  versions, size, infohash and magnet link");
@@ -947,7 +1115,7 @@ func[Emp] help() {
 var[Str<>] argv = args();
 var[Str] command = argv.isEmpty() ? "help" : argv<0>;
 var[Str] argument = argv.length() > 1 ? argv<1> : "";
-var[Str<>] rest = argv.length() > 1 ? argv.slice(1, argv.length()) : [];
+var[Str<>] rest = argv.length() > 1 ? argv.slice(1, argv.length()) : <>;
 
 func[Emp] needArgument(what[Str]) {
     if (argument.isEmpty()) {
@@ -968,6 +1136,7 @@ try {
             needArgument("a package name");
             cmdRemove(argument);
         }
+        case "upgrade" := { cmdUpgrade(argument); }
         case "list" := { cmdList(); }
         case "search" := { cmdSearch(argument); }
         case "info" := {

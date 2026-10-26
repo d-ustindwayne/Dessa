@@ -26,7 +26,7 @@ var[Money] total = new Money(0);
 total += a;
 total += b;
 print(total, total > a);
-var[Money<>] prices = [a, b, new Money(50)];
+var[Money<>] prices = <a, b, new Money(50)>;
 prices.sort((x[Money], y[Money]) := x._cmp(y));
 print(prices);
 
@@ -45,7 +45,7 @@ class Geo {
     var[Int] id = 0;
     var[Str] name = "";
 }
-var[Obj<>] rows = [new { id = 1 }, new Geo(), new Geo()];
+var[Obj<>] rows = <new { id = 1 }, new Geo(), new Geo()>;
 setField(rows<1>, "name", "Cebu");
 var[Obj<>] onlyGeo = rows.filter((o[Obj]) := o is Geo);
 onlyGeo.forEach((g[Geo]) := print(g.name.upper(), g.id));

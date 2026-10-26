@@ -32,7 +32,7 @@ func[Int] fib(n[Int]) {
 
 // 3. Lists of Bul: primes up to 10 million
 func[Int] sieve(limit[Int]) {
-    var[Bul<>] composite = [];
+    var[Bul<>] composite = <>;
     for (var[Int] i = 0; i <= limit; i++) composite.push(false);
     var[Int] count = 0;
     for (var[Int] i = 2; i <= limit; i++) {
@@ -59,7 +59,7 @@ func[Int] strings(n[Int]) {
 
 // 5. Sorting a million numbers (MINSTD random numbers)
 func[Int] sorting(n[Int]) {
-    var[Int<>] values = [];
+    var[Int<>] values = <>;
     var[Int] x = 42;
     for (var[Int] i = 0; i < n; i++) {
         x = (x * 48271) % 2147483647;

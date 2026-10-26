@@ -354,6 +354,23 @@ def riv_test():
         result = riv_run(["install"], app, home1)
         if "installing it again" not in result.stdout or lib.read_text(encoding="utf-8") != original:
             problems.append("riv install with changed files: " + result.stdout + result.stderr)
+        # riv add writes a range (^), riv install a riv.lock with versions and sha256
+        manifest = (app / "riv.pkg").read_text(encoding="utf-8")
+        lock_file = app / "riv.lock"
+        lock = lock_file.read_text(encoding="utf-8") if lock_file.exists() else ""
+        if not re.search(r"colors = \^[0-9.]+", manifest) or not re.search(r"colors = [0-9.]+ sha256:[0-9a-f]{64}", lock) or "textfx = " not in lock:
+            problems.append("riv.pkg range / riv.lock:\n" + manifest + "\n" + lock)
+        # A package whose files aren't the ones riv.lock remembers is refused; riv upgrade takes it again
+        lock_file.write_text(re.sub(r"(colors = [0-9.]+ sha256:)[0-9a-f]{64}", r"\g<1>" + "0" * 64, lock), encoding="utf-8")
+        result = riv_run(["install"], app, home1)
+        if result.returncode == 0 or "doesn't have the files riv.lock remembers" not in result.stdout:
+            problems.append("riv install with a changed package: " + result.stdout + result.stderr)
+        result = riv_run(["upgrade"], app, home1)
+        if result.returncode != 0 or "0" * 64 in lock_file.read_text(encoding="utf-8"):
+            problems.append("riv upgrade: " + result.stdout + result.stderr)
+        result = riv_run(["add", "colors@>=99.0"], app, home1)
+        if result.returncode == 0 or "No version of colors fits '>=99.0'" not in result.stdout:
+            problems.append("riv add with a range nothing fits: " + result.stdout + result.stderr)
 
         # A new package: published in one home, shared, installed in another
         greet = tmp / "greet"

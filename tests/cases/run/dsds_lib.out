@@ -1,18 +1,18 @@
-Stack[1, "two", 3.5] 3 3.5
+Stack<1, "two", 3.5> 3 3.5
 3.5 two 1 false
-Queue[97, 98, 99] 4656 97
-Deque["b"] a c b b
-LinkedList[1, 1.5, 2, 3, 4] 5 1.5 3 false
-1.5 1 4 LinkedList[2, 3]
-LinkedList[3, "x"]
-PriorityQueue[3, 4, 5] 1 1 2 3
+Queue<97, 98, 99> 4656 97
+Deque<"b"> a c b b
+LinkedList<1, 1.5, 2, 3, 4> 5 1.5 3 false
+1.5 1 4 LinkedList<2, 3>
+LinkedList<3, "x">
+PriorityQueue<3, 4, 5> 1 1 2 3
 pear fig
-SearchTree[20, 30, 40, 50, 60, 70, 80] 7 true false 20 80
-true true false SearchTree[30, 40, 60, 70, 80]
-["Cebu", "Manila", "Baguio", "Davao", "Island"] ["Cebu", "Baguio", "Davao"]
-["Cebu", "Manila", "Davao", "Baguio"] ["Cebu", "Manila", "Baguio", "Davao"]
-["Cebu", "Manila", "Baguio"] 820
-false []
+SearchTree<20, 30, 40, 50, 60, 70, 80> 7 true false 20 80
+true true false SearchTree<30, 40, 60, 70, 80>
+<"Cebu", "Manila", "Baguio", "Davao", "Island"> <"Cebu", "Baguio", "Davao">
+<"Cebu", "Manila", "Davao", "Baguio"> <"Cebu", "Manila", "Baguio", "Davao">
+<"Cebu", "Manila", "Baguio"> 820
+false <>
 true false
 pop: the stack is empty
 get: index 10 is out of range for a list of 2

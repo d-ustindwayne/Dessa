@@ -359,7 +359,8 @@ Ref<T> self_ref(T* self) {
 // Errors
 // ============================================================
 
-// A runtime error or a thrown Str. Caught by `catch (e[Str])`.
+// A runtime error or a thrown Str, when the program has no Error class to
+// make (see error_hook). Caught by `catch (e[Str])`.
 struct Error : std::runtime_error {
     explicit Error(const Str& message) : std::runtime_error(message) {}
 };
@@ -369,14 +370,46 @@ struct Thrown {
     Ref<Object> value;
 };
 
-[[noreturn]] inline void fail(const Str& message) {
-    throw Error(message);
-}
-
 // The Dessa statement being run, updated by generated code before each
 // statement; reported when an error isn't caught.
 inline const char* trace_file = "";
 inline int trace_line = 0;
+
+// Makes the Error object for thrown text (runtime false) or a runtime error
+// (runtime true); the program sets it to the prelude's _error. is_error says
+// whether a thrown value is an Error (printed without "Uncaught: ").
+inline Ref<Object> (*error_hook)(const Str& message, bool runtime) = nullptr;
+inline bool (*is_error)(const Ref<Object>& value) = nullptr;
+
+[[noreturn]] inline void raise_message(const Str& message, bool runtime) {
+    static bool making = false;
+    if (error_hook && !making) {
+        const char* file = trace_file;   // making it runs code: keep the error's place
+        int line = trace_line;
+        making = true;
+        Ref<Object> error;
+        try {
+            error = error_hook(message, runtime);
+        } catch (...) {
+            making = false;
+            throw;
+        }
+        making = false;
+        trace_file = file;
+        trace_line = line;
+        throw Thrown{error};
+    }
+    throw Error(message);
+}
+
+[[noreturn]] inline void fail(const Str& message) {
+    raise_message(message, true);
+}
+
+// throw "text"
+[[noreturn]] inline void raise(const Str& message) {
+    raise_message(message, false);
+}
 
 inline void trace(const char* file, int line) {
     trace_file = file;
@@ -799,13 +832,13 @@ Str to_str(const T& value) {
     else if constexpr (is_fn<U>::value) return value ? "<function>" : "Nil";
     else if constexpr (std::is_function_v<std::remove_pointer_t<U>>) return "<function>";
     else if constexpr (is_list<U>::value) {
-        Str out = "[";
+        Str out = "<";
         for (size_t i = 0; i < value.size(); ++i) {
             if (i) out += ", ";
             if constexpr (std::is_same_v<typename U::value_type, bool>) out += value[i] ? "true" : "false";
             else out += repr(value[i]);
         }
-        return out + "]";
+        return out + ">";
     } else if constexpr (is_set<U>::value) {
         Str out = "{";
         bool first = true;
@@ -1352,17 +1385,14 @@ inline Str m_replaceAll(Str s, const Str& from, const Str& to) {
     return s;
 }
 
-// 3.14159.toFixed(2) -> "3.14"  (rounded, always exactly `digits` decimals)
-inline Str m_toFixed(Dbl value, Int digits) {
+// 3.14159.toFixed(2) -> 3.14  (rounded to `digits` decimals; a Flt stays a Flt)
+inline Dbl m_toFixed(Dbl value, Int digits) {
     if (digits < 0 || digits > 20) fail("toFixed: digits must be between 0 and 20, got " + std::to_string(digits));
-    // Round halves away from zero (2.5 -> 3), like JavaScript, rather than
-    // printf's round-half-to-even.
+    // Round halves away from zero (2.5 -> 3)
     double scale = std::pow(10.0, static_cast<double>(digits));
-    double rounded = std::round(value * scale) / scale;
-    char buffer[400];
-    std::snprintf(buffer, sizeof buffer, "%.*f", static_cast<int>(digits), rounded);
-    return buffer;
+    return std::round(value * scale) / scale;
 }
+inline Flt m_toFixed(Flt value, Int digits) { return static_cast<Flt>(m_toFixed(static_cast<Dbl>(value), digits)); }
 inline List<Str> m_split(const Str& s, const Str& sep) {
     List<Str> parts;
     if (sep.empty()) {
@@ -1789,7 +1819,9 @@ int run_main(int argc, char** argv, Body&& body) {
         body();
     } catch (const Thrown& thrown) {
         std::cout.flush();
-        std::cerr << "Uncaught: " << (thrown.value ? thrown.value->ds_str() : Str("Nil")) << trace_location() << "\n";
+        const Str where = trace_location();   // toStr() runs code: keep the error's place
+        std::cerr << (is_error && is_error(thrown.value) ? "" : "Uncaught: ") << (thrown.value ? thrown.value->ds_str() : Str("Nil"))
+                  << where << "\n";
         return 1;
     } catch (const std::bad_function_call&) {
         std::cout.flush();

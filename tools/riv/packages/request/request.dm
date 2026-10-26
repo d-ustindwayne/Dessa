@@ -20,15 +20,7 @@
 $("request") { _send }            // native part (request.hpp)
 $("json") { Json, parseJson, stringify }
 
-class RequestError {
-    var[Str] message = "";
-    init(message[Str]) {
-        this.message = message;
-    }
-    func[Str] toStr() {
-        return $"RequestError: {this.message}";
-    }
-}
+class RequestError(Error) {}   // an Error: e.message, prints as RequestError: ...
 
 class Response {
     var[Str] url = "";
@@ -65,7 +57,7 @@ func[Response] request(method[Str], url[Str], headers[Map[Str, Str]]={}, body[St
         headerLines += $"{name}: {headers<name>}\n";
     }
 
-    var[Str<>] raw = [];
+    var[Str<>] raw = <>;
     try {
         raw = _send(method.upper(), url, headerLines, body, timeout);
     } catch (e[Str]) {

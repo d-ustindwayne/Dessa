@@ -18,6 +18,7 @@ set(DESSA_FRONTEND
     src/analyser/builtins.cpp
     src/analyser/scope.cpp
     src/analyser/semtype.cpp
+    src/analyser/generics.cpp
     src/codegen/codegen.cpp
     src/codegen/cgen.cpp
     src/codegen/cgen_expr.cpp

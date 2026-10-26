@@ -19,7 +19,7 @@ print("42".toInt() + 1, "2.5".toDbl() * 2, 65.toChr(), 'a'.code(), 'x'.upper(), 
 print(t<0>, t<t.length() - 1>, t.chars().length());
 
 // Lists
-var[Int<>] xs = [5, 3, 8];
+var[Int<>] xs = <5, 3, 8>;
 xs.push(1);
 xs.insert(0, 9);
 print(xs, xs.length(), xs.includes(8), xs.indexOf(3));
@@ -28,11 +28,11 @@ print(xs, xs.first(), xs.last());
 xs.reverse();
 print(xs);
 print(xs.pop(), xs.removeAt(0), xs, xs.remove(3), xs);
-print(xs.slice(0, 1), [1, 2, 3, 4].slice(2, 4), xs.isEmpty(), [].length());
-var[Str<>] words = ["b", "a", "c"];
+print(xs.slice(0, 1), <1, 2, 3, 4>.slice(2, 4), xs.isEmpty(), <>.length());
+var[Str<>] words = <"b", "a", "c">;
 words.sort();
 print(words.join("-"));
-var[Int<>] more = [...xs, 100, ...[7, 7]];
+var[Int<>] more = <...xs, 100, ...<7, 7>>;
 print(more);
 
 // Sets
@@ -51,5 +51,5 @@ print(fileExists(path), readFile(path));
 print(deleteFile(path), fileExists(path));
 
 // replace vs replaceAll, includes, toFixed
-print("a-b-c".replace("-", "+"), "a-b-c".replaceAll("-", "+"), "hello".includes("ell"), [1, 2].includes(2), {"x"}.includes("y"));
-print(3.14159.toFixed(2), 2.5.toFixed(0), (7 / 3).toFixed(3), 10.0.toFixed(1), "x".length(), [1, 2, 3].length());
+print("a-b-c".replace("-", "+"), "a-b-c".replaceAll("-", "+"), "hello".includes("ell"), <1, 2>.includes(2), {"x"}.includes("y"));
+print(3.14159.toFixed(2), 2.5.toFixed(0), (7 / 3).toFixed(3), 10.0.toFixed(1), "x".length(), <1, 2, 3>.length());

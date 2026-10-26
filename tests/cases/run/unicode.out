@@ -1,11 +1,11 @@
 4 5 3
-é 😀 ['h', 'i', ' ', '😀', '!']
+é 😀 <'h', 'i', ' ', '😀', '!'>
 fé 4 3
 CAFÉ école STRAßE
 é 😀 233 128512 é true
 true false true É true true
 a-ñ-b- xñ ñy
-["a", "😀", "b"] 1 true
+<"a", "😀", "b"> 1 true
 {'m': 1, 'i': 4, 's': 4, 'p': 2}
 Cannot convert "ab" to Chr: it must be exactly one character
 Hello World From Dessa Ñandú Éxito

@@ -28,8 +28,8 @@ Highlighting works without the compiler; everything else needs it.
 
 ## Features
 
-**Highlighting** for Dessa files, `.dhtml` pages, and Dessa scripts inside
-HTML pages.
+**Highlighting** for Dessa files, `.dhtml` pages, Dessa scripts inside
+HTML pages, and ```` ```dessa ```` code blocks in Markdown.
 
 **Errors as you type.** The compiler checks the file while you type and marks
 the exact spot. In `.dhtml` pages every script is checked, with positions in
@@ -80,7 +80,7 @@ as native programs; `.dhtml` pages are served locally (`dessa run page.dhtml`).
 |---|---|---|
 | `dessa.compilerPath` | `dessa` | the `dessa` executable, if it isn't on PATH |
 | `dessa.checkOnType` | `true` | check while typing (otherwise on open and save) |
-| `dessa.autoBrackets` | `true` | `$` at the start of a line adds `()`; a space after `var`, `const` or `func` becomes `[]` |
+| `dessa.autoBrackets` | `true` | `$` at the start of a line adds `()`; `var`, `const` or `func` at the start of a statement get `[]`; a space after `if`, `while`, `for`, `switch` or `catch` becomes ` ()`; `{` after an import becomes `{  }`; `!!` in a type gets spaces; Enter splits an import list over lines |
 | `dessa.unusedImports` | `dim` | imports the file never uses: `dim` (faded), `warning`, or `off` |
 | `dessa.packageFolders` | `[]` | extra folders with riv packages for `$("lib")` imports (like `DESSA_PACKAGES`) |
 

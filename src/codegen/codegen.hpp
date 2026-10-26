@@ -80,6 +80,7 @@ private:
     std::string loopItem(const std::string& item, const SemanticType& iterable, const SemanticType* declared, const VarDeclStmt* decl);
     void switchStmt(const SwitchStmt* statement);
     void tryStmt(const TryStmt* statement);
+    std::optional<SemanticType> preludeError() const;
 
     // ---- Expressions ----
     std::string expr(const Expr* expression);

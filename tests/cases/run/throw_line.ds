@@ -1,0 +1,21 @@
+// exit: 1
+// An uncaught throw points at the throw, not at the constructor that built the value
+// stderr: throw_line.ds:14
+class NumberError {
+    var[Str] message;
+    init(message[Str]) {
+        this.message = message;
+    }
+}
+
+func[Dbl !! NumberError] divide(num1[Dbl], num2[Dbl]) {
+    if (num2 == 0) {
+        // the error object is made on another line than the throw
+        throw new NumberError(
+            "division by zero");
+    }
+    return num1 / num2;
+}
+
+print(divide(1, 2));
+print(divide(1, 0));

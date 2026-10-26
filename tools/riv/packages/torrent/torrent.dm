@@ -5,10 +5,10 @@
  *
  *     var[Torrent] t = makeTorrent("my-folder", "my-folder", DEFAULT_TRACKERS, []);
  *     print(t.infoHash);                       // what peers ask for
- *     seed([t], ["my-folder"], 6881, 0);       // share until stopped
+ *     seed(<t>, <"my-folder">, 6881, 0);       // share until stopped
  *
  *     // on another computer
- *     download(t.data, "copy-of-it", [], DEFAULT_OPTIONS);
+ *     download(t.data, "copy-of-it", <>, DEFAULT_OPTIONS);
  *
  * Peers find each other through public trackers (free servers that only
  * pass addresses around), on the local network (multicast, no internet
@@ -22,15 +22,15 @@
 $("torrent") { _create, _infoHash, _matches, _download, _seed }
 
 // Free public trackers (UDP)
-const[Str<>] DEFAULT_TRACKERS = [
+const[Str<>] DEFAULT_TRACKERS = <
     "udp://tracker.opentrackr.org:1337/announce",
     "udp://open.stealth.si:80/announce",
     "udp://tracker.torrent.eu.org:451/announce",
     "udp://exodus.desync.com:6969/announce",
-];
+>;
 
 // trackers=0|1, lan=0|1, webseed=0|1, timeout=<seconds>, quiet=0|1
-const[Str<>] DEFAULT_OPTIONS = ["trackers=1", "lan=1", "webseed=1", "timeout=60"];
+const[Str<>] DEFAULT_OPTIONS = <"trackers=1", "lan=1", "webseed=1", "timeout=60">;
 
 class Torrent {
     var[Str] infoHash = "";    // hex: what peers ask for
@@ -72,8 +72,8 @@ func[Str] download(data[Str], target[Str], peers[Str<>], options[Str<>]) {
 }
 
 // Shares folders; torrents<i> describes folders<i>. seconds = 0: until stopped.
-func[Emp] seed(torrents[Torrent<>], folders[Str<>], port[Int], seconds[Int], options[Str<>] = []) {
-    var[Str<>] data = [];
+func[Emp] seed(torrents[Torrent<>], folders[Str<>], port[Int], seconds[Int], options[Str<>] = <>) {
+    var[Str<>] data = <>;
     for (var[Torrent] t in torrents) data.push(t.data);
     _seed(data, folders, port, options.isEmpty() ? DEFAULT_OPTIONS : options, seconds);
 }

@@ -1,0 +1,70 @@
+/*
+ * The error classes every Dessa file has without importing them.
+ *
+ *     Error                 the base of all errors: throw new Error("...")
+ *       DessaError          errors the language itself raises while running:
+ *         IndexError        a list index out of range, an empty list
+ *         KeyError          a missing map key or object field
+ *         ValueError        a value that can't be used: Int("abc"), sqrt(-1)
+ *         OverflowError     an Int too big for an Int
+ *         DivisionError     division or modulo by zero
+ *         NilError          using nil as a value
+ *         FileError         a file that can't be read or written
+ *
+ * Library errors (JsonError, SqlError, ...) extend Error too, and so can
+ * yours: class NotFound(Error) {}. catch (e[Error]) catches them all;
+ * catch (e[Str]) catches them too and gives the message.
+ */
+
+class Error {
+    var[Str] message = "";
+
+    init(message[Str]) {
+        this.message = message;
+    }
+
+    // IndexError: Index 3 is out of range for list of length 2
+    func[Str] toStr() {
+        return $"{typeof(this)}: {this.message}";
+    }
+}
+
+class DessaError(Error) {}
+class IndexError(DessaError) {}
+class KeyError(DessaError) {}
+class ValueError(DessaError) {}
+class OverflowError(DessaError) {}
+class DivisionError(DessaError) {}
+class NilError(DessaError) {}
+class FileError(DessaError) {}
+
+// What the runtime throws: thrown text becomes an Error, and the runtime's
+// own messages the DessaError that fits them
+func[Error] _error(message[Str], runtime[Bul]) {
+    if (!runtime) return new Error(message);
+    var[Str] m = message;
+    if (m.startsWith("Int overflow") || m.includes("it's too big")) return new OverflowError(message);
+    if (m.startsWith("Division by zero") || m.startsWith("Modulo by zero")) return new DivisionError(message);
+    if (m.startsWith("Nil reference") || m.startsWith("Unexpected nil") || m.startsWith("Cannot convert Nil") ||
+        m.includes("holds Nil") || m.includes("value is nil")) {
+        return new NilError(message);
+    }
+    if (m.includes("out of range") || m.startsWith("Negative index") || m.startsWith("slice(") ||
+        m.includes("empty list") || m.includes("the list is empty") || m.startsWith("sample:")) {
+        return new IndexError(message);
+    }
+    if ((m.startsWith("Key ") && m.includes("not in the map")) || m.includes("no field")) return new KeyError(message);
+    if (m.includes("file '") || m.includes("File '") || m.includes("folder '") || m.startsWith("The file is closed") ||
+        m.startsWith("Cannot delete")) {
+        return new FileError(message);
+    }
+    if (m.startsWith("Cannot convert") || m.startsWith("Cannot store") || m.includes("not a whole number") ||
+        m.startsWith("Value is") || m.startsWith("Unexpected value") || m.includes(" of a negative number") ||
+        m.includes("of a number <= 0") || m.startsWith("Negative exponent") || m.includes("can't be negative") ||
+        m.includes("cannot be negative") || m.includes("is smaller than low") || m.includes("is bigger than high") ||
+        m.startsWith("toFixed:") || m.startsWith("fromHex:") || m.startsWith("decrypt:") || m.startsWith("verifyPassword:") ||
+        m.startsWith("token:") || m.startsWith("Unknown time zone") || m.startsWith("open: mode") || m.includes("not valid base64")) {
+        return new ValueError(message);
+    }
+    return new DessaError(message);
+}

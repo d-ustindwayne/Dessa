@@ -83,13 +83,17 @@ void ds_clear_error(void) {
 
 static DS_NORETURN void uncaught(void) {
     fflush(stdout);
+    const char* file = ds_trace_file;   /* toStr() runs code: keep the error's place */
+    int line = ds_trace_line;
     if (ds_thrown) {
         ds_str* text = ds_object_str(ds_thrown);
-        fprintf(stderr, "Uncaught: %.*s", (int)text->len, text->data);
+        /* An Error prints as it is (IndexError: ...), anything else as Uncaught: ... */
+        const char* prefix = ds_error_type && ds_is_class(ds_thrown, ds_error_type) ? "" : "Uncaught: ";
+        fprintf(stderr, "%s%.*s", prefix, (int)text->len, text->data);
     } else {
         fprintf(stderr, "Error: %.*s", ds_error ? (int)ds_error->len : 0, ds_error ? ds_error->data : "");
     }
-    if (ds_trace_line > 0) fprintf(stderr, "\n  at %s:%d", ds_trace_file, ds_trace_line);
+    if (line > 0) fprintf(stderr, "\n  at %s:%d", file, line);
     fputs("\n", stderr);
     fflush(stderr);
     exit(1);
@@ -100,10 +104,31 @@ void ds_rethrow(void) {
     DS_JUMP(ds_handler);
 }
 
-void ds_throw_str(ds_str* message) {
+void* (*ds_error_hook)(ds_str* message, int runtime);
+const ds_type* ds_error_type;
+
+/* Thrown text and runtime errors are thrown as Error objects (made by the
+ * program's _error); without one, or when making it fails, as plain text */
+static DS_NORETURN void throw_message(ds_str* message, int runtime) {
+    static int making;
+    if (ds_error_hook && !making) {
+        const char* file = ds_trace_file;   /* making it runs code: keep the error's place */
+        int line = ds_trace_line;
+        making = 1;
+        void* error = ds_error_hook(message, runtime);
+        making = 0;
+        ds_trace_file = file;
+        ds_trace_line = line;
+        ds_release(message);
+        ds_throw_obj(error);
+    }
     ds_clear_error();
     ds_error = message;
     ds_rethrow();
+}
+
+void ds_throw_str(ds_str* message) {
+    throw_message(message, 0);
 }
 
 void ds_throw_obj(void* object) {
@@ -113,7 +138,7 @@ void ds_throw_obj(void* object) {
 }
 
 void ds_fail_str(ds_str* message) {
-    ds_throw_str(message);
+    throw_message(message, 1);
 }
 
 void ds_fail(const char* format, ...) {
@@ -123,7 +148,7 @@ void ds_fail(const char* format, ...) {
     int n = vsnprintf(small, sizeof small, format, args);
     va_end(args);
     if (n < 0) n = 0;
-    if ((size_t)n < sizeof small) ds_throw_str(ds_str_new(small, n));
+    if ((size_t)n < sizeof small) ds_fail_str(ds_str_new(small, n));
     char* big = (char*)malloc((size_t)n + 1);
     if (!big) out_of_memory();
     va_start(args, format);
@@ -131,7 +156,7 @@ void ds_fail(const char* format, ...) {
     va_end(args);
     ds_str* message = ds_str_new(big, n);
     free(big);
-    ds_throw_str(message);
+    ds_fail_str(message);
 }
 
 void ds_overflow(ds_int a, const char* op, ds_int b) {
@@ -759,12 +784,12 @@ bool ds_list_eq(ds_list* a, ds_list* b) {
 ds_str* ds_list_str(ds_list* l) {
     ds_sb b;
     ds_sb_init(&b);
-    ds_sb_cstr(&b, "[");
+    ds_sb_cstr(&b, "<");
     for (int64_t i = 0; i < l->len; ++i) {
         if (i) ds_sb_cstr(&b, ", ");
         ds_sb_take(&b, ds_item_repr(l->et, ITEM(l, i)));
     }
-    ds_sb_cstr(&b, "]");
+    ds_sb_cstr(&b, ">");
     return ds_sb_done(&b);
 }
 
@@ -1246,7 +1271,7 @@ void ds_map_missing(ds_map* m, const void* key) {
     ds_sb_cstr(&b, "Key ");
     ds_sb_take(&b, k);
     ds_sb_cstr(&b, " is not in the map (use .has(key) or .get(key) to check)");
-    ds_throw_str(ds_sb_done(&b));
+    ds_fail_str(ds_sb_done(&b));
 }
 
 ds_list* ds_map_keys(ds_map* m) {
@@ -1344,7 +1369,7 @@ void* ds_cast(void* object, const ds_type* cls) {
         ds_sb_cstr(&b, "Value is not the expected class (");
         ds_sb_take(&b, ds_class_name(object));
         ds_sb_cstr(&b, ")");
-        ds_throw_str(ds_sb_done(&b));
+        ds_fail_str(ds_sb_done(&b));
     }
     return object;
 }
@@ -1763,13 +1788,10 @@ ds_str* ds_str_repeat(ds_str* s, ds_int count) {
 
 ds_int ds_str_compare(ds_str* a, ds_str* b) { return ds_str_cmp(a, b); }
 
-ds_str* ds_to_fixed(ds_dbl value, ds_int digits) {
+ds_dbl ds_to_fixed(ds_dbl value, ds_int digits) {
     if (digits < 0 || digits > 20) ds_fail("toFixed: digits must be between 0 and 20, got %lld", (long long)digits);
     double scale = pow(10.0, (double)digits);
-    double rounded = round(value * scale) / scale;
-    char buffer[400];
-    int n = snprintf(buffer, sizeof buffer, "%.*f", (int)digits, rounded);
-    return ds_str_new(buffer, n);
+    return round(value * scale) / scale;
 }
 
 /* ============================================================

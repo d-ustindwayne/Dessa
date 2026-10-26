@@ -1,12 +1,12 @@
 Int Dbl Str Chr Bul Int[16]
 Int Int<> Map[Str, Int] Dog Nil
 Str Func[Int, [Int]]
-[["Ann", 31], ["Bea", 27]]
-[[1, 10], [2, 20], [3, 30]]
-["Ann is 31", "Bea is 27"]
+<<"Ann", 31>, <"Bea", 27>>
+<<1, 10>, <2, 20>, <3, 30>>
+<"Ann is 31", "Bea is 27">
 ANN 31
 BEA 27
-[9, 5, 3, 1]
-["Ace", "Bo", "Mia"]
-["fig", "pear", "kiwi", "banana"] -1 1 0
-["banana", "fig", "kiwi", "pear"]
+<9, 5, 3, 1>
+<"Ace", "Bo", "Mia">
+<"fig", "pear", "kiwi", "banana"> -1 1 0
+<"banana", "fig", "kiwi", "pear">

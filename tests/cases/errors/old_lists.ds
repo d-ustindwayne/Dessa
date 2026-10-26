@@ -1,0 +1,4 @@
+// Lists are written <1, 2>; the old [1, 2] still works but is warned about
+var[Int<>] old = [1, 2];                        // warning: Lists are written with < >: <1, 2> instead of [1, 2]
+var[Int<>] now = <1, 2>;
+var[Bul<>] bad = <1 > 2>;                       // error: A comparison inside a list needs brackets

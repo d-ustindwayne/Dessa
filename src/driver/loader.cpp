@@ -67,6 +67,14 @@ Program ModuleLoader::load(const std::string& entryPath, const std::string* sour
     return program;
 }
 
+// include/prelude/errors.ds, when the compiler has its include folder
+std::string ModuleLoader::preludePath() const {
+    if (includeDir.empty()) return "";
+    fs::path file = fs::path(includeDir) / "prelude" / "errors.ds";
+    std::error_code ec;
+    return fs::is_regular_file(file, ec) ? normalise(file) : "";
+}
+
 // All Dessa file types, in order of preference. (They are compiled the same
 // way for now.)
 static const char* const extensions[] = {".ds", ".dm", ".dx", ".dz", ".dsx", ".dxx", ".dzx", ".dds", ".dss"};
@@ -206,6 +214,7 @@ int ModuleLoader::visit(Program& program, const std::string& path, const std::st
 
     auto module = std::make_unique<Module>();
     module->path = path;
+    module->isPrelude = path == preludePath();
     module->displayPath = displayPath(path);
 
     if (sourceOverride) {
@@ -227,13 +236,30 @@ int ModuleLoader::visit(Program& program, const std::string& path, const std::st
 
     Parser parser(std::move(tokens));
     module->ast = parser.parseProgram();
+    module->templates = parser.takeTemplates();
     for (const auto& e : parser.getErrors()) diagnostics.push_back(diagnosticFromMessage(module->displayPath, e));
+
+    // Every file sees Error, IndexError, ... as if it had imported them
+    const std::string prelude = preludePath();
+    if (!prelude.empty() && prelude != path) {
+        ModuleSpec spec;
+        spec.path = "errors";
+        spec.isPrelude = true;
+        std::vector<ModuleSpec> specs;
+        specs.push_back(std::move(spec));
+        module->ast.insert(module->ast.begin(), std::make_unique<ImportStmt>(std::vector<ImportName>{}, std::move(specs), true));
+    }
 
     state.loadingStack.push_back(path);
     for (const auto& statement : module->ast) {
         if (!statement || statement->kind != StmtKind::Import) continue;
         const auto* import = static_cast<const ImportStmt*>(statement.get());
         for (const auto& spec : import->modules) {
+            if (spec.isPrelude) {
+                int childId = visit(program, preludePath(), nullptr, state, module->displayPath, 0, 0);
+                if (childId >= 0) module->resolvedImports[&spec] = childId;
+                continue;
+            }
             // A file of the project wins over a library of the same name. (A
             // library's own files import its native part: $("sql") in sql.dm.)
             if (!spec.isBuiltin && isLibrary(spec.path)) {

@@ -55,3 +55,25 @@ var[Int] lo = 3;
 var[Int] hi = 10;
 var[Int] mid = lo + (hi - lo) / 2;
 print(mid, lo + (hi - lo) / 2);
+
+// Straight into classes and back
+class User {
+    var[Str] name = "";
+    var[Int] age = 0;
+    var[Str<>] tags = <>;
+    var[Bul] admin = false;
+}
+
+var[User] u = parseJsonAs:User("{\"name\": \"Ann\", \"age\": 31, \"tags\": [\"a\", \"b\"], \"extra\": 1}");
+print(u);
+var[User<>] all = parseJsonListAs:User("[{\"name\": \"Bo\", \"ADMIN\": true}, {\"name\": \"Cy\", \"age\": 5}]");
+print(all);
+print(toJson(u));
+print(toJson(all<0>).pretty());
+var[Json] wrapped = parseJson("{\"user\": {\"name\": \"Di\", \"age\": 40}}");
+print(wrapped.get("user").to:User().age);
+try {
+    var[User] bad = parseJsonAs:User("{\"age\": \"old\"}");
+} catch (e[JsonError]) {
+    print(e);
+}

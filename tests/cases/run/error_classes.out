@@ -1,0 +1,10 @@
+index IndexError: Index 5 is out of range for list of length 2
+key KeyError Key "z" is not in the map (use .has(key) or .get(key) to check) true
+value ValueError Cannot convert "abc" to Int true
+div DivisionError Modulo by zero true
+overflow OverflowError Int overflow: 9223372036854775807 + 1 doesn't fit in an Int (-9223372036854775808 to 9223372036854775807); use Big from $("math") for bigger numbers true
+text Error Error: plain
+own KeyError mine true
+as text: Index 9 is out of range for list of length 2
+as text: bad
+NotFound: user 7 true

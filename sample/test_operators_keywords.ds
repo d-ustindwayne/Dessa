@@ -59,8 +59,8 @@ var[Config | Nil] cfg = new Config();
 var[Int | Nil] optCheck = cfg?.timeout;
 
 // --- 6. Collections & Spread ---
-var[Str<>] baseList = ["one", "two"];
-var[Str<>] spreadList = [...baseList, "three"];
+var[Str<>] baseList = <"one", "two">;
+var[Str<>] spreadList = <...baseList, "three">;
 var[Int{}] setVal = {1, 2, 3, 5};
 
 // --- 7. Functions, Lambdas & Control Flow Keywords ---

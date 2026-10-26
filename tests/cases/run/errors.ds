@@ -42,7 +42,7 @@ try {
 }
 
 // Runtime errors can be caught as Str
-var[Int<>] list = [1, 2, 3];
+var[Int<>] list = <1, 2, 3>;
 try {
     print(list<10>);
 } catch (e[Str]) {

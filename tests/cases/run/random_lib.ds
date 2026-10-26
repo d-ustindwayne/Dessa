@@ -4,7 +4,7 @@ $("random") { seed, rand, randInt, randDbl, chance, pick, shuffle, sample, randS
 seed(42);
 print(randInt(1, 6), randInt(1, 6), randInt(1, 6), randInt(-1000000, 1000000));
 print(rand().toFixed(6), randDbl(10, 20).toFixed(4), chance(0.5));
-print(pick(["rock", "paper", "scissors"]), shuffle([1, 2, 3, 4, 5]), sample(['a', 'b', 'c', 'd'], 2));
+print(pick(<"rock", "paper", "scissors">), shuffle(<1, 2, 3, 4, 5>), sample(<'a', 'b', 'c', 'd'>, 2));
 print(randStr(12), uuid());
 var[Int] big = randInt(-9223372036854775807 - 1, 9223372036854775807);
 print(typeof(big));
@@ -18,9 +18,9 @@ var[Int] ones = 0;
 seed(7);
 for (var[Int] i = 0; i < 6000; i++) if (randInt(1, 6) == 1) ones++;
 print(ones > 900 && ones < 1100);
-var[Str<>] names = ["Ann", "Bo"];
+var[Str<>] names = <"Ann", "Bo">;
 var[Str] who = pick(names);
 print(names.includes(who), shuffle(names).length(), uuid().length());
 
 try { randInt(5, 1); } catch (e[Str]) { print(e); }
-var[Int<>] empty = []; try { pick(empty); } catch (e[Str]) { print(e); }
+var[Int<>] empty = <>; try { pick(empty); } catch (e[Str]) { print(e); }

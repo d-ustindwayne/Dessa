@@ -61,6 +61,8 @@ struct Symbol {
     int aliasTable = -1;
     // Function / Method: what it says it may throw (func[Int !! NumberError])
     std::vector<SemanticType> throws;
+    // A generic function or class (Analyser::templates): filled in when used
+    int templateId = -1;
 };
 
 enum class ScopeKind {

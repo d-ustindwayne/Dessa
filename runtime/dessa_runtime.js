@@ -21,7 +21,29 @@ class Exit { constructor(code) { this.code = code; } }        // sys.exit(code)
 $.DsError = DsError;
 $.Thrown = Thrown;
 $.Exit = Exit;
-$.fail = (message) => { throw new DsError(message); };
+// Makes the Error object for thrown text (runtime false) or a runtime error
+// (runtime true); the program sets it to the prelude's _error. isError says
+// whether a thrown value is an Error (printed without "Uncaught: ").
+$.errorHook = null;
+$.isError = null;
+let makingError = false;
+const asError = (message, runtime) => {
+    if (!$.errorHook || makingError) return new DsError(message);
+    const file = traceFile, line = traceLine;   // making it runs code: keep the error's place
+    makingError = true;
+    try {
+        return new Thrown($.errorHook(message, runtime));
+    } finally {
+        makingError = false;
+        traceFile = file;
+        traceLine = line;
+    }
+};
+$.fail = (message) => { throw asError(message, true); };
+$.raise = (message) => { throw asError(message, false); };   // throw "text"
+// What a catch sees: JavaScript's own errors (nil access, deep recursion)
+// become Error objects like the runtime's
+$.caught = (e) => (e instanceof Thrown || e instanceof Exit || e instanceof DsError) ? e : asError($.message(e), true);
 
 // Any JS exception as the message a Dessa `catch (e[Str])` sees.
 $.message = (e) => {
@@ -376,7 +398,7 @@ const str = (v) => {
     if (v instanceof FltValue) return fmtFlt(v.v);
     if (v instanceof Radix) return radixStr(v);
     if (isEnum(v)) return v.name;
-    if (Array.isArray(v)) return "[" + v.map(repr).join(", ") + "]";
+    if (Array.isArray(v)) return "<" + v.map(repr).join(", ") + ">";
     if (v instanceof DsSet) return "{" + v.items.map(repr).join(", ") + "}";
     if (v instanceof Map) {
         if (v.size === 0) return "{:}";
@@ -865,8 +887,7 @@ $.m_toFixed = (value, digits) => {
     const d = num(digits);
     if (d < 0 || d > 20) $.fail(`toFixed: digits must be between 0 and 20, got ${digits}`);
     const scale = Math.pow(10, d);
-    const rounded = Math.sign(value) * Math.round(Math.abs(value) * scale) / scale;   // halves away from zero
-    return rounded.toFixed(d);
+    return Math.sign(value) * Math.round(Math.abs(value) * scale) / scale;   // halves away from zero
 };
 $.m_split = (s, sep) => sep === "" ? chars(s) : s.split(sep);
 $.m_substr = (s, start, length) => {
@@ -1657,8 +1678,10 @@ if (nodeRequire) {
 // An error nothing caught: shown like the C++ runtime shows it. Returns the exit code.
 $.report = (e) => {
     if (e instanceof Exit) return e.code;
-    if (e instanceof Thrown) $.writeErr(`Uncaught: ${str(e.value)}${traceLocation()}\n`);
-    else $.writeErr(`Error: ${$.message(e)}${traceLocation()}\n`);
+    const where = traceLocation();   // toStr() runs code: keep the error's place
+    e = $.caught(e);
+    if (e instanceof Thrown) $.writeErr(`${$.isError && $.isError(e.value) ? "" : "Uncaught: "}${str(e.value)}${where}\n`);
+    else $.writeErr(`Error: ${$.message(e)}${where}\n`);
     return 1;
 };
 

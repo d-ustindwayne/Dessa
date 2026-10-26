@@ -3,7 +3,7 @@ MCMXCIV MMXXVI 42 3999
 seventy-eight thousand fifty-six | zero | minus one thousand five | one million | 195
 33844 2000005 123456789
 A AA BB XFD 16384 27
-10 2 [1, 4, 9, 16] 5678 4321 -13
+10 2 <1, 4, 9, 16> 5678 4321 -13
 -1 2 0
 4 4/5 -3 1/2 -3 1/2 0
 212 0 -273.15 298.15
@@ -12,7 +12,7 @@ A AA BB XFD 16384 27
 7 true false
 0 true 1 true false
 Uryyb, Jbeyq! Dessa dwwdfn dw gdzq attack at dawn pyrex
-#7B2DA7 #FF0010 [161, 178, 195] [170, 187, 204]
+#7B2DA7 #FF0010 <161, 178, 195> <170, 187, 204>
 ok warn plain 16
 true false true false
 true false user Name Field HTML Parser

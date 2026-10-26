@@ -22,6 +22,13 @@
       "manifest": "name = request\nversion = 1.2.0\nentry = request.dm\ndescription = HTTP requests (get, post, ...) through curl\n\n[dependencies]\njson = 1.1.0\n",
       "files": 4,
       "bytes": 7948
+    },
+    "1.3.0": {
+      "infohash": "9c4e04327982a66a3a9f30822ab3d80bd0cc114b",
+      "torrent": "ZDg6YW5ub3VuY2U0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2UxMzphbm5vdW5jZS1saXN0bGw0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2VlbDMzOnVkcDovL29wZW4uc3RlYWx0aC5zaTo4MC9hbm5vdW5jZWVsNDE6dWRwOi8vdHJhY2tlci50b3JyZW50LmV1Lm9yZzo0NTEvYW5ub3VuY2VlbDM3OnVkcDovL2V4b2R1cy5kZXN5bmMuY29tOjY5NjkvYW5ub3VuY2VlZTEwOmNyZWF0ZWQgYnkxMTpyaXYgKERlc3NhKTQ6aW5mb2Q1OmZpbGVzbGQ2Omxlbmd0aGkzNjc5ZTQ6cGF0aGwxMDpyZXF1ZXN0LmRtZWVkNjpsZW5ndGhpMzgzNWU0OnBhdGhsMTE6cmVxdWVzdC5ocHBlZWQ2Omxlbmd0aGkxODllNDpwYXRobDE0OnJlcXVlc3QubmF0aXZlZWVkNjpsZW5ndGhpMTM3ZTQ6cGF0aGw3OnJpdi5wa2dlZWU0Om5hbWU3OnJlcXVlc3QxMjpwaWVjZSBsZW5ndGhpMTYzODRlNjpwaWVjZXMyMDo/9PNb1jtQjPPAI6EML9iyrtbOymU4OnVybC1saXN0bDc4Omh0dHBzOi8vcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbS9kLXVzdGluZHdheW5lL0Rlc3NhL21haW4vdG9vbHMvcml2L3BhY2thZ2VzL2Vl",
+      "manifest": "name = request\nversion = 1.3.0\nentry = request.dm\ndescription = HTTP requests (get, post, ...) through curl\n\n[dependencies]\njson = 1.2.0\n",
+      "files": 4,
+      "bytes": 7840
     }
   }
 }

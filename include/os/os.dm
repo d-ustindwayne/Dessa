@@ -43,7 +43,7 @@ class File {
 
     // The lines not read yet.
     func[Str<>] lines() {
-        var[Str<>] all = [];
+        var[Str<>] all = <>;
         var[Str | Nil] line = this.readLine();
         while (line != nil) {
             all.push(line);

@@ -116,7 +116,7 @@ class[Describable] Account {
     var[Int] number = 0;
     var[Str] owner = "";
     var[Int] balance = 0;
-    var[Transaction<>] history = [];
+    var[Transaction<>] history = <>;
 
     init(owner[Str], bank[Bank]) {
         this.owner = owner;
@@ -187,7 +187,7 @@ class SavingsAccount(Account) {
 
 class Bank {
     var[Str] name = "";
-    var[Account<>] accounts = [];
+    var[Account<>] accounts = <>;
     var[Int] lastNumber = 1000;
 
     init(name[Str]) {

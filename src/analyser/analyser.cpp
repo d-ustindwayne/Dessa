@@ -33,6 +33,11 @@ void Analyser::analyse(const Program& prog) {
     optionalChains.clear(); argOrders.clear(); declTypes.clear(); functionSymbols.clear(); catchTypes.clear(); isTargets.clear();
     recursiveLambdas.clear(); recursiveRefs.clear(); definingLambda = nullptr; enumCases.clear();
     importRecords.clear();
+    templates.clear(); classInstanceByKey.clear(); classInstances.clear(); functionInstances.clear();
+    functionShownNames.clear(); instanceCounts.clear(); instanceDecls.clear(); pendingBodies.clear(); typeHints.clear();
+    methodInstanceDecls.clear(); methodInstances.clear(); fillNote.clear();
+    instanceDepth = 0;
+    SemanticType::clearShownNames();
     dynamicMembers.clear();
     aliasTables.clear();
     aliasRefs.clear();
@@ -68,6 +73,7 @@ void Analyser::analyse(const Program& prog) {
         currentModule = module->id;
         currentScope = modules[currentModule].scope.get();
         declareTypeNames(*module);
+        declareTemplates(*module);
         processImports(*module);
         collectTypeMembers(*module);
         collectFunctionSignatures(*module);
@@ -80,6 +86,7 @@ void Analyser::analyse(const Program& prog) {
         currentScope = modules[currentModule].scope.get();
         analyseModuleBody(*module);
     }
+    analysePendingBodies();
     if (!prog.modules.empty()) {
         currentModule = prog.entry().id;
         reportUnusedImports(prog.entry());
@@ -165,7 +172,7 @@ void Analyser::report(DiagnosticSeverity severity, int line, int column, const s
     if (program && currentModule >= 0 && static_cast<size_t>(currentModule) < program->modules.size()) {
         file = program->modules[currentModule]->displayPath;
     }
-    diagnostics.push_back({severity, message, file, line, column, "", 0});
+    diagnostics.push_back({severity, message + (severity == DiagnosticSeverity::Hint ? "" : fillNote), file, line, column, "", 0});
 }
 
 void Analyser::error(const Expr* at, const std::string& message) {
@@ -264,6 +271,10 @@ void Analyser::processImports(const Module& module) {
     for (const auto& statement : module.ast) {
         if (!statement || statement->kind != StmtKind::Import) continue;
         const auto* import = static_cast<const ImportStmt*>(statement.get());
+        // $("math") { PI } names come from one module; several are imported whole
+        if (!import->importAll && import->modules.size() > 1) {
+            error(statement.get(), "Names in { } can come from one module only; write one $(\"...\") { ... } per module");
+        }
 
         // name -> symbol, gathered across every module named in $(...)
         std::unordered_map<std::string, std::vector<Symbol>> allNames;
@@ -350,6 +361,15 @@ void Analyser::processImports(const Module& module) {
 
         if (!anyResolved) continue;
 
+        // The errors every file has: never unused, and a file's own Error wins
+        if (import->modules.size() == 1 && import->modules[0].isPrelude) {
+            for (const auto& [name, candidates] : available) {
+                if (name.empty() || name[0] == '_' || currentScope->resolveLocal(name)) continue;
+                importSymbol(candidates.front(), name, 0, 0, -1);
+            }
+            continue;
+        }
+
         if (import->importAll) {
             const int importId = static_cast<int>(importRecords.size());
             importRecords.push_back({module.id, statement.get(), "", statement->line, statement->column, 0, false});
@@ -431,7 +451,8 @@ void Analyser::collectClassMembers(ClassInfo& info) {
     const std::string key = info.type().key();
 
     if (decl->parentClassName) {
-        SemanticType parent = resolveTypeName(*decl->parentClassName, decl->line, decl->column);
+        SemanticType parent = decl->parentType ? resolveType(*decl->parentType, decl->line, decl->column)
+                                               : resolveTypeName(*decl->parentClassName, decl->line, decl->column);
         if (parent.isClass()) {
             info.parent = parent;
         } else if (!parent.isUnknown()) {
@@ -445,6 +466,21 @@ void Analyser::collectClassMembers(ClassInfo& info) {
         } else if (!iface.isUnknown()) {
             error(decl, "'" + *decl->interfaceName + "' is not an interface");
         }
+    }
+
+    // Generic methods: filled in for each use (Analyser::instantiateMethod)
+    for (const auto& member : decl->methodTemplates) {
+        const auto* method = static_cast<const FuncDeclStmt*>(member.get());
+        GenericTemplate t;
+        t.decl = method;
+        t.moduleId = info.moduleId;
+        t.name = method->name;
+        t.params = method->typeParams;
+        t.tokens = &method->templateTokens;
+        t.ownerClass = key;
+        t.classTypes = &method->templateTypes;
+        info.methodTemplates[method->name] = static_cast<int>(templates.size());
+        templates.push_back(std::move(t));
     }
 
     for (const auto& member : decl->members) {
@@ -676,83 +712,87 @@ void Analyser::checkClassHierarchy(const Module& module) {
         const auto* decl = static_cast<const ClassDeclStmt*>(statement.get());
         auto it = classes.find(SemanticType::userDefined(decl->name, module.id, UserTypeKind::Class).key());
         if (it == classes.end() || it->second.decl != decl) continue;
-        ClassInfo& info = it->second;
+        checkClassMembers(it->second);
+    }
+}
 
-        for (const auto& member : decl->members) {
-            if (!member || member->kind != StmtKind::FuncDecl) continue;
-            const auto* method = static_cast<const FuncDeclStmt*>(member.get());
-            if (method->name == "toString" && method->params.empty()) {
-                report(DiagnosticSeverity::Warning, member->line, member->column,
-                       "Dessa prints an object with toStr(), not toString(); rename it to toStr to use it with print");
+// Overrides, @override, interface conformance
+void Analyser::checkClassMembers(ClassInfo& info) {
+    const ClassDeclStmt* decl = info.decl;
+    for (const auto& member : decl->members) {
+        if (!member || member->kind != StmtKind::FuncDecl) continue;
+        const auto* method = static_cast<const FuncDeclStmt*>(member.get());
+        if (method->name == "toString" && method->params.empty()) {
+            report(DiagnosticSeverity::Warning, member->line, member->column,
+                   "Dessa prints an object with toStr(), not toString(); rename it to toStr to use it with print");
+        }
+        for (const auto& a : method->annotations) {
+            if (a.lexeme != "override") {
+                error(a.line, a.column, "Unknown annotation '@" + a.lexeme + "' (the only one is @override)");
+                continue;
             }
-            for (const auto& a : method->annotations) {
-                if (a.lexeme != "override") {
-                    error(a.line, a.column, "Unknown annotation '@" + a.lexeme + "' (the only one is @override)");
-                    continue;
-                }
-                bool found = false;
-                for (const ClassInfo* p = info.parent ? findClass(*info.parent) : nullptr; p && !found;
-                     p = p->parent ? findClass(*p->parent) : nullptr) {
-                    found = p->methods.count(method->name) != 0;
-                }
-                if (!found && info.interface) {
-                    if (const InterfaceInfo* iface = findInterface(*info.interface)) found = iface->methods.count(method->name) != 0;
-                }
-                if (!found) {
-                    error(a.line, a.column, "'" + method->name + "' has @override, but " +
-                          (info.parent || info.interface ? "no parent class or interface of '" + info.name + "' has a method '" + method->name + "'"
-                                                         : "'" + info.name + "' has no parent class or interface"));
-                }
+            bool found = false;
+            for (const ClassInfo* p = info.parent ? findClass(*info.parent) : nullptr; p && !found;
+                 p = p->parent ? findClass(*p->parent) : nullptr) {
+                found = p->methods.count(method->name) != 0;
+            }
+            if (!found && info.interface) {
+                if (const InterfaceInfo* iface = findInterface(*info.interface)) found = iface->methods.count(method->name) != 0;
+            }
+            if (!found) {
+                error(a.line, a.column, "'" + method->name + "' has @override, but " +
+                      (info.parent || info.interface ? "no parent class or interface of '" + info.type().toString() + "' has a method '" + method->name + "'"
+                                                     : "'" + info.type().toString() + "' has no parent class or interface"));
             }
         }
+    }
 
-        // Overrides must keep the signature; fields can't be redeclared.
-        if (info.parent) {
-            const std::string parentKey = info.parent->key();
-            for (const auto& name : info.fieldOrder) {
-                if (const Symbol* inherited = findClassMember(parentKey, name)) {
-                    error(info.fields.at(name).line, info.fields.at(name).column,
-                          "Field '" + name + "' is already declared in a parent of '" + info.name + "'" +
-                          (inherited->kind == SymbolKind::Method ? " as a method" : ""));
-                }
+    // Overrides must keep the signature; fields can't be redeclared.
+    if (info.parent) {
+        const std::string parentKey = info.parent->key();
+        for (const auto& name : info.fieldOrder) {
+            if (const Symbol* inherited = findClassMember(parentKey, name)) {
+                error(info.fields.at(name).line, info.fields.at(name).column,
+                      "Field '" + name + "' is already declared in a parent of '" + info.type().toString() + "'" +
+                      (inherited->kind == SymbolKind::Method ? " as a method" : ""));
             }
-            for (const auto& [name, method] : info.methods) {
-                const Symbol* inherited = findClassMember(parentKey, name);
-                if (!inherited) continue;
-                if (inherited->kind != SymbolKind::Method) {
-                    error(method.line, method.column, "Method '" + name + "' clashes with an inherited field");
-                } else if (inherited->type != method.type) {
-                    error(method.line, method.column, "Method '" + name + "' overrides a parent method with a different signature: expected " +
-                          inherited->type.toString() + ", got " + method.type.toString());
-                }
-            }
-            // A class without its own init inherits its parent's init (like Python).
         }
+        for (const auto& [name, method] : info.methods) {
+            const Symbol* inherited = findClassMember(parentKey, name);
+            if (!inherited) continue;
+            if (inherited->kind != SymbolKind::Method) {
+                error(method.line, method.column, "Method '" + name + "' clashes with an inherited field");
+            } else if (inherited->type != method.type) {
+                error(method.line, method.column, "Method '" + name + "' overrides a parent method with a different signature: expected " +
+                      inherited->type.toString() + ", got " + method.type.toString());
+            }
+        }
+        // A class without its own init inherits its parent's init (like Python).
+    }
 
-        // Interface conformance
-        if (info.interface) {
-            const InterfaceInfo* iface = findInterface(*info.interface);
-            if (iface) {
-                const std::string key = info.type().key();
-                for (const auto& name : iface->fieldOrder) {
-                    const SemanticType& expected = iface->fields.at(name);
-                    const Symbol* member = findClassMember(key, name);
-                    if (!member || member->kind != SymbolKind::Field) {
-                        error(decl, "Class '" + info.name + "' does not implement interface field '" + name + "[" + expected.toString() + "]' of '" + iface->name + "'");
-                    } else if (member->type != expected) {
-                        error(member->line, member->column, "Field '" + name + "' has type " + member->type.toString() +
-                              " but interface '" + iface->name + "' requires " + expected.toString());
-                    }
+    // Interface conformance
+    if (info.interface) {
+        const InterfaceInfo* iface = findInterface(*info.interface);
+        if (iface) {
+            const std::string key = info.type().key();
+            for (const auto& name : iface->fieldOrder) {
+                const SemanticType& expected = iface->fields.at(name);
+                const Symbol* member = findClassMember(key, name);
+                if (!member || member->kind != SymbolKind::Field) {
+                    error(decl, "Class '" + info.type().toString() + "' does not implement interface field '" + name + "[" + expected.toString() + "]' of '" + iface->name + "'");
+                } else if (member->type != expected) {
+                    error(member->line, member->column, "Field '" + name + "' has type " + member->type.toString() +
+                          " but interface '" + iface->name + "' requires " + expected.toString());
                 }
-                for (const auto& name : iface->methodOrder) {
-                    const Symbol& expected = iface->methods.at(name);
-                    const Symbol* member = findClassMember(key, name);
-                    if (!member || member->kind != SymbolKind::Method) {
-                        error(decl, "Class '" + info.name + "' does not implement interface method '" + name + "' of '" + iface->name + "'");
-                    } else if (member->type != expected.type) {
-                        error(member->line, member->column, "Method '" + name + "' has signature " + member->type.toString() +
-                              " but interface '" + iface->name + "' requires " + expected.type.toString());
-                    }
+            }
+            for (const auto& name : iface->methodOrder) {
+                const Symbol& expected = iface->methods.at(name);
+                const Symbol* member = findClassMember(key, name);
+                if (!member || member->kind != SymbolKind::Method) {
+                    error(decl, "Class '" + info.type().toString() + "' does not implement interface method '" + name + "' of '" + iface->name + "'");
+                } else if (member->type != expected.type) {
+                    error(member->line, member->column, "Method '" + name + "' has signature " + member->type.toString() +
+                          " but interface '" + iface->name + "' requires " + expected.type.toString());
                 }
             }
         }
@@ -761,6 +801,13 @@ void Analyser::checkClassHierarchy(const Module& module) {
 
 void Analyser::collectExports(const Module& module) {
     auto& exports = modules[module.id].exports;
+    for (const auto& statement : module.templates) {
+        const std::string& name = statement->kind == StmtKind::ClassDecl ? static_cast<const ClassDeclStmt*>(statement.get())->name
+                                                                       : static_cast<const FuncDeclStmt*>(statement.get())->name;
+        if (const Symbol* symbol = currentScope->resolveLocal(name)) {
+            if (symbol->moduleId == module.id) exports.emplace(name, *symbol);
+        }
+    }
     for (const auto& statement : module.ast) {
         if (!statement) continue;
         std::string name;
@@ -980,6 +1027,13 @@ void Analyser::narrowAfterAssignment(const std::string& name, const SemanticType
 // ============================================================
 
 SemanticType Analyser::resolveType(const TypeNode& typeNode, int line, int column) {
+    // T in a filled-in generic
+    if (typeNode.resolved) {
+        if (typeNode.unionMembers.empty()) return *typeNode.resolved;
+        std::vector<SemanticType> members{*typeNode.resolved};
+        for (const auto& member : typeNode.unionMembers) members.push_back(resolveType(member, line, column));
+        return SemanticType::unionOf(std::move(members));
+    }
     if (!typeNode.group.empty()) {
         // (Int | Str)<>, Int<><>: a grouped or nested base type
         SemanticType base = resolveType(typeNode.group.front(), line, column);
@@ -1038,7 +1092,23 @@ SemanticType Analyser::resolveType(const TypeNode& typeNode, int line, int colum
         return SemanticType::unionOf(std::move(members));
     }
 
-    SemanticType base = resolveTypeName(typeNode.name, line, column);
+    SemanticType base;
+    if (!typeNode.typeArgs.empty()) {
+        // Box:Int: the generic class, filled in
+        const Symbol* symbol = typeNode.name.find('.') != std::string::npos ? resolveQualified(typeNode.name, line, column)
+                                                                           : resolveSymbol(typeNode.name);
+        if (!symbol) {
+            if (typeNode.name.find('.') == std::string::npos) error(line, column, "Unknown type '" + typeNode.name + "'");
+            base = SemanticType::unknown();
+        } else if (symbol->templateId < 0 || !templates[static_cast<size_t>(symbol->templateId)].isClass) {
+            error(line, column, "'" + typeNode.name + "' is not a generic class, so it takes no types after ':'");
+            base = SemanticType::unknown();
+        } else {
+            base = instantiateClass(symbol->templateId, resolveTypeArgs(typeNode.typeArgs, line, column), line, column);
+        }
+    } else {
+        base = resolveTypeName(typeNode.name, line, column);
+    }
 
     if (typeNode.radix) {
         int r = *typeNode.radix;
@@ -1100,6 +1170,12 @@ SemanticType Analyser::resolveTypeName(const std::string& name, int line, int co
     }
 
     if (const Symbol* symbol = resolveSymbol(name)) {
+        if (symbol->templateId >= 0 && symbol->kind == SymbolKind::Class) {
+            const auto& params = templates[static_cast<size_t>(symbol->templateId)].params;
+            error(line, column, "'" + name + "' is generic: say its type" + (params.size() == 1 ? "" : "s") + ", e.g. " + name +
+                                    (params.size() == 1 ? ":Int" : ":[Int, Str]"));
+            return SemanticType::unknown();
+        }
         if (symbol->kind == SymbolKind::Class || symbol->kind == SymbolKind::Interface || symbol->kind == SymbolKind::Enum) {
             return symbol->type;
         }
@@ -1328,8 +1404,14 @@ bool Analyser::checkConversion(const SemanticType& target, const Expr* value, co
         if (ok) return true;
     }
 
+    // Person | Int<> is a Person or an Int<>; a list of either is written (Person | Int)<>
+    std::string unbracketed = valueType.toString();
+    unbracketed.erase(std::remove_if(unbracketed.begin(), unbracketed.end(), [](char c) { return c == '(' || c == ')'; }),
+                      unbracketed.end());
+    bool needsBrackets = unbracketed == target.toString() && valueType.toString() != target.toString();
     error(value, "Cannot convert " + valueType.toString() + " to " + target.toString() + " " + context +
-                     (valueType.is(SemanticTypeKind::Obj) ? "; convert it, e.g. " + target.toString() + "(x), or check its type with is first" : ""));
+                     (valueType.is(SemanticTypeKind::Obj) ? "; convert it, e.g. " + target.toString() + "(x), or check its type with is first" : "") +
+                     (needsBrackets ? "; a list of a union needs brackets: write " + valueType.toString() : ""));
     return false;
 }
 
@@ -1430,6 +1512,7 @@ void Analyser::analyseVariableDeclaration(const VarDeclStmt* statement) {
 
     if (statement->initializer) {
         const Expr* init = statement->initializer.get();
+        typeHints[init] = declared;
         if (init->kind == ExprKind::Lambda && declared.kind != SemanticTypeKind::Function) {
             // const[Int] square = (x[Int]) := x ^ 2;  -> [Int] is the return type
             valueType = analyseLambda(static_cast<const LambdaExpr*>(init), declared);
@@ -1573,6 +1656,9 @@ void Analyser::analyseClassBody(const ClassDeclStmt* statement) {
 
     for (const auto& member : statement->members) {
         if (!member) continue;
+        if (member->kind == StmtKind::FuncDecl && static_cast<const FuncDeclStmt*>(member.get())->name.find('$') != std::string::npos) {
+            continue;   // a filled-in generic method: analysed on its own
+        }
         if (member->kind == StmtKind::VarDecl) {
             const auto* field = static_cast<const VarDeclStmt*>(member.get());
             if (!field->name) continue;
@@ -1588,6 +1674,22 @@ void Analyser::analyseClassBody(const ClassDeclStmt* statement) {
         }
     }
 
+    endScope();
+    currentClassKey = previousClass;
+}
+
+// A filled-in generic method: like analyseClassBody, for one method
+void Analyser::analyseMethodBody(const ClassInfo& info, const FuncDeclStmt* method) {
+    const std::string previousClass = currentClassKey;
+    currentClassKey = info.type().key();
+    beginScope(ScopeKind::Class);
+    std::vector<const ClassInfo*> chain;
+    for (const ClassInfo* k = &info; k && chain.size() < 64; k = k->parent ? findClass(*k->parent) : nullptr) chain.push_back(k);
+    for (const ClassInfo* k : chain) {
+        for (const auto& [name, symbol] : k->fields) currentScope->declare(symbol);
+        for (const auto& [name, symbol] : k->methods) currentScope->declare(symbol);
+    }
+    analyseFunctionBody(method);
     endScope();
     currentClassKey = previousClass;
 }
@@ -1895,6 +1997,7 @@ void Analyser::analyseReturn(const ReturnStmt* statement) {
         return;
     }
 
+    typeHints[statement->value.get()] = *currentReturnType;
     SemanticType actual = analyseExpression(statement->value.get());
     if (currentReturnType->isVoidLike()) {
         error(statement->value.get(), "'" + currentFunctionName + "' has return type Emp and cannot return a value");

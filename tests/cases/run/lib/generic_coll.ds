@@ -1,0 +1,22 @@
+// A generic class and function, imported by run/generics.ds
+class Stack:T {
+    var[T<>] items = <>;
+
+    func[Emp] push(item[T]) {
+        this.items.push(item);
+    }
+
+    func[T] pop() {
+        return this.items.pop();
+    }
+
+    func[Int] size() {
+        return this.items.length();
+    }
+}
+
+func[U<>] mapAll:[T, U](items[T<>], f[Func[U, [T]]]) {
+    var[U<>] out = <>;
+    for (var[T] item in items) out.push(f(item));
+    return out;
+}

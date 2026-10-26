@@ -62,10 +62,84 @@ std::vector<StmtPtr> Parser::parseProgram() {
     std::vector<StmtPtr> statements;
     while (!isAtEnd()) {
         StmtPtr stmt = declaration();
-        if (stmt) statements.push_back(std::move(stmt));
+        const bool generic = stmt && ((stmt->kind == StmtKind::FuncDecl && !static_cast<FuncDeclStmt*>(stmt.get())->typeParams.empty()) ||
+                                      (stmt->kind == StmtKind::ClassDecl && !static_cast<ClassDeclStmt*>(stmt.get())->typeParams.empty()));
+        if (generic) templates.push_back(std::move(stmt));
+        else if (stmt) statements.push_back(std::move(stmt));
         takeMoreDeclarations(statements);
     }
     return statements;
+}
+
+StmtPtr Parser::instantiate(const std::vector<Token>& tokens, const std::vector<std::pair<std::string, TypeNode>>& types) {
+    Parser parser(tokens);
+    parser.substitutions = types;
+    parser.instantiating = true;
+    StmtPtr decl = parser.declaration();
+    // What is filled in is no longer generic itself
+    if (decl && decl->kind == StmtKind::FuncDecl) {
+        auto* fn = static_cast<FuncDeclStmt*>(decl.get());
+        fn->typeParams.clear();
+        fn->templateTokens.clear();
+        fn->templateTypes.clear();
+    } else if (decl && decl->kind == StmtKind::ClassDecl) {
+        auto* klass = static_cast<ClassDeclStmt*>(decl.get());
+        klass->typeParams.clear();
+        klass->templateTokens.clear();
+    }
+    return decl;
+}
+
+// :T or :[K, V] after a generic function's or class's name
+std::vector<std::string> Parser::parseTypeParams() {
+    std::vector<std::string> params;
+    auto one = [&]() {
+        std::string name = consume(TokenType::IDENTIFIER, "Expect a type parameter name, e.g. :T or :[K, V].").lexeme;
+        if (std::find(params.begin(), params.end(), name) != params.end()) throw error(previous(), "Type parameter '" + name + "' is listed twice.");
+        params.push_back(name);
+    };
+    if (match({TokenType::L_BRACKET})) {
+        do {
+            one();
+        } while (match({TokenType::COMMA}));
+        consume(TokenType::R_BRACKET, "Expect ']' after the type parameters.");
+    } else {
+        one();
+    }
+    return params;
+}
+
+// The types after ':' in Box:Int or Pair:[Str, Int]. Without brackets only
+// the type itself: Box:Int<> is a list of Box:Int (Box:[Int<>] a Box of lists).
+std::vector<TypeNode> Parser::parseTypeArgs() {
+    std::vector<TypeNode> args;
+    if (match({TokenType::L_BRACKET})) {
+        do {
+            args.push_back(parseType());
+        } while (match({TokenType::COMMA}));
+        consume(TokenType::R_BRACKET, "Expect ']' after the types.");
+    } else {
+        args.push_back(parseTypeBase());
+    }
+    return args;
+}
+
+// After ':' -- does a type come next? ([, a built-in type, or a capitalised name)
+bool Parser::typeArgAhead() const {
+    return typeArgAheadAt(1);
+}
+
+bool Parser::typeArgAheadAt(size_t offset) const {
+    const Token& t = peekAt(offset);
+    switch (t.type) {
+        case TokenType::L_BRACKET: case TokenType::TYPE_STR: case TokenType::TYPE_INT: case TokenType::TYPE_BUL:
+        case TokenType::TYPE_FLT: case TokenType::TYPE_DBL: case TokenType::TYPE_CHR:
+            return true;
+        case TokenType::IDENTIFIER:
+            return !t.lexeme.empty() && t.lexeme[0] >= 'A' && t.lexeme[0] <= 'Z';
+        default:
+            return false;
+    }
 }
 
 // ============================================================
@@ -280,12 +354,15 @@ std::vector<TypeNode> Parser::parseThrows() {
 }
 
 StmtPtr Parser::funcDeclaration() {
+    const size_t start = current - 1;   // the `func`
     consume(TokenType::L_BRACKET, "Expect '[' before return type.");
     TypeNode returnType = parseType();
     std::vector<TypeNode> throwsTypes = parseThrows();
     consume(TokenType::R_BRACKET, "Expect ']' after return type.");
 
     std::string name = consume(TokenType::IDENTIFIER, "Expect function name.").lexeme;
+    std::vector<std::string> typeParams;
+    if (match({TokenType::COLON})) typeParams = parseTypeParams();
 
     consume(TokenType::L_PAREN, "Expect '(' after function name.");
     std::vector<Param> params = parseParamList();
@@ -296,6 +373,12 @@ StmtPtr Parser::funcDeclaration() {
 
     auto fn = std::make_unique<FuncDeclStmt>(std::move(returnType), std::move(name), std::move(params), std::move(body));
     fn->throwsTypes = std::move(throwsTypes);
+    if (!typeParams.empty()) {
+        fn->typeParams = std::move(typeParams);
+        fn->templateTokens.assign(tokens.begin() + static_cast<std::ptrdiff_t>(start), tokens.begin() + static_cast<std::ptrdiff_t>(current));
+        fn->templateTokens.push_back(Token(TokenType::END_OF_FILE, "", previous().line, previous().column));
+        fn->templateTypes = substitutions;   // a generic method of a filled-in class keeps the class's types
+    }
     return fn;
 }
 
@@ -315,6 +398,7 @@ StmtPtr Parser::constructorDeclaration() {
 }
 
 StmtPtr Parser::classDeclaration() {
+    const size_t start = current - 1;   // the `class`
     std::optional<std::string> interfaceName;
 
     if (match({TokenType::L_BRACKET})) {
@@ -323,12 +407,21 @@ StmtPtr Parser::classDeclaration() {
     }
 
     std::string name = consume(TokenType::IDENTIFIER, "Expect class name.").lexeme;
+    std::vector<std::string> typeParams;
+    if (match({TokenType::COLON})) typeParams = parseTypeParams();
 
     std::optional<std::string> parentClassName;
+    std::optional<TypeNode> parentType;
     if (match({TokenType::L_PAREN})) {
         parentClassName = consume(TokenType::IDENTIFIER, "Expect parent class name.").lexeme;
         while (match({TokenType::DOT})) {   // class Circle(shapes.Shape)
             *parentClassName += "." + consume(TokenType::IDENTIFIER, "Expect class name after '.'.").lexeme;
+        }
+        if (match({TokenType::COLON})) {    // class IntBox(Box:Int)
+            TypeNode parent;
+            parent.name = *parentClassName;
+            parent.typeArgs = parseTypeArgs();
+            parentType = std::move(parent);
         }
         consume(TokenType::R_PAREN, "Expect ')' after parent class name.");
     }
@@ -358,7 +451,22 @@ StmtPtr Parser::classDeclaration() {
     }
     consume(TokenType::R_BRACE, "Expect '}' after class body.");
 
-    return std::make_unique<ClassDeclStmt>(std::move(name), std::move(interfaceName), std::move(parentClassName), std::move(members));
+    std::vector<StmtPtr> methodTemplates;
+    for (auto& member : members) {
+        if (member && member->kind == StmtKind::FuncDecl && !static_cast<FuncDeclStmt*>(member.get())->typeParams.empty()) {
+            methodTemplates.push_back(std::move(member));
+        }
+    }
+    members.erase(std::remove(members.begin(), members.end(), nullptr), members.end());
+    auto klass = std::make_unique<ClassDeclStmt>(std::move(name), std::move(interfaceName), std::move(parentClassName), std::move(members));
+    klass->methodTemplates = std::move(methodTemplates);
+    klass->parentType = std::move(parentType);
+    if (!typeParams.empty()) {
+        klass->typeParams = std::move(typeParams);
+        klass->templateTokens.assign(tokens.begin() + static_cast<std::ptrdiff_t>(start), tokens.begin() + static_cast<std::ptrdiff_t>(current));
+        klass->templateTokens.push_back(Token(TokenType::END_OF_FILE, "", previous().line, previous().column));
+    }
+    return klass;
 }
 
 // @override (several may follow each other)
@@ -763,6 +871,39 @@ StmtPtr Parser::throwStatement() {
 // ============================================================
 
 TypeNode Parser::parseType() {
+    TypeNode node = parseTypeBase();
+
+    // Collection suffixes nest: Int<> (list), Int{} (set), Int<><> (list of lists)
+    for (;;) {
+        bool list;
+        if (match({TokenType::L_ANGLE})) {
+            consume(TokenType::R_ANGLE, "Expect '>' after '<' in list type.");
+            list = true;
+        } else if (match({TokenType::L_BRACE})) {
+            consume(TokenType::R_BRACE, "Expect '}' after '{' in set type.");
+            list = false;
+        } else {
+            break;
+        }
+        if (node.isList || node.isSet || node.resolved) {
+            TypeNode inner = std::move(node);
+            node = TypeNode{};
+            node.group.push_back(std::move(inner));
+        }
+        if (list) node.isList = true;
+        else node.isSet = true;
+    }
+
+    while (match({TokenType::BITWISE_OR})) {
+        node.unionMembers.push_back(parseType());
+    }
+
+    return node;
+}
+
+// A type without <>, {} or | after it: Int, Int[16], Map[K, V], Func[...],
+// (A | B), Box:Int, Lst[Int]
+TypeNode Parser::parseTypeBase() {
     TypeNode node;
 
     // (Int | Str)<> -- parentheses group a type, e.g. to make a list of a union
@@ -781,6 +922,29 @@ TypeNode Parser::parseType() {
         }
     } else {
         throw error(peek(), "Expect type name.");
+    }
+
+    // T in a generic being filled in: the type it stands for
+    if (node.group.empty() && node.name.find('.') == std::string::npos) {
+        for (const auto& [param, type] : substitutions) {
+            if (param == node.name) return type;
+        }
+    }
+    // Lst[Int | Str]: another way to write (Int | Str)<>
+    if (node.name == "Lst" && check(TokenType::L_BRACKET)) {
+        advance();
+        TypeNode element = parseType();
+        consume(TokenType::R_BRACKET, "Expect ']' after the type of the list's items, e.g. Lst[Int].");
+        TypeNode list;
+        list.group.push_back(std::move(element));
+        list.isList = true;
+        return list;
+    }
+    // Box:Int, Pair:[Str, Int]
+    if (node.group.empty() && check(TokenType::COLON) && typeArgAhead()) {
+        advance();
+        node.typeArgs = parseTypeArgs();
+        return node;
     }
 
     // Func[ReturnType, [ParamType, ...]]  /  Func[ReturnType, ParamType]  /  Func[ReturnType]
@@ -818,31 +982,6 @@ TypeNode Parser::parseType() {
             throw error(radixToken, "Invalid integer base.");
         }
         consume(TokenType::R_BRACKET, "Expect ']' after integer base.");
-    }
-
-    // Collection suffixes nest: Int<> (list), Int{} (set), Int<><> (list of lists)
-    for (;;) {
-        bool list;
-        if (match({TokenType::L_ANGLE})) {
-            consume(TokenType::R_ANGLE, "Expect '>' after '<' in list type.");
-            list = true;
-        } else if (match({TokenType::L_BRACE})) {
-            consume(TokenType::R_BRACE, "Expect '}' after '{' in set type.");
-            list = false;
-        } else {
-            break;
-        }
-        if (node.isList || node.isSet) {
-            TypeNode inner = std::move(node);
-            node = TypeNode{};
-            node.group.push_back(std::move(inner));
-        }
-        if (list) node.isList = true;
-        else node.isSet = true;
-    }
-
-    while (match({TokenType::BITWISE_OR})) {
-        node.unionMembers.push_back(parseType());
     }
 
     return node;
@@ -930,7 +1069,11 @@ ExprPtr Parser::pipe() {
 ExprPtr Parser::ternary() {
     ExprPtr condition = pipe();
     if (match({TokenType::QUESTION})) {
-        ExprPtr thenBranch = expression();
+        ExprPtr thenBranch;
+        {
+            ColonScope scope(*this, true);
+            thenBranch = expression();
+        }
         consume(TokenType::COLON, "Expect ':' after ternary 'then' branch.");
         ExprPtr elseBranch = ternary();
         int line = condition->line, column = condition->column;
@@ -1019,13 +1162,13 @@ ExprPtr Parser::comparison() {
         expr->column = column;
         return expr;
     }
-    if (match({TokenType::L_ANGLE, TokenType::LESS_EQUAL,
-               TokenType::R_ANGLE, TokenType::GREATER_EQUAL})) {
+    if (match({TokenType::L_ANGLE, TokenType::LESS_EQUAL, TokenType::GREATER_EQUAL}) ||
+        (!inAngleList && match({TokenType::R_ANGLE}))) {
         Token op = previous();
         expr = binary(std::move(expr), std::move(op), shift());
 
         if (check(TokenType::L_ANGLE) || check(TokenType::LESS_EQUAL) ||
-            check(TokenType::R_ANGLE) || check(TokenType::GREATER_EQUAL)) {
+            (check(TokenType::R_ANGLE) && !inAngleList) || check(TokenType::GREATER_EQUAL)) {
             throw error(peek(), "Comparison operators (<, >, <=, >=) cannot be chained. Use logical operators (&&, ||).");
         }
     }
@@ -1034,7 +1177,7 @@ ExprPtr Parser::comparison() {
 
 ExprPtr Parser::shift() {
     ExprPtr expr = additive();
-    while (match({TokenType::LEFT_SHIFT, TokenType::RIGHT_SHIFT})) {
+    while (match({TokenType::LEFT_SHIFT}) || (!inAngleList && match({TokenType::RIGHT_SHIFT}))) {
         Token op = previous();
         expr = binary(std::move(expr), std::move(op), additive());
     }
@@ -1110,7 +1253,24 @@ ExprPtr Parser::call() {
             bool optional = previous().type == TokenType::QUESTION_DOT;
             Token name = check(TokenType::INIT) ? advance()
                        : consume(TokenType::IDENTIFIER, "Expect member name after '.'.");
-            expr = std::make_unique<MemberExpr>(std::move(expr), std::move(name), optional);
+            std::vector<TypeNode> typeArgs;
+            if (!colonEnds && check(TokenType::COLON) && typeArgAhead()) {   // db.all:Person(...)
+                Checkpoint checkpoint = mark();
+                try {
+                    advance();
+                    typeArgs = parseTypeArgs();
+                    if (!check(TokenType::L_PAREN)) {
+                        typeArgs.clear();
+                        reset(checkpoint);
+                    }
+                } catch (const ParseError&) {
+                    typeArgs.clear();
+                    reset(checkpoint);
+                }
+            }
+            auto member = std::make_unique<MemberExpr>(std::move(expr), std::move(name), optional);
+            member->typeArgs = std::move(typeArgs);
+            expr = std::move(member);
         } else if (check(TokenType::L_ANGLE)) {
             auto attempt = tryParseIndex(expr);
             if (!attempt.has_value()) break;
@@ -1132,7 +1292,16 @@ std::optional<ExprPtr> Parser::tryParseIndex(ExprPtr& object) {
     advance(); // '<'
 
     try {
-        ExprPtr index = additive();
+        ++indexDepth;
+        ExprPtr index;
+        try {
+            index = additive();
+        } catch (...) {
+            --indexDepth;
+            throw;
+        }
+        --indexDepth;
+        if (check(TokenType::RIGHT_SHIFT) && (inAngleList || indexDepth > 0)) splitDoubleAngle(TokenType::R_ANGLE);
         if (check(TokenType::R_ANGLE)) {
             advance();
             return std::make_unique<IndexExpr>(std::move(object), std::move(index));
@@ -1146,11 +1315,17 @@ std::optional<ExprPtr> Parser::tryParseIndex(ExprPtr& object) {
 }
 
 std::vector<Argument> Parser::parseArguments() {
+    AngleListScope scope(*this, false);
+    ColonScope colons(*this, false);
     std::vector<Argument> args;
     if (!check(TokenType::R_PAREN)) {
         do {
             Argument arg;
-            if (check(TokenType::IDENTIFIER) && checkNext(TokenType::COLON)) {
+            // name: value -- but first:Int(...) (no spaces) is a generic call
+            const bool genericCall = checkNext(TokenType::COLON) && typeArgAheadAt(2) &&
+                                     peekAt(1).column == peek().column + static_cast<int>(peek().lexeme.size()) &&
+                                     peekAt(2).column == peekAt(1).column + 1 && peekAt(2).line == peek().line;
+            if (check(TokenType::IDENTIFIER) && checkNext(TokenType::COLON) && !genericCall) {
                 arg.name = advance().lexeme;
                 advance(); // ':'
             }
@@ -1170,6 +1345,8 @@ ExprPtr Parser::finishCall(ExprPtr callee) {
 
 // Called after '(' has been consumed.
 ExprPtr Parser::parseLambdaOrGrouping(const Token& openParen) {
+    AngleListScope scope(*this, false);
+    ColonScope colons(*this, false);
     bool isLambda = (check(TokenType::R_PAREN) && checkNext(TokenType::COLON_EQUAL)) ||
                     (check(TokenType::IDENTIFIER) && checkNext(TokenType::L_BRACKET));
 
@@ -1182,6 +1359,8 @@ ExprPtr Parser::parseLambdaOrGrouping(const Token& openParen) {
         if (match({TokenType::L_BRACE})) {
             body = blockStatement();
         } else {
+            // An expression body runs on into the surrounding list, if any: <(x[Int]) := (x > 1)>
+            AngleListScope outer(*this, scope.saved);
             Token start = peek();
             body = place(std::make_unique<ExpressionStmt>(expression()), start);
         }
@@ -1276,6 +1455,17 @@ ExprPtr Parser::parseTemplateString(const Token& token) {
     return place(std::move(expr), token);
 }
 
+// << or >> where lists open or close: two separate < or > tokens
+void Parser::splitDoubleAngle(TokenType single) {
+    Token first = tokens[current];
+    first.type = single;
+    first.lexeme = single == TokenType::L_ANGLE ? "<" : ">";
+    Token second = first;
+    second.column = first.column + 1;
+    tokens[current] = first;
+    tokens.insert(tokens.begin() + static_cast<std::ptrdiff_t>(current) + 1, second);
+}
+
 ExprPtr Parser::primary() {
     if (match({TokenType::INT_LITERAL, TokenType::FLOAT_LITERAL, TokenType::DOUBLE_LITERAL,
                TokenType::CHAR_LITERAL, TokenType::STRING, TokenType::TRUE, TokenType::FALSE,
@@ -1290,6 +1480,7 @@ ExprPtr Parser::primary() {
         checkNext(TokenType::L_PAREN)) {
         Token type = advance();
         advance(); // '('
+        AngleListScope scope(*this, false);
         if (check(TokenType::R_PAREN)) throw error(peek(), type.lexeme + "(...) needs a value to convert, e.g. " + type.lexeme + "(x)");
         ExprPtr value = expression();
         consume(TokenType::R_PAREN, "Expect ')' after the value to convert; a conversion takes one value.");
@@ -1301,13 +1492,28 @@ ExprPtr Parser::primary() {
     }
 
     if (match({TokenType::IDENTIFIER, TokenType::THIS, TokenType::SUPER})) {
-        return place(std::make_unique<IdentifierExpr>(previous()), previous());
+        auto identifier = std::make_unique<IdentifierExpr>(previous());
+        // pick:Int(items): a generic function with its types given
+        if (!colonEnds && previous().type == TokenType::IDENTIFIER && check(TokenType::COLON) && typeArgAhead()) {
+            Checkpoint checkpoint = mark();
+            try {
+                advance();
+                std::vector<TypeNode> typeArgs = parseTypeArgs();
+                if (check(TokenType::L_PAREN)) identifier->typeArgs = std::move(typeArgs);
+                else reset(checkpoint);
+            } catch (const ParseError&) {
+                reset(checkpoint);
+            }
+        }
+        Token name = identifier->name;
+        return place(std::move(identifier), name);
     }
 
     if (match({TokenType::NEW})) {
         Token newToken = previous();
         // new { message = "Hi", code = 200 }: an anonymous object (an Obj)
         if (check(TokenType::L_BRACE)) {
+            AngleListScope scope(*this, false);
             Token brace = advance();
             std::vector<Argument> fields;
             std::vector<std::optional<TypeNode>> types;
@@ -1337,6 +1543,11 @@ ExprPtr Parser::primary() {
         while (match({TokenType::DOT})) {   // new m.Database()
             className.lexeme += "." + consume(TokenType::IDENTIFIER, "Expect class name after '.'.").lexeme;
         }
+        std::vector<TypeNode> typeArgs;
+        if (check(TokenType::COLON)) {      // new Box:Int(5)
+            advance();
+            typeArgs = parseTypeArgs();
+        }
         consume(TokenType::L_PAREN, "Expect '(' after class name.");
         std::vector<Argument> args = parseArguments();
         consume(TokenType::R_PAREN, "Expect ')' after constructor arguments.");
@@ -1347,24 +1558,65 @@ ExprPtr Parser::primary() {
             empty->isAnonymous = true;
             return place(std::move(empty), newToken);
         }
-        return place(std::make_unique<NewExpr>(std::move(className), std::move(args)), newToken);
+        auto made = std::make_unique<NewExpr>(std::move(className), std::move(args));
+        made->typeArgs = std::move(typeArgs);
+        for (const auto& [param, type] : substitutions) {   // new T() in a generic being filled in
+            if (param == made->className.lexeme && type.resolved) made->resolvedClass = type.resolved;
+        }
+        return place(std::move(made), newToken);
     }
 
-    if (match({TokenType::L_BRACKET})) {
-        Token open = previous();
+    // <1, 2, 3>, <> -- a list (<<1>, <2>> opens with <<)
+    if (check(TokenType::L_ANGLE) || check(TokenType::LEFT_SHIFT)) {
+        if (check(TokenType::LEFT_SHIFT)) splitDoubleAngle(TokenType::L_ANGLE);
+        Token open = advance();
         std::vector<CollectionElement> elements;
-        if (!check(TokenType::R_BRACKET)) {
-            do {
-                if (check(TokenType::R_BRACKET)) break; // trailing comma
-                bool isSpread = match({TokenType::ELLIPSIS});
-                elements.push_back({isSpread, expression()});
-            } while (match({TokenType::COMMA}));
+        {
+            AngleListScope scope(*this, true);
+            if (check(TokenType::RIGHT_SHIFT)) splitDoubleAngle(TokenType::R_ANGLE);
+            if (!check(TokenType::R_ANGLE)) {
+                do {
+                    if (check(TokenType::RIGHT_SHIFT)) splitDoubleAngle(TokenType::R_ANGLE);
+                    if (check(TokenType::R_ANGLE)) break; // trailing comma
+                    bool isSpread = match({TokenType::ELLIPSIS});
+                    elements.push_back({isSpread, expression()});
+                } while (match({TokenType::COMMA}));
+            }
+            if (check(TokenType::RIGHT_SHIFT)) splitDoubleAngle(TokenType::R_ANGLE);
         }
-        consume(TokenType::R_BRACKET, "Expect ']' after list elements.");
+        consume(TokenType::R_ANGLE, "Expect '>' after list elements (a comparison inside a list needs brackets: <(a > b)>).");
+        // <1 > 2>: the > was meant as a comparison
+        if (check(TokenType::INT_LITERAL) || check(TokenType::FLOAT_LITERAL) || check(TokenType::DOUBLE_LITERAL) ||
+            check(TokenType::IDENTIFIER) || check(TokenType::STRING) || check(TokenType::CHAR_LITERAL) ||
+            check(TokenType::TRUE) || check(TokenType::FALSE) || check(TokenType::NIL)) {
+            throw error(peek(), "A comparison inside a list needs brackets: <(a > b)>");
+        }
         return place(std::make_unique<ListExpr>(std::move(elements)), open);
     }
 
+    // [1, 2]: the old way to write a list (warned about by the analyser)
+    if (match({TokenType::L_BRACKET})) {
+        Token open = previous();
+        std::vector<CollectionElement> elements;
+        {
+            AngleListScope scope(*this, false);
+            if (!check(TokenType::R_BRACKET)) {
+                do {
+                    if (check(TokenType::R_BRACKET)) break; // trailing comma
+                    bool isSpread = match({TokenType::ELLIPSIS});
+                    elements.push_back({isSpread, expression()});
+                } while (match({TokenType::COMMA}));
+            }
+        }
+        Token close = consume(TokenType::R_BRACKET, "Expect ']' after list elements.");
+        oldLists.push_back({open.line, open.column, close.line, close.column});
+        auto list = std::make_unique<ListExpr>(std::move(elements));
+        list->oldBrackets = true;
+        return place(std::move(list), open);
+    }
+
     if (match({TokenType::L_BRACE})) {
+        AngleListScope scope(*this, false);
         Token open = previous();
 
         // {:} -- an empty map
@@ -1381,7 +1633,11 @@ ExprPtr Parser::primary() {
             do {
                 if (check(TokenType::R_BRACE)) break; // trailing comma
                 bool isSpread = match({TokenType::ELLIPSIS});
-                ExprPtr first = expression();
+                ExprPtr first;
+                {
+                    ColonScope scope(*this, true);
+                    first = expression();
+                }
                 // The first `key: value` decides that this is a map (any
                 // spreads before it were maps being copied in).
                 if (!isMap && !isSpread && check(TokenType::COLON) &&

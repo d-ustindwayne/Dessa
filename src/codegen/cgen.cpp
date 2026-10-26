@@ -583,6 +583,15 @@ void CCodegen::findReachable() {
                 visitStmt(s.get(), work);
         }
     }
+    // The runtime turns its errors into Error objects with the prelude's _error
+    for (const auto& module : program.modules) {
+        if (!module->isPrelude) continue;
+        auto d = declarations.find(std::to_string(module->id) + ":_error");
+        if (d != declarations.end() && !reachable.count(d->second)) {
+            reachable.insert(d->second);
+            work.push_back(d->second);
+        }
+    }
     while (!work.empty()) {
         const Stmt* s = work.back();
         work.pop_back();
@@ -895,7 +904,7 @@ void CCodegen::emitClassCode(const ClassInfo& info) {
         code << "    return " << methodName(*withToStr, "toStr") << "(h);\n}\n\n";
     } else {
         code << "    " << s << "* o = (" << s << "*)h;\n    ds_sb b;\n    ds_sb_init(&b);\n";
-        code << "    ds_sb_cstr(&b, " << cString(info.name + "(") << ");\n";
+        code << "    ds_sb_cstr(&b, " << cString(info.type().toString() + "(") << ");\n";
         bool first = true;
         for (const auto& [name, type] : allFields(info)) {
             code << "    ds_sb_cstr(&b, " << cString((first ? "" : ", ") + name + ": ") << ");\n";
@@ -972,7 +981,7 @@ void CCodegen::emitClassCode(const ClassInfo& info) {
 
     // The class description: its type, then the method table
     code << "const " << s << "_cls " << clsName(t) << " = {\n";
-    code << "    {" << cString(info.name) << ", DS_K_OBJECT, dsd_" << base << ", dss_" << base << ", "
+    code << "    {" << cString(info.type().toString()) << ", DS_K_OBJECT, dsd_" << base << ", dss_" << base << ", "
          << (info.parent ? "&" + clsName(*info.parent) + ".t" : std::string("NULL")) << ", " << ifaces << ", " << count << "}";
     for (const auto& method : allMethods(info)) {
         const ClassInfo* owner = methodOwner(info, method);
@@ -1295,7 +1304,20 @@ void CCodegen::emitMain() {
     std::ostringstream body;
     out = &body;
     indentLevel = 0;
+    // Runtime errors and thrown text become Error objects (include/prelude/errors.ds)
+    std::string errorMaker;
+    for (const auto& module : program.modules) {
+        if (module->isPrelude) errorMaker = functionName(module->id, "_error");
+    }
+    if (!errorMaker.empty()) {
+        line("static void* ds_make_error(ds_str* message, int runtime) {");
+        line("    return " + errorMaker + "(message, runtime != 0);");
+        line("}");
+        line("");
+    }
     line("static void ds_program(void) {");
+    if (!errorMaker.empty()) line("    ds_error_hook = ds_make_error;");
+    if (const auto error = preludeError()) line("    ds_error_type = &" + clsName(*error) + ".t;");
     for (const auto& module : program.modules) {
         for (const auto& s : module->ast) {
             if (!s || s->kind != StmtKind::VarDecl || !isReachable(s.get())) continue;
@@ -1849,12 +1871,20 @@ void CCodegen::tryStmt(const TryStmt* s) {
         indentLevel--;
     }
     if (strArm) {
-        line(std::string(first ? "if (" : "} else if (") + "ds_error) {");
+        // Text, and any Error (runtime errors are IndexError, ... objects): its message
+        const std::optional<SemanticType> error = preludeError();
+        const std::string isError = error ? " || (ds_thrown && ds_is_class(ds_thrown, &" + clsName(*error) + ".t))" : "";
+        line(std::string(first ? "if (" : "} else if (") + "ds_error" + isError + ") {");
         first = false;
         indentLevel++;
         pushScope();
         std::string cname = declareLocal(*strArm->param, SemanticType::simple(SemanticTypeKind::Str), true);
-        line("ds_str* " + cname + " = (ds_str*)ds_take(&ds_error);");
+        if (error) {
+            line("ds_str* " + cname + " = ds_error ? (ds_str*)ds_take(&ds_error) : (ds_str*)ds_retain(((" + structName(*error) +
+                 "*)ds_thrown)->" + mangle("message") + ");");
+        } else {
+            line("ds_str* " + cname + " = (ds_str*)ds_take(&ds_error);");
+        }
         line("ds_clear_error();");
         blockBody(strArm->body.get());
         popScope(true);
@@ -1912,6 +1942,19 @@ void CCodegen::returnStmt(const ReturnStmt* s) {
     line("}");
 }
 
+// The prelude's Error class (include/prelude/errors.ds), when it is loaded
+std::optional<SemanticType> CCodegen::preludeError() const {
+    for (const auto& module : program.modules) {
+        if (module->isPrelude) return SemanticType::userDefined("Error", module->id, UserTypeKind::Class);
+    }
+    return std::nullopt;
+}
+
+// The value may call constructors that move the trace line; point it back at the throw.
+void CCodegen::traceThrow(const ThrowStmt* s) {
+    if (s->line > 0) line("ds_trace(ds_file_m" + std::to_string(moduleId) + ", " + std::to_string(s->line) + ");");
+}
+
 void CCodegen::throwStmt(const ThrowStmt* s) {
     const SemanticType& type = analyser.typeOf(s->value.get()) ? *analyser.typeOf(s->value.get()) : kUnknown;
     beginTemps();
@@ -1924,10 +1967,12 @@ void CCodegen::throwStmt(const ThrowStmt* s) {
     if (type.is(SemanticTypeKind::Str)) {
         line("ds_str* " + v + " = " + value + ";");
         releaseTemps(ts);
+        traceThrow(s);
         line("ds_throw_str(" + v + ");");
     } else {
         line("void* " + v + " = " + value + ";");
         releaseTemps(ts);
+        traceThrow(s);
         line("ds_throw_obj(" + v + ");");
     }
     indentLevel--;

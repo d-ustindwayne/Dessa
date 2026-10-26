@@ -194,6 +194,8 @@ private:
     void tryStmt(const TryStmt* s);
     void returnStmt(const ReturnStmt* s);
     void throwStmt(const ThrowStmt* s);
+    void traceThrow(const ThrowStmt* s);
+    std::optional<SemanticType> preludeError() const;
     void exprStmt(const Expr* e);
     // Writes the statement collected in gen() with its temporaries around it
     void beginTemps();

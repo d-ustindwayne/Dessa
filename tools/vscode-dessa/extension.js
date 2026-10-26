@@ -33,7 +33,7 @@ const METHODS = {
         ['isDigit', '() := Bul'], ['isAlpha', '() := Bul'], ['isSpace', '() := Bul'], ['isUpper', '() := Bul'],
         ['isLower', '() := Bul'], ['upper', '() := Chr'], ['lower', '() := Chr'], ['code', '() := Int'], ['toStr', '() := Str'],
     ],
-    Num: [['toStr', '() := Str'], ['toInt', '() := Int'], ['toDbl', '() := Dbl'], ['toFlt', '() := Flt'], ['toChr', '() := Chr (Int only)'], ['toHex', '() := Int[16] (Int only)'], ['toDec', '() := Int (Int only)'], ['toOct', '() := Int[8] (Int only)'], ['toBin', '() := Int[2] (Int only)'], ['toFixed', '(digits[Int]) := Str (Flt/Dbl only)']],
+    Num: [['toStr', '() := Str'], ['toInt', '() := Int'], ['toDbl', '() := Dbl'], ['toFlt', '() := Flt'], ['toChr', '() := Chr (Int only)'], ['toHex', '() := Int[16] (Int only)'], ['toDec', '() := Int (Int only)'], ['toOct', '() := Int[8] (Int only)'], ['toBin', '() := Int[2] (Int only)'], ['toFixed', '(digits[Int]) := Flt / Dbl (rounded, Flt/Dbl only)']],
     Bul: [['toStr', '() := Str']],
     Enum: [['name', '() := Str'], ['value', '() := Int'], ['toStr', '() := Str']],
     Collection: [
@@ -735,6 +735,39 @@ function projectModules(doc) {
     return [...new Set(found)].sort();
 }
 
+const DESSA_EXTENSIONS = ['.ds', '.dm', '.dx', '.dz', '.dsx', '.dxx', '.dzx', '.dds', '.dss'];
+
+// Packages riv installed (riv_modules in the file's folder or any parent) and
+// the extra package folders, as name -> folder; the nearest one wins, like
+// the compiler's search
+function installedPackages(doc) {
+    const found = new Map();
+    const addFrom = (folder) => {
+        let entries = [];
+        try { entries = fs.readdirSync(folder, { withFileTypes: true }); } catch { return; }
+        for (const e of entries) {
+            if (e.isDirectory() && !e.name.startsWith('.') && !found.has(e.name)) found.set(e.name, path.join(folder, e.name));
+        }
+    };
+    for (let dir = path.dirname(doc.fileName); ; dir = path.dirname(dir)) {
+        addFrom(path.join(dir, 'riv_modules'));
+        if (path.dirname(dir) === dir) break;
+    }
+    for (const folder of compilerEnv().DESSA_PACKAGES.split(path.delimiter)) if (folder) addFrom(folder);
+    return found;
+}
+
+// The file that declares a package's names: lib.ds, <name>.ds or <name>.dm
+function packageEntry(folder, name) {
+    for (const base of ['lib', name]) {
+        for (const ext of DESSA_EXTENSIONS) {
+            const file = path.join(folder, base + ext);
+            if (fs.existsSync(file)) return file;
+        }
+    }
+    return null;
+}
+
 // The names `$("spec") { ... }` can import: a library's, or a file's
 // (without the _private ones and the builtins everyone has)
 async function importableNames(doc, spec, data) {
@@ -750,12 +783,17 @@ async function importableNames(doc, spec, data) {
     if (imported) file = imported.file;
     if (!file && !lib) {
         const base = path.join(path.dirname(doc.fileName), ...spec.split('.'));
-        for (const ext of ['.ds', '.dm', '.dx', '.dz', '.dsx', '.dxx', '.dzx', '.dds', '.dss']) {
+        for (const ext of DESSA_EXTENSIONS) {
             if (fs.existsSync(base + ext)) {
                 file = base + ext;
                 break;
             }
         }
+    }
+    // A riv package this file doesn't import yet
+    if (!file && !lib) {
+        const folder = installedPackages(doc).get(spec);
+        if (folder) file = packageEntry(folder, spec);
     }
     if (file) {
         const result = await runDessa(['symbols', file], undefined, path.dirname(file));
@@ -771,6 +809,10 @@ async function importableNames(doc, spec, data) {
 // $ at the start of a line becomes $(|); a space right after var, const or
 // func becomes [|] (a type goes there); Enter inside $("x"|) puts the list
 // over several lines. Then suggestions open.
+// The [] just added after var / const / func: a lowercase letter typed into
+// it means a name was meant (variable = 5), so the brackets go again
+let addedDeclBrackets = null;   // { doc, line, column of [ }
+
 function autoBrackets(e) {
     if (!vscode.workspace.getConfiguration('dessa').get('autoBrackets')) return;
     const editor = vscode.window.visibleTextEditors.find((ed) => ed.document === e.document);
@@ -778,31 +820,91 @@ function autoBrackets(e) {
     const change = e.contentChanges[0];
     const doc = e.document;
     const at = change.range.start;
-    if (/^\r?\n[ \t]*$/.test(change.text)) {
+    const added = addedDeclBrackets;
+    addedDeclBrackets = null;
+    if (/^\r?\n\s*$/.test(change.text)) {
         if (isDessa(doc) && inDessaScript(doc, at) && !inStringOrComment(doc, at)) importOnEnter(editor, at.line);
         return;
     }
-    if (change.rangeLength !== 0 || (change.text !== '$' && change.text !== ' ')) return;
+    if (added && added.doc === doc && change.rangeLength === 0 && /^[a-z_0-9]$/.test(change.text) &&
+        at.line === added.line && at.character === added.column + 1 &&
+        doc.lineAt(at.line).text.slice(added.column, added.column + 3) === '[' + change.text + ']') {
+        const start = new vscode.Position(at.line, added.column);
+        editor.edit((b) => b.replace(new vscode.Range(start, start.translate(0, 3)), change.text),
+            { undoStopBefore: false, undoStopAfter: false }).then((ok) => {
+            if (!ok) return;
+            const cursor = start.translate(0, 1);
+            editor.selection = new vscode.Selection(cursor, cursor);
+            vscode.commands.executeCommand('hideSuggestWidget');
+        });
+        return;
+    }
+    if (change.rangeLength !== 0 || !['$', ' ', '{', '{}', '!', 'r', 't', 'c'].includes(change.text)) return;
     if (!isDessa(doc) || !inDessaScript(doc, at) || inStringOrComment(doc, at)) return;
     const text = doc.lineAt(at.line).text;
     const before = text.slice(0, at.character);
-    const after = text.slice(at.character + 1);
-    let insert = null;
-    if (change.text === '$' && /^\s*$/.test(before) && after.trim() === '') insert = '()';
+    const after = text.slice(at.character + change.text.length);
+    // `var` typed at the start of a statement -> `var[|]` (not in `var[Int] variable`)
+    if (/^[rtc]$/.test(change.text)) {
+        const word = before + change.text;
+        const start = /(^\s*|[;{}]\s*|\(\s*)(var|const|func)$/.exec(word);
+        if (!start || !/^\s*\)?\s*$/.test(after)) return;
+        if (/\b(var|const|func)\b/.test(word.slice(0, word.length - start[2].length))) return;
+        const end = at.translate(0, 1);
+        editor.edit((b) => b.insert(end, '[]'), { undoStopBefore: false, undoStopAfter: false }).then((ok) => {
+            if (!ok) return;
+            const inside = end.translate(0, 1);
+            editor.selection = new vscode.Selection(inside, inside);
+            addedDeclBrackets = { doc, line: end.line, column: end.character };
+            vscode.commands.executeCommand('editor.action.triggerSuggest');
+        });
+        return;
+    }
+    // What replaces the typed text, and where the cursor goes in it
+    let replace = null;
+    let cursor = 0;
+    let suggest = true;
+    if (change.text === '$' && /^\s*$/.test(before) && after.trim() === '') {
+        replace = '$()';
+        cursor = 2;
+    }
     // `var |`, `for (var |)`, and `var |x = 5` (typed in front of a name: the space stays)
     if (change.text === ' ' && /(^|[\s;{(])(var|const|func)$/.test(before) && !/^\s*\[/.test(after)) {
-        insert = /^\w/.test(after) ? '[] ' : '[]';
+        replace = /^\w/.test(after) ? '[] ' : '[]';
+        cursor = 1;
     }
-    if (!insert) return;
-    const end = at.translate(0, 1);
-    editor.edit((b) => {
-        if (insert === '()') b.insert(end, '()');
-        else b.replace(new vscode.Range(at, end), insert);
-    }, { undoStopBefore: false, undoStopAfter: false }).then((ok) => {
+    // `if |` -> `if (|)`, the same for while, for, switch and catch
+    if (change.text === ' ' && /(^|[\s;{}])(if|while|for|switch|catch)$/.test(before) && after.trim() === '') {
+        replace = ' ()';
+        cursor = 2;
+        suggest = false;
+    }
+    // `$("math") {|` -> `$("math") { | }`
+    if ((change.text === '{' || change.text === '{}') && /\$\([^()]*\)\s*$/.test(before) && /^\s*$/.test(after)) {
+        replace = '{  }';
+        cursor = 2;
+    }
+    // `func[Dbl!!|` -> `func[Dbl !! |]`: what a function may throw
+    if (change.text === '!' && before.endsWith('!') && !before.endsWith('!!') && inTypeBrackets(before.slice(0, -1))) {
+        const start = at.translate(0, -1);
+        const lead = /\s$/.test(before.slice(0, -1)) ? '' : ' ';
+        const trail = /^\s/.test(after) ? '' : ' ';
+        editor.edit((b) => b.replace(new vscode.Range(start, at.translate(0, 1)), lead + '!!' + trail),
+            { undoStopBefore: false, undoStopAfter: false }).then((ok) => {
+            if (!ok) return;
+            const inside = start.translate(0, lead.length + 2 + trail.length);
+            editor.selection = new vscode.Selection(inside, inside);
+            vscode.commands.executeCommand('editor.action.triggerSuggest');
+        });
+        return;
+    }
+    if (replace === null) return;
+    editor.edit((b) => b.replace(new vscode.Range(at, at.translate(0, change.text.length)), replace),
+        { undoStopBefore: false, undoStopAfter: false }).then((ok) => {
         if (!ok) return;
-        const inside = insert === '()' ? end.translate(0, 1) : at.translate(0, 1);
+        const inside = at.translate(0, cursor);
         editor.selection = new vscode.Selection(inside, inside);
-        vscode.commands.executeCommand('editor.action.triggerSuggest');
+        if (suggest) vscode.commands.executeCommand('editor.action.triggerSuggest');
     });
 }
 
@@ -820,6 +922,55 @@ function importOnEnter(editor, line) {
     const next = doc.lineAt(line + 1).text;
     const unit = editor.options.insertSpaces ? ' '.repeat(Number(editor.options.tabSize) || 4) : '\t';
     const suggest = () => vscode.commands.executeCommand('editor.action.triggerSuggest');
+
+    // $("math") { PI, |}  ->  $("math") {      and a name on its own line in
+    //                              PI,           such a list gets its comma
+    //                              |
+    //                          }
+    const braces = /^(\s*)(\$\([^()]*\)\s*\{)([^{}]*)$/.exec(text);
+    if (braces && braces[3].trim()) {
+        let close = -1;
+        for (let l = line + 1; l < Math.min(doc.lineCount, line + 4); l++) {
+            const t = doc.lineAt(l).text;
+            if (/^[^{}]*\}/.test(t)) {
+                close = l;
+                break;
+            }
+            if (t.trim()) return;
+        }
+        if (close < 0) return;
+        const closeText = doc.lineAt(close).text;
+        const names = (s) => s.split(',').map((n) => n.trim()).filter(Boolean);
+        const first = names(braces[3]);
+        const later = names(closeText.slice(0, closeText.indexOf('}')));
+        const indent = braces[1];
+        const lines = [indent + braces[2].replace(/\s+$/, ''), ...first.map((n) => indent + unit + n + ','), indent + unit,
+            ...later.map((n) => indent + unit + n + ','), indent + '}' + closeText.slice(closeText.indexOf('}') + 1)];
+        const range = new vscode.Range(line, 0, close, closeText.length);
+        editor.edit((b) => b.replace(range, lines.join('\n')), { undoStopBefore: false, undoStopAfter: false }).then((ok) => {
+            if (!ok) return;
+            const cursor = new vscode.Position(line + first.length + 1, indent.length + unit.length);
+            editor.selection = new vscode.Selection(cursor, cursor);
+            suggest();
+        });
+        return;
+    }
+    const braceName = /^\s*\w+(?:\s+as\s+\w+)?\s*(,?)\s*$/.exec(text);
+    if (braceName) {
+        const start = doc.offsetAt(new vscode.Position(line, 0));
+        const before = doc.getText().slice(Math.max(0, start - 2000), start);
+        if (/\$\([^()]*\)\s*\{[^{}]*$/.test(before)) {
+            if (braceName[1]) {
+                suggest();
+                return;
+            }
+            const end = new vscode.Position(line, text.replace(/\s+$/, '').length);
+            editor.edit((b) => b.insert(end, ','), { undoStopBefore: false, undoStopAfter: false }).then((ok) => {
+                if (ok) suggest();
+            });
+            return;
+        }
+    }
 
     const oneLine = new RegExp(String.raw`^(\s*)\$\(\s*((?:${IMPORT_SPEC}\s*,\s*)*${IMPORT_SPEC})\s*,?\s*$`).exec(text);
     const close = /^\s*\)/.exec(next);
@@ -853,6 +1004,68 @@ function importOnEnter(editor, line) {
     });
 }
 
+// Is the cursor inside the [...] of a type? Lists are indexed with <>, so a
+// [ right after a word is always a type: var[, func[, x[ (a parameter),
+// Map[, Func[, Int[. A dotted name (m.Big) is left to member completion.
+function inTypeBrackets(before) {
+    let depth = 0;
+    for (let i = before.length - 1; i >= 0; i--) {
+        const c = before[i];
+        if (c === ']') depth++;
+        else if (c === '[') {
+            if (depth > 0) {
+                depth--;
+                continue;
+            }
+            const word = /[A-Za-z_]\w*\s*$/.test(before.slice(Math.max(0, i - 200), i));
+            return word && !/\.\s*\w*$/.test(before.slice(i + 1));
+        } else if (c === ';' || c === '=' || c === '"' || c === '\n') {
+            return false;
+        }
+    }
+    return false;
+}
+
+const TYPE_KINDS = new Set(['class', 'interface', 'enum']);
+
+// The types: built in, then the classes, interfaces and enums in scope
+// (the compiler's list, or the file's globals when it couldn't answer)
+function typeItems(fromCompiler, data) {
+    const items = [];
+    const seen = new Set();
+    const push = (item) => {
+        if (seen.has(item.label)) return;
+        seen.add(item.label);
+        items.push(item);
+    };
+    for (const [p, desc] of Object.entries(PRIMITIVES)) {
+        const item = new vscode.CompletionItem(p, vscode.CompletionItemKind.TypeParameter);
+        item.detail = desc;
+        item.sortText = `0${p}`;
+        push(item);
+    }
+    for (const [p, desc] of [['Map', 'Map[K, V]: keys to values'], ['Func', 'Func[Ret, [Params]]: a function']]) {
+        const item = new vscode.CompletionItem(p, vscode.CompletionItemKind.TypeParameter);
+        item.detail = desc;
+        item.sortText = `0${p}`;
+        push(item);
+    }
+    for (const item of fromCompiler || []) {
+        if (item.dessa && TYPE_KINDS.has(item.dessa.symbol.kind)) {
+            item.sortText = `1${item.label}`;
+            push(item);
+        }
+    }
+    for (const g of (data && data.globals) || []) {
+        if (!TYPE_KINDS.has(g.kind)) continue;
+        const item = new vscode.CompletionItem(g.name, symbolKind(g.kind));
+        item.detail = g.kind;
+        item.sortText = `1${g.name}`;
+        push(item);
+    }
+    return items;
+}
+
 function symbolKind(kind) {
     switch (kind) {
         case 'function': case 'builtin': return vscode.CompletionItemKind.Function;
@@ -879,7 +1092,7 @@ const completionProvider = {
         const data = await symbols(doc);
 
         // $("dcrypto") { sha| : what the module offers
-        const braces = /\$\(\s*"([\w.]+)"(?:\s+as\s+\w+)?\s*\)\s*\{([^}]*)$/.exec(linePrefix);
+        const braces = /\$\(\s*"([\w.]+)"(?:\s+as\s+\w+)?\s*\)\s*\{([^{}]*)$/.exec(before.slice(-2000));
         if (braces) {
             const inside = braces[2];
             if (/\bas\s+\w*$/.test(inside)) return [];   // naming an alias
@@ -891,8 +1104,17 @@ const completionProvider = {
                 return item;
             });
         }
-        // { and , only open suggestions inside an import's braces
-        if (context && (context.triggerCharacter === '{' || context.triggerCharacter === ',')) return undefined;
+        // : after a generic's name (func[T] first:|, class Box:|, new Box:|) or in a type (Box:|): the types
+        if (/\b(func\s*\[[^\]]*\]\s*\w+|class\s+\w+|new\s+\w+)\s*:\s*\[?[\w,\s]*$/.test(linePrefix) && !inStringOrComment(doc, position)) {
+            return typeItems(await compilerCompletions(doc, position), data);
+        }
+        if (context && context.triggerCharacter === ':' && !inTypeBrackets(before.slice(-2000))) return undefined;
+        // { and , only open suggestions inside an import's braces, [ and | inside a type
+        const typeTrigger = context && (context.triggerCharacter === '[' || context.triggerCharacter === '|');
+        if (typeTrigger && !inTypeBrackets(before.slice(-2000))) return undefined;
+        if (context && (context.triggerCharacter === '{' || context.triggerCharacter === ',')) {
+            if (!inTypeBrackets(before.slice(-2000))) return undefined;
+        }
         // $ at the start of a line: an import (with auto brackets, () is typed for you)
         if (/^\s*\$$/.test(linePrefix) && !vscode.workspace.getConfiguration('dessa').get('autoBrackets')) {
             const item = new vscode.CompletionItem('$("...")', vscode.CompletionItemKind.Module);
@@ -919,12 +1141,20 @@ const completionProvider = {
             };
             const items = (data ? data.libraries : []).map((lib) =>
                 make(lib.name, vscode.CompletionItemKind.Module, `library: ${lib.members.map((m) => m.name).join(', ')}`));
+            // riv packages show up before the file imports them
+            const known = new Set((data ? data.libraries : []).map((lib) => lib.name));
+            for (const [name, folder] of installedPackages(doc)) {
+                if (!known.has(name)) items.push(make(name, vscode.CompletionItemKind.Module, `package: ${folder}`));
+            }
             for (const module of projectModules(doc)) items.push(make(module, vscode.CompletionItemKind.File, 'a file of this project'));
             return items;
         }
         // A quote typed anywhere else starts an ordinary string
         if (context && context.triggerCharacter === '"') return undefined;
         if (inStringOrComment(doc, position)) return undefined;
+
+        // var[|], func[|], name[|] in parameters: a type goes there, not a variable
+        if (inTypeBrackets(before.slice(-2000))) return typeItems(await compilerCompletions(doc, position), data);
 
         // Ask the compiler first: exact types, locals, narrowing, imports
         const fromCompiler = await compilerCompletions(doc, position);
@@ -1286,7 +1516,7 @@ function activate(context) {
     context.subscriptions.push(
         diagnosticCollection,
         output,
-        vscode.languages.registerCompletionItemProvider(selector, completionProvider, '.', '"', '$', '{', ','),
+        vscode.languages.registerCompletionItemProvider(selector, completionProvider, '.', '"', '$', '{', ',', '[', '|', ':'),
         vscode.languages.registerHoverProvider(selector, hoverProvider),
         vscode.languages.registerSignatureHelpProvider(selector, signatureHelpProvider, '(', ','),
         vscode.languages.registerDefinitionProvider(selector, definitionProvider),

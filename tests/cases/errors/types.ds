@@ -10,8 +10,8 @@ var[Int[3]] g = 1;             // error: Integer base must be 2, 8, 10 or 16
 var[Str[2]] h = "x";           // error: integer base can only be applied to Int
 var[Bogus] i = 1;              // error: Unknown type 'Bogus'
 var[Emp] j;                    // error: cannot have type Emp
-var[Int<>] k = [1, 2, "three"];  // error: Cannot convert
-var[Dbl<>] l = [1, 2.5];
+var[Int<>] k = <1, 2, "three">;  // error: Cannot convert
+var[Dbl<>] l = <1, 2.5>;
 var[Int{}] m = {1, 2, 3};
 var[Int] n = nil;              // error: Cannot convert Nil to Int
 var[Int | Nil] o = nil;

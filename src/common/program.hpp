@@ -33,7 +33,9 @@ struct Module {
     std::string displayPath;  // path as shown in diagnostics
     std::string source;
     std::vector<StmtPtr> ast;
+    std::vector<StmtPtr> templates;   // generic functions and classes (filled in by the analyser)
     bool isEntry = false;
+    bool isPrelude = false;   // include/prelude/errors.ds: Error, IndexError, ...
     // The Dessa part (.dm) of a library whose native part is JavaScript
     // (<lib>/<lib>.js, e.g. webutils): the path of that .js file.
     std::string jsNative;

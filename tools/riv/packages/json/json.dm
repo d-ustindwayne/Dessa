@@ -28,22 +28,14 @@ enum JsonKind {
 
 // Thrown by parseJson for malformed text, and by the as...() / at() / get()
 // methods when a value isn't what you asked for.
-class JsonError {
-    var[Str] message = "";
-    init(message[Str]) {
-        this.message = message;
-    }
-    func[Str] toStr() {
-        return $"JsonError: {this.message}";
-    }
-}
+class JsonError(Error) {}   // an Error: e.message, prints as JsonError: ...
 
 class Json {
     var[JsonKind] kind = JsonKind.NULL;
     var[Bul] boolValue = false;
     var[Dbl] numberValue = 0.0;
     var[Str] stringValue = "";
-    var[Json<>] items = [];
+    var[Json<>] items = <>;
     var[Map[Str, Json]] fields = {:};
 
     // ---- What is it? ----
@@ -106,6 +98,12 @@ class Json {
         return this.items<index>;
     }
 
+    // An array's items.
+    func[Json<>] arrayItems() {
+        this.expect(JsonKind.ARRAY, "an array");
+        return this.items;
+    }
+
     // Items of an array, characters of a string, or fields of an object.
     func[Int] length() {
         if (this.isArray()) return this.items.length();
@@ -147,6 +145,30 @@ class Json {
     // JSON text spread over lines, indented by `indent` spaces per level.
     func[Str] pretty(indent[Int]=2) {
         return writeJson(this, indent, 0);
+    }
+
+    // ---- Into your classes ----
+    // An object as a new T: each field of T gets the key with the same name
+    // (case and _ don't matter, so first_name fills firstName). Keys without
+    // a field are left out, and so are fields without a key. T needs an
+    // init() without arguments. Fields that are Str, Int, Dbl, Flt, Bul, Json
+    // or lists of Str, Int, Dbl, Bul are filled.
+    //
+    //     class User { var[Str] name = ""; var[Int] age = 0; }
+    //     var[User] u = parseJson(text).to:User();
+    func[T] to:T() {
+        this.expect(JsonKind.OBJECT, "an object");
+        var[T] item = new T();
+        _fillFromJson(item, this);
+        return item;
+    }
+
+    // An array of objects as a list of T (see to).
+    func[T<>] toList:T() {
+        this.expect(JsonKind.ARRAY, "an array");
+        var[T<>] out = <>;
+        for (var[Json] value in this.items) out.push(value.to:T());
+        return out;
     }
 }
 
@@ -244,7 +266,7 @@ func[Str] writeJson(value[Json], indent[Int], depth[Int]) {
     var[Str] outer = " ".repeat(indent * depth);
     var[Str] colon = indent > 0 ? ": " : ":";
 
-    var[Str<>] parts = [];
+    var[Str<>] parts = <>;
     if (isArray) {
         for (var[Json] item in value.items) {
             parts.push(inner + writeJson(item, indent, depth + 1));
@@ -268,7 +290,7 @@ func[Str] stringify(value[Json], indent[Int]=0) {
 
 class JsonParser {
     var[Str] text = "";
-    var[Chr<>] chars = [];   // the text as characters, for fast indexing
+    var[Chr<>] chars = <>;   // the text as characters, for fast indexing
     var[Int] pos = 0;
 
     init(text[Str]) {
@@ -470,4 +492,104 @@ func[Json] parseJson(text[Str]) {
     parser.skipSpace();
     if (!parser.atEnd()) parser.fail("unexpected text after the JSON value");
     return result;
+}
+
+// JSON text of an object straight into your class (see Json.to):
+//
+//     var[User] u = parseJsonAs:User("{\"name\": \"Ann\", \"age\": 31}");
+func[T] parseJsonAs:T(text[Str]) {
+    return parseJson(text).to:T();
+}
+
+// JSON text of an array of objects into a list of your class.
+func[T<>] parseJsonListAs:T(text[Str]) {
+    return parseJson(text).toList:T();
+}
+
+// "first_name", "FirstName" and "firstname" are the same name
+func[Str] _jsonKey(name[Str]) {
+    return name.replaceAll("_", "").lower();
+}
+
+// The fields of `item` from the keys of `data` with the same names
+func[Emp] _fillFromJson(item[Obj], data[Json]) {
+    var[Map[Str, Str]] byKey = {:};
+    for (var[Str] key in data.keys()) byKey<_jsonKey(key)> = key;
+    for (var[Str] field in fieldsOf(item)) {
+        var[Str] key = byKey.getOr(_jsonKey(field), "");
+        if (key.isEmpty()) continue;
+        var[Json] value = data.get(key);
+        if (value.isNull()) continue;
+        var[Obj] filled = _jsonValue(value, getField(item, field), key);
+        if (filled != nil) setField(item, field, filled);
+    }
+}
+
+// A JSON value as what a field holding `current` takes (nil: a field it can't fill)
+func[Obj] _jsonValue(value[Json], current[Obj], key[Str]) {
+    try {
+        if (current is Str) return value.asStr();
+        if (current is Int) return value.asInt();
+        if (current is Dbl) return value.asDbl();
+        if (current is Flt) return Flt(value.asDbl());
+        if (current is Bul) return value.asBul();
+        if (current is Json) return value;
+        if (current is Str<>) {
+            var[Str<>] out = <>;
+            for (var[Json] v in value.arrayItems()) out.push(v.asStr());
+            return out;
+        }
+        if (current is Int<>) {
+            var[Int<>] out = <>;
+            for (var[Json] v in value.arrayItems()) out.push(v.asInt());
+            return out;
+        }
+        if (current is Dbl<>) {
+            var[Dbl<>] out = <>;
+            for (var[Json] v in value.arrayItems()) out.push(v.asDbl());
+            return out;
+        }
+        if (current is Bul<>) {
+            var[Bul<>] out = <>;
+            for (var[Json] v in value.arrayItems()) out.push(v.asBul());
+            return out;
+        }
+    } catch (e[JsonError]) {
+        throw new JsonError($"\"{key}\": {e.message}");
+    }
+    return nil;
+}
+
+// Your object (or text, a number, true/false, nil, a list of those) as JSON:
+// each field becomes a key
+//
+//     print(toJson(new User()));      // {"name":"","age":0}
+func[Json] toJson(value[Obj]) {
+    if (value == nil) return jsonNull();
+    if (value is Json) return value;
+    if (value is Str) return jsonStr(value);
+    if (value is Int) return jsonNum(Dbl(value));
+    if (value is Dbl) return jsonNum(value);
+    if (value is Flt) return jsonNum(Dbl(value));
+    if (value is Bul) return jsonBool(value);
+    var[Json] list = jsonArray();
+    if (value is Str<>) {
+        for (var[Str] s in value) list.push(jsonStr(s));
+        return list;
+    }
+    if (value is Int<>) {
+        for (var[Int] n in value) list.push(jsonNum(Dbl(n)));
+        return list;
+    }
+    if (value is Dbl<>) {
+        for (var[Dbl] n in value) list.push(jsonNum(n));
+        return list;
+    }
+    if (value is Bul<>) {
+        for (var[Bul] b in value) list.push(jsonBool(b));
+        return list;
+    }
+    var[Json] object = jsonObject();
+    for (var[Str] field in fieldsOf(value)) object.set(field, toJson(getField(value, field)));
+    return object;
 }

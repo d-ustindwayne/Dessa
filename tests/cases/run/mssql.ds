@@ -29,7 +29,7 @@ for (var[Obj] row in db.queryAll("SELECT * FROM #people ORDER BY id")) {
 }
 var[Obj] ann = db.query("SELECT name, age FROM #people WHERE age > ?", 28);
 print(ann.name, Int(ann.age) + 1);
-for (var[Person] p in db.queryAllAs(() := new Person(), "SELECT * FROM #people ORDER BY id")) {
+for (var[Person] p in db.queryAllAs:Person("SELECT * FROM #people ORDER BY id")) {
     print(p);
 }
 print(db.execute("UPDATE #people SET age = age + 1"));

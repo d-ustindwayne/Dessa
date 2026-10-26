@@ -18,8 +18,8 @@
 // Roman numerals
 // ============================================================
 
-const[Int<>] _romanValues = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1];
-const[Str<>] _romanSymbols = ["M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"];
+const[Int<>] _romanValues = <1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1>;
+const[Str<>] _romanSymbols = <"M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I">;
 
 // 1 to 3999 in Roman numerals: toRoman(1994) is "MCMXCIV".
 func[Str] toRoman(number[Int]) {
@@ -59,14 +59,14 @@ func[Int] fromRoman(text[Str]) {
 // Numbers in words (English)
 // ============================================================
 
-const[Str<>] _ones = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
-                      "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
-const[Str<>] _tens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
-const[Str<>] _scales = ["", "thousand", "million", "billion", "trillion", "quadrillion", "quintillion"];
+const[Str<>] _ones = <"zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+                      "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen">;
+const[Str<>] _tens = <"", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety">;
+const[Str<>] _scales = <"", "thousand", "million", "billion", "trillion", "quadrillion", "quintillion">;
 
 // 0 to 999
 func[Str] _underThousand(n[Int]) {
-    var[Str<>] parts = [];
+    var[Str<>] parts = <>;
     var[Int] rest = n;
     if (rest >= 100) {
         parts.push(_ones<Int(rest / 100)> + " hundred");
@@ -88,7 +88,7 @@ func[Str] toWords(number[Int]) {
         if (number == -9223372036854775807 - 1) throw "toWords: the number is too small";
         return "minus " + toWords(-number);
     }
-    var[Str<>] groups = [];
+    var[Str<>] groups = <>;
     var[Int] rest = number;
     var[Int] scale = 0;
     while (rest > 0) {
@@ -170,7 +170,7 @@ func[Int] excelColumnNumber(column[Str]) {
 // ============================================================
 
 func[Int<>] _digits(number[Int]) {
-    var[Int<>] digits = [];
+    var[Int<>] digits = <>;
     for (var[Chr] c in Str(number < 0 ? -number : number)) digits.push(c.code() - 48);
     return digits;
 }
@@ -189,7 +189,7 @@ func[Int] digitalRoot(number[Int]) {
     return n;
 }
 
-// 1234 -> [1, 4, 9, 16]
+// 1234 -> <1, 4, 9, 16>
 func[Int<>] squareDigits(number[Int]) {
     return _digits(number).map((d[Int]) := d * d);
 }
@@ -203,7 +203,7 @@ func[Int] sortDigits(number[Int], descending[Bul]=false) {
     return number < 0 ? -out : out;
 }
 
-// The number closest to zero (the positive one on a tie): [-4, 2, -1, 7] -> -1
+// The number closest to zero (the positive one on a tie): <-4, 2, -1, 7> -> -1
 func[Int] nearestToZero(numbers[Int<>]) {
     if (numbers.isEmpty()) throw "nearestToZero: the list is empty";
     var[Int] best = numbers<0>;

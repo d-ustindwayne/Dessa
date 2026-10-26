@@ -12,6 +12,7 @@ namespace dessa {
 // ============================================================
 struct Expr;
 struct Stmt;
+struct SemanticType;
 using ExprPtr = std::unique_ptr<Expr>;
 using StmtPtr = std::unique_ptr<Stmt>;
 
@@ -51,6 +52,11 @@ struct TypeNode {
     // Map[Str, Int] -> {name: "Map", isMap: true, mapTypes: [Str, Int]}
     bool isMap = false;
     std::vector<TypeNode> mapTypes;     // key, value
+
+    // Box:Int, Pair:[Str, Int] -> {name: "Box", typeArgs: [Int]}
+    std::vector<TypeNode> typeArgs;
+    // Inside a filled-in generic, T stands for this type (from any module)
+    std::shared_ptr<SemanticType> resolved;
 };
 
 // ============================================================
@@ -106,6 +112,7 @@ struct ImportName {
 struct ModuleSpec {
     std::string path;
     mutable bool isBuiltin = false;
+    bool isPrelude = false;             // the import of include/prelude/errors.ds every file gets
     std::optional<std::string> alias;   // $("math" as m): used as m.sqrt(2)
     int line = 0;
     int column = 0;
@@ -166,6 +173,7 @@ struct TemplateStringExpr : Expr {
 // A bare name reference: `a`, `age`, `students`, `ListOfPerson`.
 struct IdentifierExpr : Expr {
     Token name;
+    std::vector<TypeNode> typeArgs;   // pick:Int(...): a generic function's types, given
     explicit IdentifierExpr(Token name)
         : Expr(ExprKind::Identifier), name(std::move(name)) {}
 };
@@ -243,6 +251,7 @@ struct IndexExpr : Expr {
 struct MemberExpr : Expr {
     ExprPtr object;
     Token name;
+    std::vector<TypeNode> typeArgs;   // db.all:Person(...): a generic method's types, given
     bool isOptional = false; // ?. vs .
     MemberExpr(ExprPtr object, Token name, bool isOptional)
         : Expr(ExprKind::Member), object(std::move(object)), name(std::move(name)), isOptional(isOptional) {}
@@ -265,6 +274,8 @@ struct LambdaExpr : Expr {
 // whose fields are the named args
 struct NewExpr : Expr {
     Token className;
+    std::vector<TypeNode> typeArgs;   // new Box:Int(...)
+    std::shared_ptr<SemanticType> resolvedClass;   // new T() in a filled-in generic: the class T is
     std::vector<Argument> args;
     bool isAnonymous = false;
     std::vector<std::optional<TypeNode>> fieldTypes;   // new { var[Str] name = "x" }
@@ -275,6 +286,7 @@ struct NewExpr : Expr {
 // ["Dustin", "Dwayne", "Diaz"], [...registeredVoters, ...southVoters]
 struct ListExpr : Expr {
     std::vector<CollectionElement> elements;
+    bool oldBrackets = false;   // written [1, 2] instead of <1, 2>
     explicit ListExpr(std::vector<CollectionElement> elements)
         : Expr(ExprKind::List), elements(std::move(elements)) {}
 };
@@ -375,6 +387,12 @@ struct FuncDeclStmt : Stmt {
     bool isConstructor = false;
     std::vector<Token> annotations;   // @override
     std::vector<TypeNode> throwsTypes; // func[Int !! NumberError, Str]
+    // func[T] first:T(items[T<>]): a generic function, kept as its tokens and
+    // parsed again with T filled in for each use
+    std::vector<std::string> typeParams;
+    std::vector<Token> templateTokens;
+    // A generic method of a filled-in generic class: the class's types
+    std::vector<std::pair<std::string, TypeNode>> templateTypes;
     FuncDeclStmt(TypeNode returnType, std::string name, std::vector<Param> params, StmtPtr body)
         : Stmt(StmtKind::FuncDecl), returnType(std::move(returnType)), name(std::move(name)),
           params(std::move(params)), body(std::move(body)) {}
@@ -386,7 +404,13 @@ struct ClassDeclStmt : Stmt {
     std::string name;
     std::optional<std::string> interfaceName;
     std::optional<std::string> parentClassName;
+    std::optional<TypeNode> parentType;   // class IntBox(Box:Int): a filled-in generic parent
     std::vector<StmtPtr> members; // VarDeclStmt / FuncDeclStmt entries
+    // class Box:T { ... }: a generic class, kept as its tokens (see FuncDeclStmt)
+    std::vector<std::string> typeParams;
+    std::vector<Token> templateTokens;
+    // func[T<>] all:T() inside the class: generic methods, filled in when used
+    std::vector<StmtPtr> methodTemplates;
 
     ClassDeclStmt(std::string name, 
                   std::optional<std::string> interfaceName,

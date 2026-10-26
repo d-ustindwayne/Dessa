@@ -203,7 +203,7 @@ std::string glueSource(const BuiltinLibrary& library) {
         else out << "        result = " << toC(f.cpp + "(" + args + ")", ret) << ";\n";
         out << "    } catch (const std::exception& e) {\n        error = ds_str_cstr(e.what());\n"
             << "    } catch (...) {\n        error = ds_str_cstr(\"Error in the library '" << library.name << "'\");\n    }\n";
-        out << "    if (error) ds_throw_str(error);\n";
+        out << "    if (error) ds_fail_str(error);\n";
         if (!ret.is(SemanticTypeKind::Emp)) out << "    return result;\n";
         out << "}\n\n";
     }

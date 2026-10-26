@@ -1,6 +1,6 @@
 // this can be used as a value inside init (objects exist before init runs)
 class Registry {
-    var[Node<>] all = [];
+    var[Node<>] all = <>;
 }
 class Node {
     var[Str] name = "";

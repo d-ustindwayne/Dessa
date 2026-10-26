@@ -82,7 +82,7 @@ class CheckBox(Widget) {
 
 // A list of lines the user can pick from.
 class ListBox(Widget) {
-    var[Str<>] items = [];
+    var[Str<>] items = <>;
 
     func[Emp] add(item[Str]) {
         _listAdd(this.id, item);

@@ -16,7 +16,7 @@ class Dog(Animal) {
 
 func[Emp] main(count[Int]) {
     var[Dog | Nil] maybe = nil;
-    var[Str<>] names = ["a"];
+    var[Str<>] names = <"a">;
     var[Dog] rex = new Dog();
     var[Big] b = new Big(5);
     var[Int] local = 3;

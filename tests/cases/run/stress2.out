@@ -5,7 +5,7 @@ caught negative!
 2
 21
 word: keep
-7 ["ADD", "SUB"]
+7 <"ADD", "SUB">
 2 -1
 -1
 2 3.5 3 3.5

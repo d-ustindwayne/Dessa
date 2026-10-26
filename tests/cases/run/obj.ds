@@ -20,7 +20,7 @@ reply.extra = true;
 print(reply);
 
 // anything goes into an Obj
-var[Obj<>] things = [1, "two", 3.5, 'c', true, nil, [1, 2], new Dog("Rex"), Color.GREEN, new { x = 1 }];
+var[Obj<>] things = <1, "two", 3.5, 'c', true, nil, <1, 2>, new Dog("Rex"), Color.GREEN, new { x = 1 }>;
 for (var[Obj] t in things) print(typeof(t), t);
 
 // narrowing with is
@@ -48,7 +48,7 @@ print($"{user.name} lives in {user.address.city}");
 print(Dbl(n) / 2, Str(n) + "!", Bul(new { a = 1 }.a));
 
 // maps of Obj
-var[Map[Str, Obj]] row = {"id": 7, "name": "Bo", "tags": ["a", "b"]};
+var[Map[Str, Obj]] row = {"id": 7, "name": "Bo", "tags": <"a", "b">};
 print(row, typeof(row<"tags">));
 
 // errors when the program runs

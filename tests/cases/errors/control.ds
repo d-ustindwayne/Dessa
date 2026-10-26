@@ -13,7 +13,7 @@ var[Int] z = 7 % 2;
 var[Dbl] w = 2 ^ 0.5;
 var[Bul] nb = !5;              // error: Operator '!' requires a Bul operand
 
-var[Int<>] list = [1, 2, 3];
+var[Int<>] list = <1, 2, 3>;
 var[Int] first = list<0>;
 var[Str] wrongElement = list<0>;   // error: Cannot convert Int to Str
 var[Int{}] set = {1, 2};
@@ -62,7 +62,7 @@ var[Int<>] evens = list.filter((v[Int]) := v % 2 == 0);
 list.nope();                   // error: has no member 'nope'
 
 func[Emp] mutateCaptured() {
-    var[Int<>] items = [];
+    var[Int<>] items = <>;
     const[Emp] add = (i[Int]) := {
         items.push(i);         // error: cannot modify 'items' from the enclosing function
     };

@@ -4,7 +4,7 @@ Cebu
 true true true
 say "hi"
 
-["name", "age", "admin", "scores", "address", "nickname", "quote", "pi"]
+<"name", "age", "admin", "scores", "address", "nickname", "quote", "pi">
 {"name":"Ann","age":30,"admin":true,"scores":[90,85.5],"address":{"city":"Cebu"},"nickname":null,"quote":"say \"hi\"\n","pi":3.14}
 {"name":"Bo","age":30,"tags":["admin","dev","ops"],"manager":null}
 {
@@ -27,3 +27,14 @@ unexpected character 't' at line 1, column 1
 unexpected text after the JSON value at line 1, column 6
 JsonError: expected a number, found string
 6 6.5
+User(name: "Ann", age: 31, tags: <"a", "b">, admin: false)
+<User(name: "Bo", age: 0, tags: <>, admin: true), User(name: "Cy", age: 5, tags: <>, admin: false)>
+{"name":"Ann","age":31,"tags":["a","b"],"admin":false}
+{
+  "name": "Bo",
+  "age": 0,
+  "tags": [],
+  "admin": true
+}
+40
+JsonError: "age": expected a number, found string

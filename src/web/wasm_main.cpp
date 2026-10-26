@@ -64,6 +64,7 @@ EMSCRIPTEN_KEEPALIVE const char* dessa_compile(const char* entryPath) {
     std::string js;
     if (!program.modules.empty()) {
         analyser.analyse(program);
+        for (auto& [moduleId, decl] : analyser.takeInstances()) program.modules[static_cast<size_t>(moduleId)]->ast.push_back(std::move(decl));
         for (const auto& d : analyser.getDiagnostics()) {
             if (d.severity == DiagnosticSeverity::Hint) continue;   // editor-only
             diagnostics.push_back(d);
@@ -97,7 +98,7 @@ EMSCRIPTEN_KEEPALIVE const char* dessa_compile(const char* entryPath) {
 }
 
 EMSCRIPTEN_KEEPALIVE const char* dessa_version() {
-    return "0.2.1";
+    return "0.2.8";
 }
 
 } // extern "C"

@@ -23,17 +23,17 @@ class[Named] Item {
 }
 
 // Nested collections
-var[Int<><>] grid = [[1, 2], [3, 4]];
+var[Int<><>] grid = <<1, 2>, <3, 4>>;
 grid<1>.push(5);
 print(grid, grid<1><2>, grid.length());
-var[Map[Str, Int<>]<>] listOfMaps = [{"a": [1]}, {:}];
+var[Map[Str, Int<>]<>] listOfMaps = <{"a": <1>}, {:}>;
 print(listOfMaps);
 
 // Optional collections and chains
 var[Int<> | Nil] maybeList = nil;
 maybeList?.push(1);
 print(maybeList?.length() ?? -1);
-maybeList = [1, 2];
+maybeList = <1, 2>;
 maybeList?.push(3);
 print(maybeList);
 
@@ -56,7 +56,7 @@ var[Color{}] colors = {Color.GREEN, Color.RED};
 var[Map[Color, Int]] votes = {Color.RED: 2};
 votes<Color.GREEN> = 5;
 print(colors, votes, colors.includes(Color.RED));
-var[(Int | Str)<>] mixed = [1, "two", 3];
+var[(Int | Str)<>] mixed = <1, "two", 3>;
 print(mixed);
 
 // Interfaces, is, variadic objects

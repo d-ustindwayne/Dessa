@@ -1,23 +1,23 @@
 /***
  * $("dsds") -- Dessa data structures: Stack, Queue, Deque, LinkedList,
- * PriorityQueue, SearchTree and Graph. They hold Obj values, so any value
- * fits (convert or check with `is` when taking one out).
+ * PriorityQueue, SearchTree and Graph. All but Graph are generic: say what
+ * they hold, e.g. Stack:Str (Stack:Obj holds anything).
  *
  *     $("dsds") { Stack, Queue, PriorityQueue, Graph }
  *
- *     var[Stack] undo = new Stack();
+ *     var[Stack:Str] undo = new Stack();
  *     undo.push("typed a");
  *     undo.push("typed b");
  *     print(undo.pop());                         // typed b
  *
- *     var[PriorityQueue] tasks = new PriorityQueue();
+ *     var[PriorityQueue:Int] tasks = new PriorityQueue();
  *     tasks.push(5); tasks.push(1); tasks.push(3);
  *     print(tasks.pop());                        // 1 (the smallest first)
  *
  *     var[Graph] map = new Graph();
  *     map.addEdge("Cebu", "Manila", 570);
  *     map.addEdge("Manila", "Baguio", 250);
- *     print(map.shortestPath("Cebu", "Baguio"));  // ["Cebu", "Manila", "Baguio"]
+ *     print(map.shortestPath("Cebu", "Baguio"));  // <"Cebu", "Manila", "Baguio">
  *
  * Written in Dessa itself (no native part), so it works everywhere Dessa runs.
  */
@@ -37,22 +37,22 @@ func[Int] compareValues(a[Obj], b[Obj]) {
 // Stack: last in, first out
 // ============================================================
 
-class Stack {
-    var[Obj<>] _items = [];
+class Stack:T {
+    var[T<>] _items = <>;
 
     // Puts a value on top.
-    func[Emp] push(value[Obj]) {
+    func[Emp] push(value[T]) {
         this._items.push(value);
     }
 
     // Takes the value on top. Error if the stack is empty.
-    func[Obj] pop() {
+    func[T] pop() {
         if (this._items.isEmpty()) throw "pop: the stack is empty";
         return this._items.pop();
     }
 
     // The value on top, without taking it.
-    func[Obj] peek() {
+    func[T] peek() {
         if (this._items.isEmpty()) throw "peek: the stack is empty";
         return this._items.last();
     }
@@ -62,7 +62,7 @@ class Stack {
     func[Emp] clear() { this._items.clear(); }
 
     // From the bottom to the top.
-    func[Obj<>] toList() { return this._items.copy(); }
+    func[T<>] toList() { return this._items.copy(); }
 
     func[Str] toStr() { return $"Stack{this._items}"; }
 }
@@ -71,19 +71,19 @@ class Stack {
 // Queue: first in, first out
 // ============================================================
 
-class Queue {
-    var[Obj<>] _items = [];
+class Queue:T {
+    var[T<>] _items = <>;
     var[Int] _head = 0;
 
     // Adds a value at the back.
-    func[Emp] enqueue(value[Obj]) {
+    func[Emp] enqueue(value[T]) {
         this._items.push(value);
     }
 
     // Takes the value at the front. Error if the queue is empty.
-    func[Obj] dequeue() {
+    func[T] dequeue() {
         if (this.isEmpty()) throw "dequeue: the queue is empty";
-        var[Obj] value = this._items<this._head>;
+        var[T] value = this._items<this._head>;
         this._head++;
         // Drop the taken part now and then
         if (this._head > 32 && this._head * 2 > this._items.length()) {
@@ -94,7 +94,7 @@ class Queue {
     }
 
     // The value at the front, without taking it.
-    func[Obj] peek() {
+    func[T] peek() {
         if (this.isEmpty()) throw "peek: the queue is empty";
         return this._items<this._head>;
     }
@@ -104,7 +104,7 @@ class Queue {
     func[Emp] clear() { this._items.clear(); this._head = 0; }
 
     // From the front to the back.
-    func[Obj<>] toList() { return this._items.slice(this._head, this._items.length()); }
+    func[T<>] toList() { return this._items.slice(this._head, this._items.length()); }
 
     func[Str] toStr() { return $"Queue{this.toList()}"; }
 }
@@ -113,28 +113,28 @@ class Queue {
 // Deque: add and take at both ends
 // ============================================================
 
-class Deque {
-    var[Obj<>] _items = [];
+class Deque:T {
+    var[T<>] _items = <>;
 
-    func[Emp] pushFront(value[Obj]) { this._items.insert(0, value); }
-    func[Emp] pushBack(value[Obj]) { this._items.push(value); }
+    func[Emp] pushFront(value[T]) { this._items.insert(0, value); }
+    func[Emp] pushBack(value[T]) { this._items.push(value); }
 
-    func[Obj] popFront() {
+    func[T] popFront() {
         if (this._items.isEmpty()) throw "popFront: the deque is empty";
         return this._items.removeAt(0);
     }
 
-    func[Obj] popBack() {
+    func[T] popBack() {
         if (this._items.isEmpty()) throw "popBack: the deque is empty";
         return this._items.pop();
     }
 
-    func[Obj] peekFront() {
+    func[T] peekFront() {
         if (this._items.isEmpty()) throw "peekFront: the deque is empty";
         return this._items.first();
     }
 
-    func[Obj] peekBack() {
+    func[T] peekBack() {
         if (this._items.isEmpty()) throw "peekBack: the deque is empty";
         return this._items.last();
     }
@@ -142,7 +142,7 @@ class Deque {
     func[Int] size() { return this._items.length(); }
     func[Bul] isEmpty() { return this._items.isEmpty(); }
     func[Emp] clear() { this._items.clear(); }
-    func[Obj<>] toList() { return this._items.copy(); }
+    func[T<>] toList() { return this._items.copy(); }
     func[Str] toStr() { return $"Deque{this._items}"; }
 }
 
@@ -150,23 +150,23 @@ class Deque {
 // LinkedList: values linked one to the next
 // ============================================================
 
-class ListNode {
-    var[Obj] value;
-    var[ListNode | Nil] next = nil;
+class ListNode:T {
+    var[T] value;
+    var[ListNode:T | Nil] next = nil;
 
-    init(value[Obj]) {
+    init(value[T]) {
         this.value = value;
     }
 }
 
-class LinkedList {
-    var[ListNode | Nil] _first = nil;
-    var[ListNode | Nil] _last = nil;
+class LinkedList:T {
+    var[ListNode:T | Nil] _first = nil;
+    var[ListNode:T | Nil] _last = nil;
     var[Int] _size = 0;
 
     // Adds a value at the start.
-    func[Emp] addFirst(value[Obj]) {
-        var[ListNode] node = new ListNode(value);
+    func[Emp] addFirst(value[T]) {
+        var[ListNode:T] node = new ListNode:T(value);
         node.next = this._first;
         this._first = node;
         this._last ?= node;
@@ -174,9 +174,9 @@ class LinkedList {
     }
 
     // Adds a value at the end.
-    func[Emp] addLast(value[Obj]) {
-        var[ListNode] node = new ListNode(value);
-        var[ListNode | Nil] last = this._last;
+    func[Emp] addLast(value[T]) {
+        var[ListNode:T] node = new ListNode:T(value);
+        var[ListNode:T | Nil] last = this._last;
         if (last == nil) {
             this._first = node;
         } else {
@@ -187,9 +187,9 @@ class LinkedList {
     }
 
     // The node at a position (0 is the first).
-    func[ListNode] _nodeAt(index[Int], what[Str]) {
+    func[ListNode:T] _nodeAt(index[Int], what[Str]) {
         if (index < 0 || index >= this._size) throw $"{what}: index {index} is out of range for a list of {this._size}";
-        var[ListNode | Nil] node = this._first;
+        var[ListNode:T | Nil] node = this._first;
         for (var[Int] i = 0; i < index; i++) {
             if (node != nil) node = node.next;
         }
@@ -197,17 +197,17 @@ class LinkedList {
     }
 
     // The value at a position (0 is the first).
-    func[Obj] get(index[Int]) {
+    func[T] get(index[Int]) {
         return this._nodeAt(index, "get").value;
     }
 
     // Replaces the value at a position.
-    func[Emp] set(index[Int], value[Obj]) {
+    func[Emp] set(index[Int], value[T]) {
         this._nodeAt(index, "set").value = value;
     }
 
     // Puts a value at a position, moving the rest one place on.
-    func[Emp] insertAt(index[Int], value[Obj]) {
+    func[Emp] insertAt(index[Int], value[T]) {
         if (index == 0) {
             this.addFirst(value);
             return;
@@ -216,20 +216,20 @@ class LinkedList {
             this.addLast(value);
             return;
         }
-        var[ListNode] before = this._nodeAt(index - 1, "insertAt");
-        var[ListNode] node = new ListNode(value);
+        var[ListNode:T] before = this._nodeAt(index - 1, "insertAt");
+        var[ListNode:T] node = new ListNode:T(value);
         node.next = before.next;
         before.next = node;
         this._size++;
     }
 
     // Takes the value at a position out of the list.
-    func[Obj] removeAt(index[Int]) {
-        var[ListNode] node = this._nodeAt(index, "removeAt");
+    func[T] removeAt(index[Int]) {
+        var[ListNode:T] node = this._nodeAt(index, "removeAt");
         if (index == 0) {
             this._first = node.next;
         } else {
-            var[ListNode] before = this._nodeAt(index - 1, "removeAt");
+            var[ListNode:T] before = this._nodeAt(index - 1, "removeAt");
             before.next = node.next;
             if (node.next == nil) this._last = before;
         }
@@ -238,20 +238,20 @@ class LinkedList {
         return node.value;
     }
 
-    func[Obj] removeFirst() {
+    func[T] removeFirst() {
         if (this._size == 0) throw "removeFirst: the list is empty";
         return this.removeAt(0);
     }
 
-    func[Obj] removeLast() {
+    func[T] removeLast() {
         if (this._size == 0) throw "removeLast: the list is empty";
         return this.removeAt(this._size - 1);
     }
 
     // The position of the first value equal to `value`, or -1.
-    func[Int] indexOf(value[Obj]) {
+    func[Int] indexOf(value[T]) {
         var[Int] index = 0;
-        var[ListNode | Nil] node = this._first;
+        var[ListNode:T | Nil] node = this._first;
         while (node != nil) {
             if (node.value == value) return index;
             node = node.next;
@@ -260,15 +260,15 @@ class LinkedList {
         return -1;
     }
 
-    func[Bul] includes(value[Obj]) { return this.indexOf(value) >= 0; }
+    func[Bul] includes(value[T]) { return this.indexOf(value) >= 0; }
 
     // Turns the list around.
     func[Emp] reverse() {
-        var[ListNode | Nil] previous = nil;
-        var[ListNode | Nil] node = this._first;
+        var[ListNode:T | Nil] previous = nil;
+        var[ListNode:T | Nil] node = this._first;
         this._last = node;
         while (node != nil) {
-            var[ListNode | Nil] next = node.next;
+            var[ListNode:T | Nil] next = node.next;
             node.next = previous;
             previous = node;
             node = next;
@@ -285,9 +285,9 @@ class LinkedList {
         this._size = 0;
     }
 
-    func[Obj<>] toList() {
-        var[Obj<>] all = [];
-        var[ListNode | Nil] node = this._first;
+    func[T<>] toList() {
+        var[T<>] all = <>;
+        var[ListNode:T | Nil] node = this._first;
         while (node != nil) {
             all.push(node.value);
             node = node.next;
@@ -302,18 +302,18 @@ class LinkedList {
 // PriorityQueue: always takes the smallest value first
 // ============================================================
 
-class PriorityQueue {
-    var[Obj<>] _heap = [];
-    var[Func[Int, [Obj, Obj]]] _compare = compareValues;
+class PriorityQueue:T {
+    var[T<>] _heap = <>;
+    var[Func[Int, [T, T]]] _compare = (a[T], b[T]) := compareValues(a, b);
 
     // The order: nil for smallest first, or a function giving a negative number
-    // when a comes first, e.g. new PriorityQueue((a[Obj], b[Obj]) := compareValues(b, a))
+    // when a comes first, e.g. new PriorityQueue((a[Int], b[Int]) := compareValues(b, a))
     // for the largest first.
-    init(compare[Func[Int, [Obj, Obj]] | Nil] = nil) {
+    init(compare[Func[Int, [T, T]] | Nil] = nil) {
         if (compare != nil) this._compare = compare;
     }
 
-    func[Emp] push(value[Obj]) {
+    func[Emp] push(value[T]) {
         this._heap.push(value);
         var[Int] i = this._heap.length() - 1;
         while (i > 0) {
@@ -325,10 +325,10 @@ class PriorityQueue {
     }
 
     // Takes the first value. Error if the queue is empty.
-    func[Obj] pop() {
+    func[T] pop() {
         if (this._heap.isEmpty()) throw "pop: the priority queue is empty";
-        var[Obj] top = this._heap<0>;
-        var[Obj] last = this._heap.pop();
+        var[T] top = this._heap<0>;
+        var[T] last = this._heap.pop();
         if (!this._heap.isEmpty()) {
             this._heap<0> = last;
             var[Int] i = 0;
@@ -347,13 +347,13 @@ class PriorityQueue {
     }
 
     // The first value, without taking it.
-    func[Obj] peek() {
+    func[T] peek() {
         if (this._heap.isEmpty()) throw "peek: the priority queue is empty";
         return this._heap<0>;
     }
 
     func[Emp] _swap(a[Int], b[Int]) {
-        var[Obj] keep = this._heap<a>;
+        var[T] keep = this._heap<a>;
         this._heap<a> = this._heap<b>;
         this._heap<b> = keep;
     }
@@ -363,8 +363,8 @@ class PriorityQueue {
     func[Emp] clear() { this._heap.clear(); }
 
     // All values in the order they would come out.
-    func[Obj<>] toList() {
-        var[Obj<>] sorted = this._heap.copy();
+    func[T<>] toList() {
+        var[T<>] sorted = this._heap.copy();
         sorted.sort(this._compare);
         return sorted;
     }
@@ -376,45 +376,45 @@ class PriorityQueue {
 // SearchTree: a sorted set of values (a binary search tree)
 // ============================================================
 
-class TreeNode {
-    var[Obj] value;
-    var[TreeNode | Nil] left = nil;
-    var[TreeNode | Nil] right = nil;
+class TreeNode:T {
+    var[T] value;
+    var[TreeNode:T | Nil] left = nil;
+    var[TreeNode:T | Nil] right = nil;
 
-    init(value[Obj]) {
+    init(value[T]) {
         this.value = value;
     }
 }
 
-class SearchTree {
-    var[TreeNode | Nil] _root = nil;
+class SearchTree:T {
+    var[TreeNode:T | Nil] _root = nil;
     var[Int] _size = 0;
-    var[Func[Int, [Obj, Obj]]] _compare = compareValues;
+    var[Func[Int, [T, T]]] _compare = (a[T], b[T]) := compareValues(a, b);
 
     // The order: nil for the usual order (compareValues), or a function like
     // PriorityQueue's.
-    init(compare[Func[Int, [Obj, Obj]] | Nil] = nil) {
+    init(compare[Func[Int, [T, T]] | Nil] = nil) {
         if (compare != nil) this._compare = compare;
     }
 
     // Adds a value; false if an equal one is already there.
-    func[Bul] add(value[Obj]) {
-        var[TreeNode | Nil] root = this._root;
+    func[Bul] add(value[T]) {
+        var[TreeNode:T | Nil] root = this._root;
         if (root == nil) {
-            this._root = new TreeNode(value);
+            this._root = new TreeNode:T(value);
             this._size++;
             return true;
         }
-        var[TreeNode] node = root;
+        var[TreeNode:T] node = root;
         loop {
             var[Int] order = this._compare(value, node.value);
             if (order == 0) return false;
-            var[TreeNode | Nil] next = order < 0 ? node.left : node.right;
+            var[TreeNode:T | Nil] next = order < 0 ? node.left : node.right;
             if (next == nil) {
                 if (order < 0) {
-                    node.left = new TreeNode(value);
+                    node.left = new TreeNode:T(value);
                 } else {
-                    node.right = new TreeNode(value);
+                    node.right = new TreeNode:T(value);
                 }
                 this._size++;
                 return true;
@@ -426,8 +426,8 @@ class SearchTree {
     }
 
     // Is an equal value in the tree?
-    func[Bul] has(value[Obj]) {
-        var[TreeNode | Nil] node = this._root;
+    func[Bul] has(value[T]) {
+        var[TreeNode:T | Nil] node = this._root;
         while (node != nil) {
             var[Int] order = this._compare(value, node.value);
             if (order == 0) return true;
@@ -437,9 +437,9 @@ class SearchTree {
     }
 
     // Takes a value out; false if it wasn't there.
-    func[Bul] remove(value[Obj]) {
-        var[TreeNode | Nil] parent = nil;
-        var[TreeNode | Nil] node = this._root;
+    func[Bul] remove(value[T]) {
+        var[TreeNode:T | Nil] parent = nil;
+        var[TreeNode:T | Nil] node = this._root;
         while (node != nil) {
             var[Int] order = this._compare(value, node.value);
             if (order == 0) break;
@@ -448,13 +448,13 @@ class SearchTree {
         }
         if (node == nil) return false;
 
-        var[TreeNode | Nil] left = node.left;
-        var[TreeNode | Nil] right = node.right;
+        var[TreeNode:T | Nil] left = node.left;
+        var[TreeNode:T | Nil] right = node.right;
         if (left != nil && right != nil) {
             // Two children: take the smallest value on the right instead
-            var[TreeNode] successorParent = node;
-            var[TreeNode] successor = right;
-            var[TreeNode | Nil] smaller = successor.left;
+            var[TreeNode:T] successorParent = node;
+            var[TreeNode:T] successor = right;
+            var[TreeNode:T | Nil] smaller = successor.left;
             while (smaller != nil) {
                 successorParent = successor;
                 successor = smaller;
@@ -467,7 +467,7 @@ class SearchTree {
                 successorParent.left = successor.right;
             }
         } else {
-            var[TreeNode | Nil] child = left != nil ? left : right;
+            var[TreeNode:T | Nil] child = left != nil ? left : right;
             if (parent == nil) {
                 this._root = child;
             } else if (parent.left == node) {
@@ -481,9 +481,9 @@ class SearchTree {
     }
 
     // The smallest value. Error if the tree is empty.
-    func[Obj] min() {
-        var[TreeNode] node = this._root ?! "min: the tree is empty";
-        var[TreeNode | Nil] next = node.left;
+    func[T] min() {
+        var[TreeNode:T] node = this._root ?! "min: the tree is empty";
+        var[TreeNode:T | Nil] next = node.left;
         while (next != nil) {
             node = next;
             next = next.left;
@@ -492,9 +492,9 @@ class SearchTree {
     }
 
     // The largest value. Error if the tree is empty.
-    func[Obj] max() {
-        var[TreeNode] node = this._root ?! "max: the tree is empty";
-        var[TreeNode | Nil] next = node.right;
+    func[T] max() {
+        var[TreeNode:T] node = this._root ?! "max: the tree is empty";
+        var[TreeNode:T | Nil] next = node.right;
         while (next != nil) {
             node = next;
             next = next.right;
@@ -511,16 +511,16 @@ class SearchTree {
     }
 
     // All values, sorted.
-    func[Obj<>] toList() {
-        var[Obj<>] all = [];
-        var[TreeNode<>] pending = [];
-        var[TreeNode | Nil] node = this._root;
+    func[T<>] toList() {
+        var[T<>] all = <>;
+        var[TreeNode:T<>] pending = <>;
+        var[TreeNode:T | Nil] node = this._root;
         while (node != nil || !pending.isEmpty()) {
             while (node != nil) {
                 pending.push(node);
                 node = node.left;
             }
-            var[TreeNode] next = pending.pop();
+            var[TreeNode:T] next = pending.pop();
             all.push(next.value);
             node = next.right;
         }
@@ -578,7 +578,7 @@ class Graph {
     // Every node reachable source `start`, nearest first (breadth-first).
     func[Str<>] bfs(start[Str]) {
         if (!this._edges.has(start)) throw $"bfs: there is no node '{start}'";
-        var[Str<>] order = [start];
+        var[Str<>] order = <start>;
         var[Str{}] seen = {start};
         var[Int] i = 0;
         while (i < order.length()) {
@@ -597,9 +597,9 @@ class Graph {
     // Every node reachable source `start`, going deep first (depth-first).
     func[Str<>] dfs(start[Str]) {
         if (!this._edges.has(start)) throw $"dfs: there is no node '{start}'";
-        var[Str<>] order = [];
+        var[Str<>] order = <>;
         var[Str{}] seen = {};
-        var[Str<>] pending = [start];
+        var[Str<>] pending = <start>;
         while (!pending.isEmpty()) {
             var[Str] node = pending.pop();
             if (seen.includes(node)) continue;
@@ -647,8 +647,8 @@ class Graph {
                 }
             }
         }
-        if (!distance.has(target)) return [];
-        var[Str<>] path = [target];
+        if (!distance.has(target)) return <>;
+        var[Str<>] path = <target>;
         var[Str] node = target;
         while (node != source) {
             node = cameFrom<node>;
@@ -671,7 +671,7 @@ class Graph {
     }
 
     func[Str] toStr() {
-        var[Str<>] parts = [];
+        var[Str<>] parts = <>;
         for (var[Str] source in this._edges) {
             parts.push($"{source} -> {this._edges<source>.keys().join(", ")}");
         }

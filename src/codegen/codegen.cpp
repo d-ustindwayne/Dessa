@@ -218,6 +218,13 @@ std::string Codegen::generate() {
 
     line("int main(int argc, char** argv) {");
     line("    return dessa::run_main(argc, argv, [] {");
+    // Runtime errors and thrown text become Error objects (include/prelude/errors.ds)
+    if (const auto error = preludeError()) {
+        line("        dessa::error_hook = [](const dessa::Str& m, bool runtime) -> dessa::Ref<dessa::Object> { return " +
+             ns(error->moduleId) + "::" + mangle("_error") + "(m, runtime); };");
+        line("        dessa::is_error = [](const dessa::Ref<dessa::Object>& v) { return static_cast<bool>(dessa::ref_cast<" +
+             typeName(*error) + ">(v)); };");
+    }
     for (const auto& module : program.modules) {
         line("        " + ns(module->id) + (module->isEntry ? "::ds_run();" : "::ds_init();"));
     }
@@ -334,7 +341,7 @@ void Codegen::emitClass(const ClassInfo& info) {
             }
         }
     }
-    line("dessa::Str ds_class() const override { return \"" + info.name + "\"; }");
+    line("dessa::Str ds_class() const override { return \"" + info.type().toString() + "\"; }");
     line("dessa::Str ds_str() const override;");
     line("bool ds_get(const dessa::Str& ds_name, dessa::Obj& ds_out) const override;");
     line("bool ds_set(const dessa::Str& ds_name, const dessa::Obj& ds_value) override;");
@@ -525,7 +532,7 @@ void Codegen::emitClassBodies(const ClassInfo& info) {
     if (withToStr) {
         line("    return const_cast<" + name + "*>(this)->" + mangle("toStr") + "();");
     } else {
-        std::string parts = "\"" + info.name + "(\"";
+        std::string parts = "\"" + info.type().toString() + "(\"";
         bool firstField = true;
         for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
             for (const auto& f : (*it)->fieldOrder) {
@@ -735,8 +742,11 @@ void Codegen::stmt(const Stmt* statement) {
             return;
         case StmtKind::Throw: {
             const Expr* value = static_cast<const ThrowStmt*>(statement)->value.get();
-            if (typeOf(value).is(SemanticTypeKind::Str)) line("throw dessa::Error(" + expr(value) + ");");
-            else line("throw dessa::Thrown{" + expr(value) + "};");
+            // The value may call constructors that move the trace line; point it back at the throw.
+            line("{ auto ds_thrown_value = " + expr(value) + ";");
+            if (statement->line > 0) line("dessa::trace(ds_file, " + std::to_string(statement->line) + ");");
+            if (typeOf(value).is(SemanticTypeKind::Str)) line("dessa::raise(ds_thrown_value); }");
+            else line("throw dessa::Thrown{ds_thrown_value}; }");
             return;
         }
         default:
@@ -845,6 +855,14 @@ void Codegen::switchStmt(const SwitchStmt* s) {
     line("}");
 }
 
+// The prelude's Error class (include/prelude/errors.ds), when it is loaded
+std::optional<SemanticType> Codegen::preludeError() const {
+    for (const auto& module : program.modules) {
+        if (module->isPrelude) return SemanticType::userDefined("Error", module->id, UserTypeKind::Class);
+    }
+    return std::nullopt;
+}
+
 void Codegen::tryStmt(const TryStmt* s) {
     line("try {");
     indentLevel++;
@@ -874,7 +892,9 @@ void Codegen::tryStmt(const TryStmt* s) {
         indentLevel--;
     };
 
-    if (!classArms.empty()) {
+    // An Error reaches a Str arm too, as its message (runtime errors are IndexError, ... objects)
+    const std::optional<SemanticType> error = strArm ? preludeError() : std::nullopt;
+    if (!classArms.empty() || error) {
         line("} catch (const dessa::Thrown& ds_thrown) {");
         indentLevel++;
         for (size_t i = 0; i < classArms.size(); ++i) {
@@ -883,6 +903,12 @@ void Codegen::tryStmt(const TryStmt* s) {
             line(std::string(i == 0 ? "if" : "} else if") + " (auto " + name + " = dessa::ref_cast<" +
                  typeName(*analyser.catchTypeOf(arm)) + ">(ds_thrown.value)) {");
             body(arm);
+        }
+        if (error) {
+            line(std::string(classArms.empty() ? "if" : "} else if") + " (auto ds_error_object = dessa::ref_cast<" + typeName(*error) +
+                 ">(ds_thrown.value)) {");
+            line("    dessa::Str " + mangle(*strArm->param) + " = ds_error_object->" + mangle("message") + ";");
+            body(strArm);
         }
         line("} else {");
         if (catchAll) body(catchAll);
@@ -1192,7 +1218,7 @@ std::string Codegen::binary(const BinaryExpr* e) {
         }
         case TokenType::QUESTION_BANG: {
             // value ?! error
-            std::string raise = rt.is(SemanticTypeKind::Str) ? "throw dessa::Error(" + expr(r) + ");" : "throw dessa::Thrown{" + expr(r) + "};";
+            std::string raise = rt.is(SemanticTypeKind::Str) ? "dessa::raise(" + expr(r) + ");" : "throw dessa::Thrown{" + expr(r) + "};";
             return "dessa::or_throw<" + cppType(typeOf(e)) + ">(" + expr(l) + ", [&]() { " + raise + " })";
         }
         case TokenType::DIV: return "dessa::div(" + expr(l) + ", " + expr(r) + ")";

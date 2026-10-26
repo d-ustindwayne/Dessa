@@ -3,7 +3,7 @@
 {id = 1, name = "Mouse", price = 25.99, stock = 150, active = 1}
 {id = 2, name = "Chair", price = 149.5, stock = 45, active = 1}
 {id = 3, name = "Café ☕ mug", price = 8, stock = Nil, active = 0}
-["Mouse", "Chair"]
+<"Mouse", "Chair">
 Café ☕ mug true Str
 true
 2

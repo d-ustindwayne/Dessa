@@ -33,10 +33,10 @@ $("time") { _epochMillis, _epochOf, _civil, _offsetMinutes, _isZone }
 // Month and day names of a language. Days start on Monday.
 class Locale {
     var[Str] code = "";
-    var[Str<>] months = [];
-    var[Str<>] shortMonths = [];
-    var[Str<>] days = [];
-    var[Str<>] shortDays = [];
+    var[Str<>] months = <>;
+    var[Str<>] shortMonths = <>;
+    var[Str<>] days = <>;
+    var[Str<>] shortDays = <>;
     var[Str] am = "AM";
     var[Str] pm = "PM";
     var[Str] longDate = "d MMMM yyyy";   // the pattern longDate() uses
@@ -57,62 +57,62 @@ class Locale {
 }
 
 func[Str<>] _numbered(suffix[Str]) {
-    var[Str<>] names = [];
+    var[Str<>] names = <>;
     for (var[Int] i = 1; i <= 12; i++) names.push($"{i}{suffix}");
     return names;
 }
 
 var[Map[Str, Locale]] _locales = {
     "en": new Locale("en",
-        ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
-        ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
-        ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-        ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], "AM", "PM", "MMMM d, yyyy"),
+        <"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December">,
+        <"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec">,
+        <"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday">,
+        <"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun">, "AM", "PM", "MMMM d, yyyy"),
     "es": new Locale("es",
-        ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"],
-        ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sept", "oct", "nov", "dic"],
-        ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"],
-        ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"], "a. m.", "p. m.", "d 'de' MMMM 'de' yyyy"),
+        <"enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre">,
+        <"ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sept", "oct", "nov", "dic">,
+        <"lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo">,
+        <"lun", "mar", "mié", "jue", "vie", "sáb", "dom">, "a. m.", "p. m.", "d 'de' MMMM 'de' yyyy"),
     "fr": new Locale("fr",
-        ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"],
-        ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."],
-        ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"],
-        ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."], "AM", "PM", "d MMMM yyyy"),
+        <"janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre">,
+        <"janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc.">,
+        <"lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche">,
+        <"lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim.">, "AM", "PM", "d MMMM yyyy"),
     "de": new Locale("de",
-        ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"],
-        ["Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sept.", "Okt.", "Nov.", "Dez."],
-        ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"],
-        ["Mo.", "Di.", "Mi.", "Do.", "Fr.", "Sa.", "So."], "AM", "PM", "d. MMMM yyyy"),
+        <"Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember">,
+        <"Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sept.", "Okt.", "Nov.", "Dez.">,
+        <"Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag">,
+        <"Mo.", "Di.", "Mi.", "Do.", "Fr.", "Sa.", "So.">, "AM", "PM", "d. MMMM yyyy"),
     "it": new Locale("it",
-        ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"],
-        ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"],
-        ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"],
-        ["lun", "mar", "mer", "gio", "ven", "sab", "dom"], "AM", "PM", "d MMMM yyyy"),
+        <"gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre">,
+        <"gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic">,
+        <"lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica">,
+        <"lun", "mar", "mer", "gio", "ven", "sab", "dom">, "AM", "PM", "d MMMM yyyy"),
     "pt": new Locale("pt",
-        ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"],
-        ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"],
-        ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo"],
-        ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"], "AM", "PM", "d 'de' MMMM 'de' yyyy"),
+        <"janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro">,
+        <"jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez">,
+        <"segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo">,
+        <"seg", "ter", "qua", "qui", "sex", "sáb", "dom">, "AM", "PM", "d 'de' MMMM 'de' yyyy"),
     "nl": new Locale("nl",
-        ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"],
-        ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"],
-        ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"],
-        ["ma", "di", "wo", "do", "vr", "za", "zo"], "AM", "PM", "d MMMM yyyy"),
+        <"januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december">,
+        <"jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec">,
+        <"maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag">,
+        <"ma", "di", "wo", "do", "vr", "za", "zo">, "AM", "PM", "d MMMM yyyy"),
     "fil": new Locale("fil",
-        ["Enero", "Pebrero", "Marso", "Abril", "Mayo", "Hunyo", "Hulyo", "Agosto", "Setyembre", "Oktubre", "Nobyembre", "Disyembre"],
-        ["Ene", "Peb", "Mar", "Abr", "May", "Hun", "Hul", "Ago", "Set", "Okt", "Nob", "Dis"],
-        ["Lunes", "Martes", "Miyerkules", "Huwebes", "Biyernes", "Sabado", "Linggo"],
-        ["Lun", "Mar", "Miy", "Huw", "Biy", "Sab", "Lin"], "AM", "PM", "MMMM d, yyyy"),
+        <"Enero", "Pebrero", "Marso", "Abril", "Mayo", "Hunyo", "Hulyo", "Agosto", "Setyembre", "Oktubre", "Nobyembre", "Disyembre">,
+        <"Ene", "Peb", "Mar", "Abr", "May", "Hun", "Hul", "Ago", "Set", "Okt", "Nob", "Dis">,
+        <"Lunes", "Martes", "Miyerkules", "Huwebes", "Biyernes", "Sabado", "Linggo">,
+        <"Lun", "Mar", "Miy", "Huw", "Biy", "Sab", "Lin">, "AM", "PM", "MMMM d, yyyy"),
     "ja": new Locale("ja", _numbered("月"), _numbered("月"),
-        ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"],
-        ["月", "火", "水", "木", "金", "土", "日"], "午前", "午後", "yyyy年M月d日"),
+        <"月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日">,
+        <"月", "火", "水", "木", "金", "土", "日">, "午前", "午後", "yyyy年M月d日"),
     "zh": new Locale("zh",
-        ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"], _numbered("月"),
-        ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"],
-        ["周一", "周二", "周三", "周四", "周五", "周六", "周日"], "上午", "下午", "yyyy年M月d日"),
+        <"一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月">, _numbered("月"),
+        <"星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日">,
+        <"周一", "周二", "周三", "周四", "周五", "周六", "周日">, "上午", "下午", "yyyy年M月d日"),
     "ko": new Locale("ko", _numbered("월"), _numbered("월"),
-        ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"],
-        ["월", "화", "수", "목", "금", "토", "일"], "오전", "오후", "yyyy년 M월 d일")
+        <"월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일">,
+        <"월", "화", "수", "목", "금", "토", "일">, "오전", "오후", "yyyy년 M월 d일")
 };
 
 // Adds (or replaces) a language for format(..., locale).
@@ -120,7 +120,7 @@ func[Emp] addLocale(locale[Locale]) {
     _locales<locale.code> = locale;
 }
 
-// The codes of the known languages: ["en", "es", ...]
+// The codes of the known languages: <"en", "es", ...>
 func[Str<>] localeCodes() {
     return _locales.keys();
 }

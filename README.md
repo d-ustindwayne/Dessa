@@ -15,7 +15,7 @@ class Item {
     }
 }
 
-var[Item<>] cart = [new Item("Mouse", 25.99), new Item("Desk", 149.5)];
+var[Item<>] cart = <new Item("Mouse", 25.99), new Item("Desk", 149.5)>;
 var[Dbl] total = 0;
 for (var[Item] item in cart) total += item.price;
 print($"{cart.length()} items, total {total.toFixed(2)}");

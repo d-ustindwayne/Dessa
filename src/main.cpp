@@ -40,7 +40,7 @@ namespace fs = std::filesystem;
 
 namespace {
 
-constexpr const char* kVersion = "0.2.1";
+constexpr const char* kVersion = "0.2.8";
 const char* g_argv0 = nullptr; // to find runtime/ and include/ next to the compiler
 
 void printUsage() {
@@ -52,6 +52,7 @@ void printUsage() {
         "  dessa build   <file.ds> [-o program]         compile to an executable (--release: fully optimized, slower to build)\n"
         "                                               programs go through C; --cpp uses C++ instead\n"
         "  dessa run     <file.ds> [-- args...]         compile and run\n"
+        "  dessa fix-lists <file.ds>                    rewrite old [1, 2] lists as <1, 2>\n"
         "  dessa symbols <file.ds> [--stdin]            symbol table as JSON (for editors)\n"
         "  dessa serve [folder] [--port N]              a web server for pages (.dhtml compiled on each request)\n"
         "  dessa complete <file.ds> --at L:C [--stdin]  completions at a position as JSON (for editors)\n"
@@ -125,6 +126,8 @@ void compileFrontEnd(Compilation& c, const std::string& path, const std::string*
     bool loadErrors = hasError(c.diagnostics);
     if (beforeAnalyse) beforeAnalyse(c);
     c.analyser.analyse(c.program);
+    // Filled-in generics (Box:Int) are generated like the module's own classes
+    for (auto& [moduleId, decl] : c.analyser.takeInstances()) c.program.modules[static_cast<size_t>(moduleId)]->ast.push_back(std::move(decl));
     for (const auto& d : c.analyser.getDiagnostics()) c.diagnostics.push_back(d);
     c.ok = !loadErrors && !hasError(c.diagnostics);
 }
@@ -181,6 +184,49 @@ int cmdAst(const std::string& path) {
     }
     printDiagnostics(diagnostics, false, std::cerr);
     return hasError(diagnostics) ? 1 : 0;
+}
+
+// dessa fix-lists app.ds: rewrites the old list literals [1, 2] as <1, 2>
+// (only the file itself, not what it imports)
+int cmdFixLists(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) {
+        std::cerr << "dessa: cannot read " << path << "\n";
+        return 1;
+    }
+    std::stringstream buffer;
+    buffer << in.rdbuf();
+    std::string source = buffer.str();
+    in.close();
+
+    Lexer lexer(source);
+    Parser parser(lexer.scanTokens());
+    parser.parseProgram();
+    // Byte offset of each line start (columns count bytes from 1)
+    std::vector<size_t> lineStart = {0, 0};
+    for (size_t i = 0; i < source.size(); ++i) {
+        if (source[i] == '\n') lineStart.push_back(i + 1);
+    }
+    auto at = [&](int line, int column) -> size_t {
+        if (line < 1 || static_cast<size_t>(line) >= lineStart.size()) return std::string::npos;
+        size_t offset = lineStart[static_cast<size_t>(line)] + static_cast<size_t>(column - 1);
+        return offset < source.size() ? offset : std::string::npos;
+    };
+    int fixed = 0;
+    for (const auto& list : parser.bracketLists()) {
+        size_t open = at(list.openLine, list.openColumn), close = at(list.closeLine, list.closeColumn);
+        if (open == std::string::npos || close == std::string::npos || source[open] != '[' || source[close] != ']') continue;
+        source[open] = '<';
+        source[close] = '>';
+        ++fixed;
+    }
+    if (fixed > 0) {
+        std::ofstream out(path, std::ios::binary);
+        out << source;
+    }
+    for (const auto& e : parser.getErrors()) std::cerr << path << ": " << e << "\n";
+    std::cout << path << ": " << fixed << " list" << (fixed == 1 ? "" : "s") << " rewritten\n";
+    return parser.hasErrors() ? 1 : 0;
 }
 
 int cmdCheck(const std::string& path, bool asJson, bool fromStdin) {
@@ -983,6 +1029,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (command == "check") return cmdCheck(file, asJson, fromStdin);
+    if (command == "fix-lists") return cmdFixLists(file);
     if (command == "emit") return cmdEmit(file, output);
     if (command == "build") return cmdBuild(file, output, argv[0]);
     if (command == "run") return cmdRun(file, programArgs, argv[0]);

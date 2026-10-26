@@ -70,6 +70,9 @@ SemanticType Analyser::analyseExpressionInner(const Expr* expression, bool allow
         case ExprKind::New: return analyseNew(static_cast<const NewExpr*>(expression));
         case ExprKind::List: {
             const auto* list = static_cast<const ListExpr*>(expression);
+            if (list->oldBrackets && warnedOldLists.insert(expression).second) {
+                warning(expression, "Lists are written with < >: <1, 2> instead of [1, 2]");
+            }
             return analyseCollection(list->elements, false, expression);
         }
         case ExprKind::Set: {
@@ -1093,7 +1096,7 @@ std::optional<Symbol> Analyser::builtinMethod(const SemanticType& receiver, cons
             if (name == "toBin") based.radix = 2;
             return make({}, based);
         }
-        if (name == "toFixed" && !receiver.isInteger()) return make({{"digits", Int}}, Str);
+        if (name == "toFixed" && !receiver.isInteger()) return make({{"digits", Int}}, receiver);
         return std::nullopt;
     }
     if (receiver.is(K::Bul)) {
@@ -1536,6 +1539,25 @@ SemanticType Analyser::analyseCall(const CallExpr* expression) {
         static_cast<const IdentifierExpr*>(callee)->name.type == TokenType::IDENTIFIER) {
         const auto* id = static_cast<const IdentifierExpr*>(callee);
         const Symbol* symbol = resolveSymbol(id->name.lexeme);
+        // A generic function: first:Int(...), or its types from the arguments
+        // (and from what the value goes into)
+        Symbol filled;
+        if (symbol && symbol->templateId >= 0 && symbol->kind == SymbolKind::Function) {
+            const GenericTemplate t = templates[static_cast<size_t>(symbol->templateId)];
+            const auto* decl = static_cast<const FuncDeclStmt*>(t.decl);
+            std::optional<std::vector<SemanticType>> types;
+            if (!id->typeArgs.empty()) types = resolveTypeArgs(id->typeArgs, id->line, id->column);
+            else types = inferTypeArgs(t, decl->params, expression->args, &decl->returnType, expression, id->name.lexeme);
+            const Symbol* instance = types ? instantiateFunction(symbol->templateId, *types, id->line, id->column) : nullptr;
+            if (!instance) {
+                for (const auto& a : expression->args) analyseExpression(a.value.get());
+                return SemanticType::unknown();
+            }
+            filled = *instance;
+            symbol = &filled;
+        } else if (!id->typeArgs.empty() && symbol) {
+            error(callee, "'" + id->name.lexeme + "' is not a generic function, so it takes no types after ':'");
+        }
         if (symbol && symbol->kind == SymbolKind::Builtin && symbol->cppName == "dessa::zip") {
             return analyseZip(expression, *symbol);
         }
@@ -1585,6 +1607,33 @@ SemanticType Analyser::analyseCall(const CallExpr* expression) {
     // obj.method(...) / obj?.method(...) / super.method(...) / super.init(...)
     if (callee->kind == ExprKind::Member) {
         const auto* member = static_cast<const MemberExpr*>(callee);
+        // db.all:Person(...): a generic method, filled in. The call then names
+        // the filled-in method (all$1), for the code generators too.
+        if (member->name.type == TokenType::IDENTIFIER && member->name.lexeme.find('$') == std::string::npos) {
+            const size_t diagnosticCount = diagnostics.size();
+            const SemanticType objectType = withoutNil(analyseExpression(member->object.get()));
+            diagnostics.resize(diagnosticCount);
+            int templateId = -1;
+            for (const ClassInfo* k = objectType.isClass() ? findClass(objectType) : nullptr; k && templateId < 0;
+                 k = k->parent ? findClass(*k->parent) : nullptr) {
+                if (auto m = k->methodTemplates.find(member->name.lexeme); m != k->methodTemplates.end()) templateId = m->second;
+            }
+            if (templateId >= 0) {
+                const GenericTemplate t = templates[static_cast<size_t>(templateId)];
+                const auto* decl = static_cast<const FuncDeclStmt*>(t.decl);
+                std::optional<std::vector<SemanticType>> types;
+                if (!member->typeArgs.empty()) types = resolveTypeArgs(member->typeArgs, member->line, member->column);
+                else types = inferTypeArgs(t, decl->params, expression->args, &decl->returnType, expression, member->name.lexeme);
+                const Symbol* instance = types ? instantiateMethod(templateId, *types, member->line, member->column) : nullptr;
+                if (!instance) {
+                    for (const auto& a : expression->args) analyseExpression(a.value.get());
+                    return SemanticType::unknown();
+                }
+                const_cast<MemberExpr*>(member)->name.lexeme = instance->name;
+            } else if (!member->typeArgs.empty() && objectType.isClass()) {
+                error(callee, "'" + member->name.lexeme + "' is not a generic method, so it takes no types after ':'");
+            }
+        }
         SemanticType memberType = analyseExpression(callee);
         const Symbol* symbol = memberOf(callee);
         if (!symbol) {
@@ -1701,8 +1750,21 @@ SemanticType Analyser::analyseNew(const NewExpr* expression) {
         return simple(SemanticTypeKind::Obj);
     }
     const std::string& className = expression->className.lexeme;
-    const Symbol* symbol = className.find('.') != std::string::npos
-        ? resolveQualified(className, expression->line, expression->column) : resolveSymbol(className);
+    Symbol typeParameter;   // new T() in a filled-in generic: the class T is
+    if (expression->resolvedClass) {
+        const SemanticType& t = *expression->resolvedClass;
+        if (!t.isClass()) {
+            error(expression, "new " + className + "() needs " + className + " to be a class, not " + t.toString());
+            for (const auto& arg : expression->args) analyseExpression(arg.value.get());
+            return SemanticType::unknown();
+        }
+        typeParameter.kind = SymbolKind::Class;
+        typeParameter.name = t.name;
+        typeParameter.moduleId = t.moduleId;
+        typeParameter.type = t;
+    }
+    const Symbol* symbol = expression->resolvedClass ? &typeParameter
+        : className.find('.') != std::string::npos ? resolveQualified(className, expression->line, expression->column) : resolveSymbol(className);
     if (!symbol || symbol->kind != SymbolKind::Class) {
         if (symbol && symbol->kind == SymbolKind::Interface) {
             error(expression, "Cannot create an instance of interface '" + className + "'; create a class that implements it");
@@ -1713,6 +1775,44 @@ SemanticType Analyser::analyseNew(const NewExpr* expression) {
         }
         for (const auto& arg : expression->args) analyseExpression(arg.value.get());
         return SemanticType::unknown();
+    }
+
+    // A generic class: new Box:Int(5), or the types from what the value goes
+    // into (var[Box:Int] b = new Box(5)), or from init's arguments
+    Symbol filled;
+    if (symbol->templateId >= 0) {
+        const GenericTemplate t = templates[static_cast<size_t>(symbol->templateId)];
+        std::optional<std::vector<SemanticType>> types;
+        const auto hint = typeHints.find(expression);
+        const SemanticType hinted = hint == typeHints.end() ? SemanticType::unknown() : withoutNil(hint->second);
+        const auto hintedInstance = classInstances.find(hinted.key());
+        if (!expression->typeArgs.empty()) {
+            types = resolveTypeArgs(expression->typeArgs, expression->line, expression->column);
+        } else if (hinted.isClass() && hintedInstance != classInstances.end() && hintedInstance->second.first == symbol->templateId) {
+            types = hintedInstance->second.second;
+        } else {
+            static const std::vector<Param> none;
+            const std::vector<Param>* params = &none;
+            for (const auto& member : static_cast<const ClassDeclStmt*>(t.decl)->members) {
+                if (member && member->kind == StmtKind::FuncDecl && static_cast<const FuncDeclStmt*>(member.get())->isConstructor) {
+                    params = &static_cast<const FuncDeclStmt*>(member.get())->params;
+                }
+            }
+            types = inferTypeArgs(t, *params, expression->args, nullptr, expression, "new " + className);
+        }
+        const SemanticType type = types ? instantiateClass(symbol->templateId, *types, expression->line, expression->column)
+                                        : SemanticType::unknown();
+        if (type.isUnknown()) {
+            for (const auto& arg : expression->args) analyseExpression(arg.value.get());
+            return SemanticType::unknown();
+        }
+        filled = *symbol;
+        filled.templateId = -1;
+        filled.name = type.name;
+        filled.type = type;
+        symbol = &filled;
+    } else if (!expression->typeArgs.empty()) {
+        error(expression, "'" + className + "' is not a generic class, so it takes no types after ':'");
     }
 
     const ClassInfo* info = findClass(symbol->type);

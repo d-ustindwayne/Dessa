@@ -161,6 +161,10 @@ static inline void ds_trace(const char* file, int line) {
 }
 
 DS_NORETURN void ds_throw_str(ds_str* message);    /* takes the count */
+/* Makes the Error object for thrown text (runtime 0) or a runtime error
+ * (runtime 1): the program sets it to the prelude's _error */
+extern void* (*ds_error_hook)(ds_str* message, int runtime);
+extern const ds_type* ds_error_type;   /* the Error class: printed without "Uncaught: " */
 DS_NORETURN void ds_throw_obj(void* object);       /* takes the count */
 DS_NORETURN void ds_rethrow(void);
 DS_NORETURN void ds_fail(const char* format, ...) __attribute__((format(printf, 1, 2)));
@@ -478,7 +482,7 @@ ds_str* ds_str_replace(ds_str* s, ds_str* from, ds_str* to, bool all);
 ds_str* ds_str_substr(ds_str* s, ds_int start, ds_int length);
 ds_str* ds_str_repeat(ds_str* s, ds_int count);
 ds_int ds_str_compare(ds_str* a, ds_str* b);
-ds_str* ds_to_fixed(ds_dbl v, ds_int digits);
+ds_dbl ds_to_fixed(ds_dbl v, ds_int digits);
 ds_chr ds_chr_upper(ds_chr c);
 ds_chr ds_chr_lower(ds_chr c);
 bool ds_chr_is_space(ds_chr c);

@@ -79,7 +79,7 @@ class Big {
 }
 
 // ============================================================
-// Statistics on a list of numbers (Int lists: write them as [1, 2, 3]
+// Statistics on a list of numbers (Int lists: write them as <1, 2, 3>
 // or convert with .map((x[Int]) := Dbl(x)))
 // ============================================================
 
@@ -94,7 +94,7 @@ func[Dbl] sum(numbers[Dbl<>]) {
     return total;
 }
 
-// The average: mean([2, 4, 9]) is 5.
+// The average: mean(<2, 4, 9>) is 5.
 func[Dbl] mean(numbers[Dbl<>]) {
     _needNumbers(numbers, "mean");
     return sum(numbers) / numbers.length();

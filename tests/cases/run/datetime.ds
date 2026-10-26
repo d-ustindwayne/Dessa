@@ -35,15 +35,15 @@ print(parseDate("2026-02-03 04:05:06.7Z").toIso(), parseDate("1999-12-31T23:59",
 
 // Your own language
 addLocale(new Locale("eo",
-    ["januaro", "februaro", "marto", "aprilo", "majo", "junio", "julio", "aŭgusto", "septembro", "oktobro", "novembro", "decembro"],
-    ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aŭg", "sep", "okt", "nov", "dec"],
-    ["lundo", "mardo", "merkredo", "ĵaŭdo", "vendredo", "sabato", "dimanĉo"],
-    ["lu", "ma", "me", "ĵa", "ve", "sa", "di"]));
+    <"januaro", "februaro", "marto", "aprilo", "majo", "junio", "julio", "aŭgusto", "septembro", "oktobro", "novembro", "decembro">,
+    <"jan", "feb", "mar", "apr", "maj", "jun", "jul", "aŭg", "sep", "okt", "nov", "dec">,
+    <"lundo", "mardo", "merkredo", "ĵaŭdo", "vendredo", "sabato", "dimanĉo">,
+    <"lu", "ma", "me", "ĵa", "ve", "sa", "di">));
 print(t.format("EEEE, d MMMM yyyy", "eo"), localeCodes().length());
 
 print(dateNow().year() >= 2026, typeof(dateNow("UTC")));
 
-for (var[Str] bad in ["2026-02-30", "2026-13-01", "hello", "2026-10-17T25:00"]) {
+for (var[Str] bad in <"2026-02-30", "2026-13-01", "hello", "2026-10-17T25:00">) {
     try {
         parseDate(bad);
     } catch (e[Str]) {

@@ -2,7 +2,7 @@
 5 3 1.25 0
 true false true false true
 A z q
-42! 2.5 true c [1, 2] {"a": 1}
+42! 2.5 true c <1, 2> {"a": 1}
 0xff
 1 LOW
 24

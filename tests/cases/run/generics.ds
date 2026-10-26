@@ -1,0 +1,125 @@
+// Generics: class Box:T, class Pair:[K, V], func[T] first:T(...), filled in for each use
+class Box:T {
+    var[T] value;
+
+    init(value[T]) {
+        this.value = value;
+    }
+
+    func[T] get() {
+        return this.value;
+    }
+
+    func[Box:T] copy() {
+        return new Box:T(this.value);
+    }
+
+    func[Box:U] map:U(f[Func[U, [T]]]) {
+        return new Box(f(this.value));
+    }
+}
+
+class Pair:[K, V] {
+    var[K] key;
+    var[V] value;
+    init(key[K], value[V]) {
+        this.key = key;
+        this.value = value;
+    }
+}
+
+func[T] first:T(items[T<>]) {
+    return items<0>;
+}
+
+func[Emp] show:T(value[T]) {
+    print(typeof(value), value);
+}
+
+var[Box:Int] a = new Box(5);
+var[Box:Str] b = new Box:Str("hi");
+var[Box:Int] c = new Box(7);
+print(a.get() + c.get(), b.get(), a, typeof(b), a.copy().get());
+var[Pair:[Str, Int]] p = new Pair("age", 30);
+print(p.key, p.value, p);
+print(first(<1, 2, 3>), first(<"x", "y">), first:Dbl(<1.5>));
+show(3);
+show("text");
+var[Box:Int<>] boxes = <new Box(1), new Box(2)>;
+print(boxes.length(), boxes<1>.value);
+var[Box:[Int<>]] listBox = new Box(<1, 2>);
+print(listBox.get().length());
+$("lib.generic_coll") { Stack, mapAll }
+
+class Point {
+    var[Int] x;
+    var[Int] y;
+    init(x[Int], y[Int]) {
+        this.x = x;
+        this.y = y;
+    }
+}
+
+
+class IntBox(Box:Int) {
+    func[Int] doubled() {
+        return this.value * 2;
+    }
+}
+
+class Named:T(Box:T) {
+    var[Str] name = "";
+    init(name[Str], value[T]) {
+        super(value);
+        this.name = name;
+    }
+}
+
+var[Stack:Point] s = new Stack();
+s.push(new Point(1, 2));
+s.push(new Point(3, 4));
+print(s.size(), s.pop(), s.size());
+print(mapAll(<1, 2, 3>, (n[Int]) := n * 10));
+print(mapAll(<"a", "bb">, (t[Str]) := t.length()));
+var[IntBox] ib = new IntBox(21);
+print(ib.doubled());
+var[Named:Str] n = new Named("greeting", "hello");
+print(n.name, n.value, n);
+var[Box:Int | Nil] maybe = nil;
+print(maybe);
+maybe = new Box(3);
+if (maybe is Box:Int) print(maybe.value);
+var[Obj] o = new Box(2.5);
+print(o);
+
+// Generic methods, new T()
+class Member {
+    var[Str] name = "";
+    var[Int] age = 0;
+}
+
+class Registry {
+    var[Str<>] names = <"Ann", "Bo">;
+
+    func[T<>] all:T() {
+        var[T<>] out = <>;
+        for (var[Str] n in this.names) {
+            var[T] item = new T();
+            setField(item, "name", n);
+            out.push(item);
+        }
+        return out;
+    }
+
+    func[U<>] mapNames:U(f[Func[U, [Str]]]) {
+        var[U<>] out = <>;
+        for (var[Str] n in this.names) out.push(f(n));
+        return out;
+    }
+}
+var[Registry] r = new Registry();
+var[Member<>] members = r.all:Member();
+print(members);
+print(r.mapNames((n[Str]) := n.length()));
+var[Box:Str] mapped = new Box(20).map((x[Int]) := $"<{x}>");
+print(mapped, mapped.value);

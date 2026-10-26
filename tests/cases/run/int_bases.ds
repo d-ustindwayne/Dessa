@@ -6,6 +6,6 @@ var[Int[8]] o = x.toOct();
 print(o, o.toHex().toDec());
 var[Int] neg = -10;
 print(neg.toHex(), neg.toBin());
-var[Int<>] xs = [1, 2, 3];
+var[Int<>] xs = <1, 2, 3>;
 print(xs.map((v[Int]) := v * 16).length(), (xs<2> * 100).toHex());
 print($"{x.toBin()} {0b11.toDec() + 1}");

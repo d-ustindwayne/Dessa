@@ -22,10 +22,10 @@ hello();
 var[Func[Bul, [Str, Int]]] longerThan = (s[Str], n[Int]) := s.length() > n;
 print(longerThan("dessa", 3), longerThan("hi", 3));
 
-var[Func[Int, [Int, Int]]<>] ops = [
+var[Func[Int, [Int, Int]]<>] ops = <
     (a[Int], b[Int]) := a + b,
     (a[Int], b[Int]) := a * b
-];
+>;
 for (var[Func[Int, [Int, Int]]] op in ops) {
     print(op(6, 7));
 }
@@ -42,7 +42,7 @@ func[Int] sum(numbers[Int*]) {
     return total;
 }
 print(sum(), sum(1), sum(1, 2, 3, 4));
-var[Int<>] more = [10, 20];
+var[Int<>] more = <10, 20>;
 print(sum(...more), sum(1, ...more, 2));
 
 func[Str] greetAll(greeting[Str], names[Str*]) {
@@ -63,11 +63,11 @@ enum Level {
     LOW,
     HIGH
 }
-func[Str] describe(value[Int], level[Level]=Level.LOW, tags[Str<>]=[], note[Str | Nil]=nil) {
+func[Str] describe(value[Int], level[Level]=Level.LOW, tags[Str<>]=<>, note[Str | Nil]=nil) {
     return $"{value} {level} {tags} {note ?? "no note"}";
 }
 print(describe(1));
-print(describe(2, Level.HIGH, ["x"], "noted"));
+print(describe(2, Level.HIGH, <"x">, "noted"));
 print(describe(3, note: "only a note"));
 
 class Box {

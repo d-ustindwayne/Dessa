@@ -40,7 +40,7 @@ var[Str] title = "hello"
     |> repeatTimes(2)
     |> shout();
 print(title);
-print([3, 1, 2] |> sorted() |> describe(" < "));
+print(<3, 1, 2> |> sorted() |> describe(" < "));
 func[Int<>] sorted(items[Int<>]) {
     var[Int<>] copy = items.copy();
     copy.sort();

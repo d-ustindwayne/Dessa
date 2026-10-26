@@ -1,5 +1,5 @@
 name = sql
-version = 1.2.0
+version = 2.0.0
 entry = sql.dm
 description = SQLite and SQL Server / ODBC databases
 

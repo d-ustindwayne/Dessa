@@ -23,15 +23,7 @@
 
 $("sql") { _odbcDrivers, _odbcOpen, _sqliteOpen, _query, _execute, _close }   // native part
 
-class SqlError {
-    var[Str] message = "";
-    init(message[Str]) {
-        this.message = message;
-    }
-    func[Str] toStr() {
-        return $"SqlError: {this.message}";
-    }
-}
+class SqlError(Error) {}   // an Error: e.message, prints as SqlError: ...
 
 // A query parameter as tagged text for the native part
 func[Str] _tag(value[Int | Dbl | Str | Bul | Nil]) {
@@ -64,7 +56,7 @@ func[Str] _nameKey(name[Str]) {
 func[Str<>] _matchFields(columns[Str<>], fields[Str<>]) {
     var[Map[Str, Str]] byKey = {:};
     for (var[Str] f in fields) byKey<_nameKey(f)> = f;
-    var[Str<>] out = [];
+    var[Str<>] out = <>;
     for (var[Str] c in columns) out.push(byKey.getOr(_nameKey(c), ""));
     return out;
 }
@@ -100,7 +92,7 @@ class Database {
     var[Str] kind = "";          // "odbc" or "sqlite"
 
     func[Str<>] _params(values[(Int | Dbl | Str | Bul | Nil)<>]) {
-        var[Str<>] tagged = [];
+        var[Str<>] tagged = <>;
         for (var[Int | Dbl | Str | Bul | Nil] v in values) tagged.push(_tag(v));
         return tagged;
     }
@@ -120,7 +112,7 @@ class Database {
     func[Obj<>] queryAll(sql[Str], params[(Int | Dbl | Str | Bul | Nil)*]) {
         var[Str<>] raw = this._select(sql, params);
         var[Int] columns = Int(raw<0>);
-        var[Obj<>] rows = [];
+        var[Obj<>] rows = <>;
         var[Int] at = columns + 1;
         while (at + columns <= raw.length() && columns > 0) {
             var[Obj] row = new Obj();
@@ -138,21 +130,22 @@ class Database {
         return rows<0>;
     }
 
-    // Every row of a SELECT, each put in a new object made by `make`: the
-    // columns go into the fields with the same name (case and _ don't matter,
-    // so first_name fills firstName). Columns without a field are left out.
+    // Every row of a SELECT as your class: the columns go into the fields
+    // with the same name (case and _ don't matter, so first_name fills
+    // firstName). Columns without a field are left out. The class needs an
+    // init() without arguments (or no init at all).
     //
     //     class Person { var[Int] id = 0; var[Str] name = ""; }
-    //     for (var[Person] p in db.queryAllAs(() := new Person(), "SELECT * FROM people")) print(p.name);
-    func[Obj<>] queryAllAs(make[Func[Obj]], sql[Str], params[(Int | Dbl | Str | Bul | Nil)*]) {
+    //     for (var[Person] p in db.queryAllAs:Person("SELECT * FROM people")) print(p.name);
+    func[T<>] queryAllAs:T(sql[Str], params[(Int | Dbl | Str | Bul | Nil)*]) {
         var[Str<>] raw = this._select(sql, params);
         var[Int] columns = Int(raw<0>);
         var[Str<>] names = raw.slice(1, columns + 1);
-        var[Obj<>] items = [];
-        var[Str<>] fieldFor = [];     // column -> field name ("" if none)
+        var[T<>] items = <>;
+        var[Str<>] fieldFor = <>;     // column -> field name ("" if none)
         var[Int] at = columns + 1;
         while (at + columns <= raw.length() && columns > 0) {
-            var[Obj] item = make();
+            var[T] item = new T();
             if (fieldFor.isEmpty()) fieldFor = _matchFields(names, fieldsOf(item));
             for (var[Int] c = 0; c < columns; c++) {
                 if (!fieldFor<c>.isEmpty()) _fill(item, fieldFor<c>, _cellValue(raw<at + c>), names<c>);
@@ -163,12 +156,12 @@ class Database {
         return items;
     }
 
-    // The first row as an object of your class (see queryAllAs), or nil if there is none.
+    // The first row as your class (see queryAllAs), or nil if there is none.
     //
-    //     var[Obj] one = db.queryAs(() := new Person(), "SELECT * FROM people WHERE id = ?", 7);
-    //     if (one is Person) print(one.name);
-    func[Obj] queryAs(make[Func[Obj]], sql[Str], params[(Int | Dbl | Str | Bul | Nil)*]) {
-        var[Obj<>] items = this.queryAllAs(make, sql, ...params);
+    //     var[Person | Nil] one = db.queryAs:Person("SELECT * FROM people WHERE id = ?", 7);
+    //     if (one != nil) print(one.name);
+    func[T | Nil] queryAs:T(sql[Str], params[(Int | Dbl | Str | Bul | Nil)*]) {
+        var[T<>] items = this.queryAllAs:T(sql, ...params);
         if (items.isEmpty()) return nil;
         return items<0>;
     }
@@ -195,7 +188,7 @@ class Database {
 
 // true / 1 / yes -> "yes" (ODBC only knows yes and no)
 func[Str] yesNo(value[Str]) {
-    return ["true", "yes", "1"].includes(value.trim().lower()) ? "yes" : "no";
+    return <"true", "yes", "1">.includes(value.trim().lower()) ? "yes" : "no";
 }
 
 // Any database through an ODBC connection string, e.g.
@@ -263,7 +256,7 @@ func[Database] connectMssql(connection[Str]) {
             case "trusted_connection" := { key = "Trusted_Connection"; }
             case "integrated security" := {
                 key = "Trusted_Connection";
-                value = ["true", "yes", "sspi"].includes(value.lower()) ? "yes" : "no";
+                value = <"true", "yes", "sspi">.includes(value.lower()) ? "yes" : "no";
             }
             default := {}
         }
@@ -273,7 +266,7 @@ func[Database] connectMssql(connection[Str]) {
 
     if (!parts.has("Driver")) {
         var[Str] driver = "";
-        for (var[Str] candidate in ["ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server", "SQL Server"]) {
+        for (var[Str] candidate in <"ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server", "SQL Server">) {
             if (driver.isEmpty() && drivers().includes(candidate)) driver = candidate;
         }
         if (driver.isEmpty()) {

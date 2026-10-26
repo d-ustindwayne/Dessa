@@ -9,7 +9,7 @@
  *     isPangram("The quick brown fox jumps over the lazy dog")   true
  *     splitCamel("userNameField")            "user Name Field"  ("HTMLParser": "HTML Parser")
  *     countVowels("Mister Tallyman")         5
- *     likes(["Ann", "Bea", "Cy", "Di"])      "Ann, Bea and 2 others like this"
+ *     likes(<"Ann", "Bea", "Cy", "Di">)      "Ann, Bea and 2 others like this"
  */
 
 func[Str] padRight(text[Str], width[Int], fill[Str]=" ") {

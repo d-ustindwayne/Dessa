@@ -22,9 +22,28 @@ entry = main.ds
 description = A small shop
 
 [dependencies]
-sql = 1.0.0
-json = 1.0.0
+sql = ^2.0.0
+json = 1.2.0
 ```
+
+A dependency is a version or a range of versions; riv takes the newest one
+that fits:
+
+| Written | Means |
+|---|---|
+| `1.2.0` | exactly 1.2.0 |
+| `^1.2.0` | 1.2.0 or newer, below 2.0.0 (for 0.x: `^0.4.1` stays below 0.5.0) |
+| `~1.2.0` | 1.2.0 or newer, below 1.3.0 |
+| `>=1.0 <2.0` | every condition (`>`, `>=`, `<`, `<=`, `=`), separated by spaces |
+| `1.x`, `1.2.x` | any version starting that way |
+| `*` | any version |
+
+`riv install` writes `riv.lock`: the exact version of every package it
+installed (dependencies of dependencies too) and the sha256 of its files.
+Later installs take those same versions while they still fit `riv.pkg`, and
+stop when a package's files are not the ones the lock remembers, so a package
+can't change under you. `riv upgrade` (or `riv upgrade <name>`) takes the
+newest versions `riv.pkg` allows and writes a new lock.
 
 Programs then import the packages like libraries:
 
@@ -38,10 +57,11 @@ $("colors") { red, banner }
 | Command | What it does |
 |---|---|
 | `riv init [name]` | create `riv.pkg` (and `main.ds`) in the current folder |
-| `riv add <name>` | add a dependency (the newest version) and install it |
-| `riv add <name>@1.0.0` | add a specific version |
+| `riv add <name>` | add a dependency (`^` the newest version) and install it |
+| `riv add <name>@1.0.0` | add a specific version, or a range: `riv add sql@~2.0` |
 | `riv remove <name>` | remove a dependency |
-| `riv install` | install every dependency (and what they need) into `riv_modules/` |
+| `riv install` | install every dependency (and what they need) into `riv_modules/`, as in `riv.lock` |
+| `riv upgrade [name]` | the newest versions `riv.pkg` allows, instead of `riv.lock`'s |
 | `riv list` | show the dependencies and whether they are installed |
 | `riv search [text]` | list the packages that are available |
 | `riv info <name>` | versions, size, infohash and magnet link of a package |
@@ -51,8 +71,8 @@ $("colors") { red, banner }
 | `riv run [args]` | run the entry file |
 | `riv update` | install the newest Dessa (the compiler and riv) from GitHub; `--force` reinstalls it |
 
-Commit `riv.pkg` with your project, but not `riv_modules/`: anyone can recreate
-that folder with `riv install`.
+Commit `riv.pkg` and `riv.lock` with your project, but not `riv_modules/`:
+anyone can recreate that folder, with the same versions, with `riv install`.
 
 ## Keeping Dessa up to date
 

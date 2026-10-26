@@ -1,20 +1,20 @@
 // Corner cases for the code generator
 
-var[Int<>] empty = [];
-var[Dbl<>] doubles = [1, 2.5];
-var[Flt<>] floats = [1.5, 2];
+var[Int<>] empty = <>;
+var[Dbl<>] doubles = <1, 2.5>;
+var[Flt<>] floats = <1.5, 2>;
 var[Str{}] words = {"a", ...{"b", "c"}};
 var[Int | Nil] maybe = empty.length() > 0 ? 1 : nil;
 var[Int<> | Nil] maybeList = nil;
 print(empty, doubles, floats, words, maybe, maybeList);
-maybeList = [3, 4];
+maybeList = <3, 4>;
 print(maybeList);
 
 // Lambdas inside methods can use this
 class Counter {
     var[Int] count = 0;
     func[Int<>] stepsTo(n[Int]) {
-        var[Int<>] out = [];
+        var[Int<>] out = <>;
         const[Int] step = (i[Int]) := {
             this.count++;
             return i * 10;
@@ -30,7 +30,7 @@ print(counter.stepsTo(3), counter.count);
 func[Int] twice(x[Int]) {
     return x * 2;
 }
-var[Int<>] doubled = [1, 2, 3].map(twice);
+var[Int<>] doubled = <1, 2, 3>.map(twice);
 print(doubled);
 
 // Interfaces in collections
@@ -55,7 +55,7 @@ class[Shape] Circle {
         return 3.0 * this.r * this.r;
     }
 }
-var[Shape<>] shapes = [new Square(2.0), new Circle(1.0)];
+var[Shape<>] shapes = <new Square(2.0), new Circle(1.0)>;
 var[Dbl] total = 0.0;
 for (var[Shape] s in shapes) {
     total += s.area();
@@ -89,7 +89,7 @@ print(mask, $"{mask}");
 print("\x41\x42", $"\x43{1}");
 
 // Bul lists can be changed by index
-var[Bul<>] flags = [false, false, true];
+var[Bul<>] flags = <false, false, true>;
 flags<0> = true;
 flags<1> = !flags<2>;
 print(flags);

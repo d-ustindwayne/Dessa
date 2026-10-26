@@ -17,7 +17,7 @@
 
 // The digits of a code, without spaces or dashes; error on anything else.
 func[Int<>] _digitsOf(code[Str], what[Str], allowX[Bul]=false) {
-    var[Int<>] digits = [];
+    var[Int<>] digits = <>;
     var[Chr<>] chars = code.chars();
     for (var[Int] i = 0; i < chars.length(); i++) {
         var[Chr] c = chars<i>;

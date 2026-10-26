@@ -8,7 +8,7 @@
  */
 
 // Command-line arguments given to the program (not including its name).
-//     dessa run app.ds -- hello 42   ->  args() is ["hello", "42"]
+//     dessa run app.ds -- hello 42   ->  args() is <"hello", "42">
 func[Str<>] args() {
     ...
 }

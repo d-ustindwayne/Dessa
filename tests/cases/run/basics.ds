@@ -7,7 +7,7 @@ var[Flt] money = 9.23;
 var[Flt] money2 = 9.23f;
 var[Dbl] score = 95.6d;
 var[Chr] grade = 'A';
-var[Str<>] students = ["Dustin", "Dwayne", "Diaz"];
+var[Str<>] students = <"Dustin", "Dwayne", "Diaz">;
 var[Int | Nil] a;
 
 print(name, age, male, money, money2, score, grade);

@@ -1,5 +1,7 @@
 // src/analyser/semtype.cpp
 #include "semtype.hpp"
+
+#include <unordered_map>
 #include <algorithm>
 #include <sstream>
 #include <utility>
@@ -119,6 +121,26 @@ std::string SemanticType::key() const {
     return std::to_string(moduleId) + ":" + name;
 }
 
+static std::unordered_map<std::string, std::string>& shownNames() {
+    static std::unordered_map<std::string, std::string> names;
+    return names;
+}
+
+void SemanticType::setShownName(const std::string& key, const std::string& shown) {
+    shownNames()[key] = shown;
+}
+
+void SemanticType::clearShownNames() {
+    shownNames().clear();
+}
+
+// A union element needs brackets: (Person | Int)<> is not Person | Int<>.
+static std::string elementString(const SemanticType* element) {
+    if (!element) return "Unknown";
+    if (element->kind == SemanticTypeKind::Union) return "(" + element->toString() + ")";
+    return element->toString();
+}
+
 std::string SemanticType::toString() const {
     switch (kind) {
         case SemanticTypeKind::Unknown: return "Unknown";
@@ -133,12 +155,16 @@ std::string SemanticType::toString() const {
         case SemanticTypeKind::Dbl: return "Dbl";
         case SemanticTypeKind::Chr: return "Chr";
         case SemanticTypeKind::Obj: return "Obj";
-        case SemanticTypeKind::List: return (elementType ? elementType->toString() : "Unknown") + "<>";
-        case SemanticTypeKind::Set: return (elementType ? elementType->toString() : "Unknown") + "{}";
+        case SemanticTypeKind::List: return elementString(elementType.get()) + "<>";
+        case SemanticTypeKind::Set: return elementString(elementType.get()) + "{}";
         case SemanticTypeKind::Map:
             return "Map[" + (keyType ? keyType->toString() : "Unknown") + ", " +
                    (elementType ? elementType->toString() : "Unknown") + "]";
-        case SemanticTypeKind::UserDefined: return name;
+        case SemanticTypeKind::UserDefined: {
+            if (name.find('$') == std::string::npos) return name;
+            auto shown = shownNames().find(key());
+            return shown == shownNames().end() ? name : shown->second;
+        }
         case SemanticTypeKind::Union: {
             std::ostringstream out;
             for (size_t i = 0; i < unionMembers.size(); ++i) {
