@@ -1,24 +1,24 @@
 # Benchmark results
 
-Measured 2026-10-27 06:45 on 11th Gen Intel(R) Core(TM) i5-1155G7 @ 2.50GHz, Windows 11.
+Measured 2026-10-27 (the code of 0.2.9, before its version number changed) on 11th Gen Intel(R) Core(TM) i5-1155G7 @ 2.50GHz, Windows 11.
 
 Times are milliseconds for each task alone (lower is faster). Every language ran the
 same algorithm and gave the same result.
 
 | Task | C++ | Java | JavaScript | Python | Dessa | Dessa (C++) | Dessa (JS) |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| loop | 3,287 | 3,279 | 10,743 | 75,051 | 3,448 | 3,072 | 26,550 |
-| fib | 3 | 7 | 57 | 577 | 16 | 10 | 196 |
-| sieve | 26 | 54 | 75 | 2,524 | 117 | 71 | 704 |
-| strings | 19 | 22 | 126 | 2,712 | 29 | 41 | 205 |
-| sorting | 63 | 103 | 423 | 1,116 | 88 | 99 | 956 |
-| maps | 171 | 173 | 218 | 854 | 274 | 305 | 1,708 |
-| objects | 180 | 23 | 33 | 2,276 | 36 | 42 | 406 |
-| mandelbrot | 36 | 40 | 43 | 3,950 | 79 | 59 | 77 |
-| **all tasks** | **3,785** | **3,701** | **11,718** | **89,060** | **4,087** | **3,699** | **30,802** |
-| times C++ | 1.0x | 1.0x | 3.1x | 23.5x | 1.1x | 1.0x | 8.1x |
+| loop | 3,219 | 3,207 | 10,612 | 71,374 | 2,998 | 3,094 | 16,629 |
+| fib | 2 | 7 | 17 | 342 | 13 | 8 | 36 |
+| sieve | 25 | 50 | 58 | 1,405 | 83 | 51 | 446 |
+| strings | 20 | 20 | 106 | 1,466 | 19 | 29 | 107 |
+| sorting | 60 | 96 | 403 | 551 | 60 | 63 | 143 |
+| maps | 160 | 176 | 200 | 347 | 157 | 189 | 293 |
+| objects | 185 | 22 | 25 | 873 | 19 | 30 | 84 |
+| mandelbrot | 35 | 38 | 39 | 1,489 | 50 | 35 | 49 |
+| **all tasks** | **3,706** | **3,616** | **11,460** | **77,847** | **3,399** | **3,499** | **17,787** |
+| times C++ | 1.0x | 1.0x | 3.1x | 21.0x | 0.9x | 0.9x | 4.8x |
 
-Whole run, including starting the program (seconds): C++ 4.0, Java 3.8, JavaScript 11.8, Python 89.1, Dessa 4.2, Dessa (C++) 4.0, Dessa (JS) 30.9.
+Whole run, including starting the program (seconds): C++ 3.8, Java 3.7, JavaScript 11.5, Python 77.9, Dessa 3.5, Dessa (C++) 3.8, Dessa (JS) 17.9.
 
 ## The tasks
 
@@ -37,16 +37,16 @@ Whole run, including starting the program (seconds): C++ 4.0, Java 3.8, JavaScri
 - Java: java version "26.0.1" 2026-04-21
 - JavaScript: Node v24.15.0
 - Python: Python 3.14.4
-- Dessa: dessa 0.2.8 (native, through C: the default)
-- Dessa (C++): dessa 0.2.8 (native, through C++: --cpp)
-- Dessa (JS): dessa 0.2.8 compiled to JavaScript, Node
+- Dessa: dessa 0.2.9 (native, through C: the default)
+- Dessa (C++): dessa 0.2.9 (native, through C++: --cpp)
+- Dessa (JS): dessa 0.2.9 compiled to JavaScript, Node
 
 ## Notes
 
 - C++ is compiled with g++ -O2; Dessa with `dessa build --release` (-O2), through C (gcc)
   by default and through C++ with --cpp. Dessa checks every Int operation for overflow and
   every list index, which the C++ version doesn't.
-- Dessa compiled to JavaScript keeps Int exact to 64 bits: Int variables inside functions are
-  plain numbers while they fit (below 2^53) and BigInts beyond; everywhere else Int is a BigInt.
+- Dessa compiled to JavaScript keeps Int exact to 64 bits: an Int is a plain number while it
+  fits exactly (up to 2^53 - 1) and a BigInt beyond, and every Int operation is checked.
   bench.js only uses JavaScript's own numbers.
 - Java's times include the JIT warming up; Python runs in the standard interpreter.
