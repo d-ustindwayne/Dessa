@@ -2,7 +2,7 @@
   "name": "dessa",
   "displayName": "Dessa",
   "description": "Dessa language support: highlighting, errors as you type, completion, hover, go to definition and run, for .ds files, .dhtml pages and Dessa scripts inside HTML.",
-  "version": "0.2.1",
+  "version": "0.2.8",
   "publisher": "d-ustindwayne",
   "author": {
     "name": "d-ustindwayne"
@@ -111,6 +111,16 @@
         "embeddedLanguages": {
           "source.dessa.embedded.html": "dessa"
         }
+      },
+      {
+        "scopeName": "markdown.dessa.codeblock",
+        "path": "./syntaxes/dessa-markdown-injection.tmLanguage.json",
+        "injectTo": [
+          "text.html.markdown"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.dessa": "dessa"
+        }
       }
     ],
     "snippets": [
@@ -166,7 +176,7 @@
         "dessa.autoBrackets": {
           "type": "boolean",
           "default": true,
-          "description": "Typing $ at the start of a line adds (), and a space right after var, const or func becomes [] (the cursor goes inside), and Enter inside $(\"x\") puts the import list over several lines."
+          "description": "Typing $ at the start of a line adds (), a space right after var, const or func becomes [] and after if, while, for, switch or catch becomes () (the cursor goes inside), { after an import becomes {  }, !! in a type gets spaces, and Enter inside $(\"x\") puts the import list over several lines."
         },
         "dessa.unusedImports": {
           "type": "string",
