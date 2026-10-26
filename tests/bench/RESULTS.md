@@ -1,24 +1,24 @@
 # Benchmark results
 
-Measured 2026-10-23 11:33 on 11th Gen Intel(R) Core(TM) i5-1155G7 @ 2.50GHz, Windows 11.
+Measured 2026-10-27 06:45 on 11th Gen Intel(R) Core(TM) i5-1155G7 @ 2.50GHz, Windows 11.
 
 Times are milliseconds for each task alone (lower is faster). Every language ran the
 same algorithm and gave the same result.
 
 | Task | C++ | Java | JavaScript | Python | Dessa | Dessa (C++) | Dessa (JS) |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| loop | 4,551 | 4,602 | 16,069 | 113,220 | 4,346 | 4,678 | 27,569 |
-| fib | 4 | 15 | 23 | 386 | 20 | 10 | 129 |
-| sieve | 35 | 72 | 86 | 1,883 | 104 | 62 | 640 |
-| strings | 25 | 31 | 167 | 2,076 | 38 | 36 | 287 |
-| sorting | 100 | 158 | 646 | 788 | 86 | 96 | 838 |
-| maps | 261 | 233 | 331 | 420 | 218 | 279 | 1,441 |
-| objects | 295 | 25 | 81 | 1,221 | 50 | 49 | 379 |
-| mandelbrot | 48 | 49 | 76 | 2,024 | 73 | 50 | 71 |
-| **all tasks** | **5,319** | **5,185** | **17,479** | **122,018** | **4,935** | **5,260** | **31,354** |
-| times C++ | 1.0x | 1.0x | 3.3x | 22.9x | 0.9x | 1.0x | 5.9x |
+| loop | 3,287 | 3,279 | 10,743 | 75,051 | 3,448 | 3,072 | 26,550 |
+| fib | 3 | 7 | 57 | 577 | 16 | 10 | 196 |
+| sieve | 26 | 54 | 75 | 2,524 | 117 | 71 | 704 |
+| strings | 19 | 22 | 126 | 2,712 | 29 | 41 | 205 |
+| sorting | 63 | 103 | 423 | 1,116 | 88 | 99 | 956 |
+| maps | 171 | 173 | 218 | 854 | 274 | 305 | 1,708 |
+| objects | 180 | 23 | 33 | 2,276 | 36 | 42 | 406 |
+| mandelbrot | 36 | 40 | 43 | 3,950 | 79 | 59 | 77 |
+| **all tasks** | **3,785** | **3,701** | **11,718** | **89,060** | **4,087** | **3,699** | **30,802** |
+| times C++ | 1.0x | 1.0x | 3.1x | 23.5x | 1.1x | 1.0x | 8.1x |
 
-Whole run, including starting the program (seconds): C++ 5.6, Java 5.4, JavaScript 17.6, Python 122.1, Dessa 5.1, Dessa (C++) 6.0, Dessa (JS) 31.5.
+Whole run, including starting the program (seconds): C++ 4.0, Java 3.8, JavaScript 11.8, Python 89.1, Dessa 4.2, Dessa (C++) 4.0, Dessa (JS) 30.9.
 
 ## The tasks
 
@@ -37,9 +37,9 @@ Whole run, including starting the program (seconds): C++ 5.6, Java 5.4, JavaScri
 - Java: java version "26.0.1" 2026-04-21
 - JavaScript: Node v24.15.0
 - Python: Python 3.14.4
-- Dessa: dessa 0.1.5 (native, through C: the default)
-- Dessa (C++): dessa 0.1.5 (native, through C++: --cpp)
-- Dessa (JS): dessa 0.1.5 compiled to JavaScript, Node
+- Dessa: dessa 0.2.8 (native, through C: the default)
+- Dessa (C++): dessa 0.2.8 (native, through C++: --cpp)
+- Dessa (JS): dessa 0.2.8 compiled to JavaScript, Node
 
 ## Notes
 
