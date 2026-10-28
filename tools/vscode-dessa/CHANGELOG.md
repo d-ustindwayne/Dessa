@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.5
+
+- No changes to the extension (Dessa 0.3.5 fixes `dessa setup wasm` on Linux and macOS)
+
 ## 0.3.4
 
 - No changes to the extension (Dessa 0.3.4 fixes `dessa setup wasm` on Linux and macOS)

@@ -6,7 +6,7 @@
 The build folder must contain dessa and riv (cmake --build <build> --target riv).
 Creates dessa-<version>-<os>-<arch>.zip (Windows) or .tar.gz (Linux/macOS):
 
-    dessa-0.3.4-windows-x64/
+    dessa-0.3.5-windows-x64/
         bin/dessa(.exe) bin/riv(.exe)
         runtime/  include/              the core
         tools/riv/packages/             riv packages (riv installs them from here without downloading)
