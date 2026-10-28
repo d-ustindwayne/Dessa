@@ -638,8 +638,11 @@ void CCodegen::findReachable() {
 std::string CCodegen::generate(std::string& reason) {
     try {
         for (const auto& module : program.modules) {
-            if (!module->jsNative.empty()) unsupported("a browser library");
+            if (module->jsNative.empty()) continue;
+            if (!wasm) unsupported("a browser library");
+            usesWeb = true;
         }
+        if (usesWeb) collectExtern();
         findReachable();
 
         // Interfaces get numbers (their place in each class's table)
@@ -691,6 +694,7 @@ std::string CCodegen::generate(std::string& reason) {
                 if (!s || !isReachable(s.get())) continue;
                 if (s->kind == StmtKind::FuncDecl) {
                     const auto* f = static_cast<const FuncDeclStmt*>(s.get());
+                    if (isStubFunction(module->id, f->name)) continue;   // the page bridge does it
                     if (const Symbol* sym = analyser.functionOf(f)) {
                         protos << signature(*sym, functionName(module->id, f->name), false) << ";\n";
                     }
@@ -704,7 +708,7 @@ std::string CCodegen::generate(std::string& reason) {
             auto colon = key.find(':');
             const ClassInfo* info = analyser.findClass(
                 SemanticType::userDefined(key.substr(colon + 1), std::stoi(key.substr(0, colon)), UserTypeKind::Class));
-            if (info) emitClassCode(*info);
+            if (info && !externClasses.count(key)) emitClassCode(*info);
         }
 
         emitMain();
@@ -719,7 +723,7 @@ std::string CCodegen::generate(std::string& reason) {
     all << "/* dessa-glue:";
     for (const auto& lib : glueLibraries) all << " " << lib;
     all << " */\n";
-    all << "#include \"dessa_rt.h\"\n\n";
+    all << (usesWeb ? "#include \"dessa_web.h\"\n\n" : "#include \"dessa_rt.h\"\n\n");
     all << typedefs.str() << "\n" << structs.str() << "\n" << protos.str() << "\n" << data.str() << "\n" << code.str();
     return all.str();
 }
@@ -731,7 +735,8 @@ void CCodegen::emitTypes() {
         if (d == declarations.end() || !reachable.count(d->second)) continue;
         auto colon = key.find(':');
         SemanticType t = SemanticType::userDefined(key.substr(colon + 1), std::stoi(key.substr(0, colon)), UserTypeKind::Class);
-        typedefs << "typedef struct " << structName(t) << " " << structName(t) << ";\n";
+        // a page object (WebAssembly) is the bridge's ds_js
+        typedefs << "typedef struct " << (externClasses.count(key) ? std::string("ds_js") : structName(t)) << " " << structName(t) << ";\n";
     }
     // Enums
     for (const auto& module : program.modules) {
@@ -752,7 +757,8 @@ void CCodegen::emitTypes() {
         auto colon = key.find(':');
         const ClassInfo* info = analyser.findClass(
             SemanticType::userDefined(key.substr(colon + 1), std::stoi(key.substr(0, colon)), UserTypeKind::Class));
-        if (info) emitClassStruct(*info);
+        if (info && externClasses.count(key)) emitExternClass(*info);
+        else if (info) emitClassStruct(*info);
     }
 }
 
@@ -1378,9 +1384,16 @@ void CCodegen::emitMain() {
     indentLevel = 0;
     line("}");
     line("");
-    line("int main(int argc, char** argv) {");
-    line("    return ds_main(argc, argv, ds_program);");
-    line("}");
+    if (wasmPage) {
+        // A page's script: the bridge starts it, and its listeners run afterwards
+        line("__attribute__((used, export_name(\"dsw_start\"))) void dsw_start(void) {");
+        line("    ds_main(0, NULL, ds_program);");
+        line("}");
+    } else {
+        line("int main(int argc, char** argv) {");
+        line("    return ds_main(argc, argv, ds_program);");
+        line("}");
+    }
     code << body.str();
     out = nullptr;
 }

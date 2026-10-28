@@ -38,6 +38,9 @@ desktop.ini
 *.vsix
 node_modules/
 
+# The WebAssembly compiler from `dessa setup wasm`
+/wasm/
+
 # The browser build (emcmake cmake -S . -B build-wasm; attached to releases)
 web/dessa.js
 npm/dessa.js

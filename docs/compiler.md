@@ -45,9 +45,24 @@ dessa run app.ds --target js                 run with Node
 dessa build app.ds --target web -o app.js    one self-contained .js file
 ```
 
+`--target wasm` makes WebAssembly, the browser's engine for native-speed code
+(pages use it by default, see [web.md](web.md)):
+
+```
+dessa run app.ds --target wasm               run it with Node
+dessa build app.ds --target wasm             app.wasm, and app.js to run it (node app.js)
+dessa setup wasm                             download the compiler WebAssembly needs (once, about 50 MB)
+```
+
+It goes through the C backend, so a program that needs C++ (see above) can't
+be built for WebAssembly yet, and neither can one using a library with a C++
+part. With Node, a WebAssembly program can read and write the files of the
+folder it runs in (when its compiler is the one from `dessa setup wasm` or
+wasi-sdk; Emscripten builds only have the terminal).
+
 All of them give the same output for the same program. Libraries with a C++
 part (`sql`, `request`, `ashwee`) only work natively. `webutils` only works in
-JavaScript.
+a page: WebAssembly or JavaScript.
 
 In JavaScript, an `Int` is exact to 64 bits like everywhere else. It is a
 plain JavaScript number while its value fits exactly (up to 2^53 - 1), which is
@@ -88,6 +103,7 @@ dessa emit app.ds -o app.c
 | `emit <file>` | print the generated C, C++ or JavaScript |
 | `home` | print the folder Dessa is installed in |
 | `serve [folder]` | a local web server for pages |
+| `setup wasm` | download the compiler for WebAssembly (pages, `--target wasm`) |
 | `symbols`, `complete`, `hover` | answers for editors, as JSON (used by the VS Code extension) |
 | `tokens`, `ast` | show what the lexer and parser read (for working on Dessa itself) |
 | `--version`, `help` | |
@@ -95,7 +111,7 @@ dessa emit app.ds -o app.c
 | Option | Meaning |
 |---|---|
 | `-o <file>` | output file for `build` and `emit` |
-| `--target native\|c\|js\|web` | what to make (native is the default: through C, or C++ when needed) |
+| `--target native\|c\|wasm\|js\|web` | what to make (native is the default: through C, or C++ when needed) |
 | `--cpp` | native, through C++ instead of C |
 | `--release` | `build`: fully optimized (-O2) |
 | `--port <n>` | port for `serve` and for `run page.dhtml` (default 8080; the next free one is used) |
@@ -112,6 +128,7 @@ dessa emit app.ds -o app.c
 | `DESSA_NO_PCH` | set to 1 to compile without the precompiled runtime (it is made once and kept in the temp folder) |
 | `DESSA_HOME` | the Dessa folder, if `dessa` can't find its `runtime` and `include` folders by itself |
 | `DESSA_PACKAGES` | extra folders to look for packages in (separated by `;` on Windows, `:` elsewhere) |
+| `DESSA_WASM_CC` | the compiler for WebAssembly: a wasi-sdk `clang` (with `DESSA_WASM_SYSROOT` if its WASI library isn't next to it) or Emscripten's `emcc`. By default the one from `dessa setup wasm`, then `WASI_SDK_PATH`, then emcc |
 | `DESSA_VERBOSE` | set to `1` to see the compiler's own messages when something goes wrong inside Dessa, and when a program is built through C++ instead of C |
 | `RIV_NO_UPDATE_CHECK` | set to `1`: no daily check for a new Dessa (riv) and no notice (dessa) |
 | `RIV_HOME` | riv's store, index and settings (default `~/.riv`); see [riv.md](riv.md) for the others |

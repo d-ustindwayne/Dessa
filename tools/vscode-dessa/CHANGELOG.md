@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.3
+
+- No changes to the extension (Dessa 0.3.3 runs `.dhtml` pages as WebAssembly)
+
 ## 0.3.0
 
 - `init` in a class body becomes `init(|)`, `super` in an `init` becomes `super(|);` (a `.` typed right after gives `super.` instead)

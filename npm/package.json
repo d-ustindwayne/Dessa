@@ -1,6 +1,6 @@
 {
   "name": "dessalang",
-  "version": "0.3.0",
+  "version": "0.3.3",
   "description": "The Dessa programming language for JavaScript: compile Dessa to JavaScript in Node or right in the browser, build .dhtml pages.",
   "keywords": ["dessa", "language", "compiler", "webassembly", "transpiler", "dhtml"],
   "license": "Apache-2.0",

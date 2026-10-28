@@ -50,6 +50,13 @@ public:
     CCodegen(const Program& program, const Analyser& analyser);
     // The C program, or "" with the reason the C backend can't build it yet
     std::string generate(std::string& reason);
+    // For WebAssembly: webutils' page objects go through the page bridge
+    // (runtime/dessa_web.h). `page`: a page's script, started by the bridge
+    // (dsw_start) instead of main()
+    void setWasm(bool page) {
+        wasm = true;
+        wasmPage = page;
+    }
 
     // ---- internal types (public for the helpers in the .cpp files) ----
 
@@ -121,6 +128,12 @@ private:
     std::set<std::string> glueLibraries;                        // libraries reached through their C++ bridge (cglue)
     std::set<std::string> gluePrototypes;
     std::string builtinPrelude;   // set by builtinCall: arguments evaluated first, in order
+    // WebAssembly (cgen_web.cpp)
+    bool wasm = false;
+    bool wasmPage = false;
+    bool usesWeb = false;                          // the program imports webutils
+    std::set<std::string> externClasses;           // keys of the page's classes (Element, Event, ...)
+    std::set<std::string> stubFunctions;           // "<module>:<name>": webutils' functions, done by the bridge
     std::string recursiveName;    // the variable whose lambda is being made (it may call itself)
     // a?.m(): builtinMethod's receiver, already evaluated (not nil)
     const std::string* receiverOverride = nullptr;
@@ -256,6 +269,19 @@ private:
     void appendText(std::string& code, const std::string& builder, const Expr* e);
     std::string callFn(const std::string& fn, const SemanticType& fnType, const CallArgs& args);
     std::string sortComparator(const SemanticType& element, const SemanticType& fnType);
+
+    // ---- The page's objects, for WebAssembly (cgen_web.cpp) ----
+    void collectExtern();
+    bool isExtern(const SemanticType& type) const;               // Element, Element | Nil, ...
+    bool isStubFunction(int moduleId, const std::string& name) const;
+    std::string externClass(const SemanticType& type) const;     // &dsk_..._Element.t
+    void emitExternClass(const ClassInfo& info);
+    std::string externPush(const std::string& value, const SemanticType& type);
+    std::string externTake(const SemanticType& type);
+    CV externCall(const std::string& object, const std::string& name, const CallArgs& args,
+                  const std::vector<FunctionParameterSymbol>& params, const SemanticType& result);
+    CV externGet(const MemberExpr* e, const SemanticType& type);
+    CV externAssign(const AssignExpr* e);
 };
 
 } // namespace dessa

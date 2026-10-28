@@ -40,7 +40,7 @@ namespace fs = std::filesystem;
 
 namespace {
 
-constexpr const char* kVersion = "0.3.0";
+constexpr const char* kVersion = "0.3.3";
 const char* g_argv0 = nullptr; // to find runtime/ and include/ next to the compiler
 
 void printUsage() {
@@ -55,6 +55,7 @@ void printUsage() {
         "  dessa fix-lists <file.ds>                    rewrite old [1, 2] lists as <1, 2>\n"
         "  dessa symbols <file.ds> [--stdin]            symbol table as JSON (for editors)\n"
         "  dessa serve [folder] [--port N]              a web server for pages (.dhtml compiled on each request)\n"
+        "  dessa setup wasm                             download the compiler for WebAssembly (pages, --target wasm)\n"
         "  dessa complete <file.ds> --at L:C [--stdin]  completions at a position as JSON (for editors)\n"
         "  dessa hover <file.ds> --at L:C [--stdin]     the symbol at a position as JSON (for editors)\n"
         "  dessa tokens  <file.ds>                      debug: print tokens\n"
@@ -272,6 +273,7 @@ bool g_cpp = false;       // --cpp: build from C++ instead of C
 bool g_release = false;   // dessa build --release: -O2 instead of -O1
 int g_port = 8080;   // dessa serve / dessa run page.dhtml
 bool targetIsJs() { return g_target == "js" || g_target == "web"; }
+bool targetIsWasm() { return g_target == "wasm"; }
 
 std::string readTextFile(const fs::path& p) {
     std::ifstream in(p, std::ios::binary);
@@ -317,6 +319,87 @@ bool compileScriptToJs(const std::string& path, const std::string& source, std::
     return !js.empty();
 }
 
+// C for WebAssembly (webutils through the page bridge), or "" and the reason
+std::string wasmSourceFor(Compilation& c, bool page, std::string& reason) {
+    CCodegen cgen(c.program, c.analyser);
+    cgen.setWasm(page);
+    std::string source = cgen.generate(reason);
+    if (source.empty()) return "";
+    // Libraries with a C++ part (line 2: /* dessa-glue: sql */) don't go to WebAssembly
+    const size_t start = source.find("/* dessa-glue:"), end = source.find("*/", start);
+    std::string glued = start == std::string::npos ? "" : source.substr(start + 14, end - start - 14);
+    glued.erase(0, glued.find_first_not_of(' '));
+    glued.erase(glued.find_last_not_of(' ') + 1);
+    if (!glued.empty()) {
+        reason = "the library " + glued + ", which has a C++ part";
+        return "";
+    }
+    return source;
+}
+
+// The script that runs a .wasm in Node or a page (runtime/dessa_wasm.js)
+std::string wasmRunner(std::string& errors) {
+    std::string runtime = toolchain::runtimeDir(g_argv0);
+    std::string js = runtime.empty() ? "" : readTextFile(fs::path(runtime) / "dessa_wasm.js");
+    if (js.empty()) errors += "dessa: cannot find runtime/dessa_wasm.js (set DESSA_HOME to the Dessa install folder)\n";
+    return js;
+}
+
+std::string base64(const std::string& bytes) {
+    static const char* digits = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out;
+    out.reserve((bytes.size() + 2) / 3 * 4);
+    for (size_t i = 0; i < bytes.size(); i += 3) {
+        unsigned n = static_cast<unsigned char>(bytes[i]) << 16;
+        if (i + 1 < bytes.size()) n |= static_cast<unsigned char>(bytes[i + 1]) << 8;
+        if (i + 2 < bytes.size()) n |= static_cast<unsigned char>(bytes[i + 2]);
+        out += digits[(n >> 18) & 63];
+        out += digits[(n >> 12) & 63];
+        out += i + 1 < bytes.size() ? digits[(n >> 6) & 63] : '=';
+        out += i + 2 < bytes.size() ? digits[n & 63] : '=';
+    }
+    return out;
+}
+
+// For pages: one script as WebAssembly when it can be (the page bridge and
+// the module, as base64), else as JavaScript. --target js keeps JavaScript.
+bool compileScriptToWasm(const std::string& path, const std::string& source, std::string& js, std::string& errors) {
+    if (targetIsJs()) return compileScriptToJs(path, source, js, errors);
+    static bool toldNoTools = false;
+    if (toolchain::wasmCompiler(g_argv0).empty()) {
+        if (!toldNoTools) {
+            std::cerr << "dessa: pages run as JavaScript here; for WebAssembly (faster), get its compiler with: dessa setup wasm\n";
+            toldNoTools = true;
+        }
+        return compileScriptToJs(path, source, js, errors);
+    }
+    Compilation c;
+    compileFrontEnd(c, path, &source);
+    std::ostringstream text;
+    printDiagnostics(c.diagnostics, false, text);
+    if (!c.ok) {
+        errors += text.str();
+        return false;
+    }
+    std::string reason;
+    std::string cSource = wasmSourceFor(c, true, reason);
+    if (cSource.empty()) {
+        std::cerr << "dessa: " << fs::path(path).filename().string() << ": a script runs as JavaScript (WebAssembly can't do " << reason
+                  << " yet)\n";
+        js = javascriptFor(c, errors);
+        return !js.empty();
+    }
+    std::string wasm, error;
+    if (!toolchain::compileWasmCached(cSource, g_argv0, wasm, error, true)) {
+        errors += error;
+        return false;
+    }
+    std::string runner = wasmRunner(errors);
+    if (runner.empty()) return false;
+    js = runner + "\nDessaWasm.page(\"" + base64(readTextFile(wasm)) + "\");\n";
+    return true;
+}
+
 std::string generate(Compilation& c, const std::string& path) {
     compileFrontEnd(c, path, nullptr);
     printDiagnostics(c.diagnostics, false, std::cerr);
@@ -326,6 +409,12 @@ std::string generate(Compilation& c, const std::string& path) {
         std::string js = javascriptFor(c, errors);
         std::cerr << errors;
         return js;
+    }
+    if (targetIsWasm()) {
+        std::string reason;
+        std::string source = wasmSourceFor(c, false, reason);
+        if (source.empty()) std::cerr << "dessa: this program can't be built for WebAssembly yet (it uses " << reason << ")\n";
+        return source;
     }
     for (const auto& module : c.program.modules) {
         if (!module->jsNative.empty()) {
@@ -416,7 +505,7 @@ int cmdEmit(const std::string& path, const std::string& output) {
 // page.dhtml -> page.html with its Dessa scripts compiled (runs without dessa.js)
 int buildPageCommand(const std::string& path, std::string output) {
     std::string html, errors;
-    if (!web::buildPage(path, compileScriptToJs, html, errors)) {
+    if (!web::buildPage(path, compileScriptToWasm, html, errors)) {
         std::cerr << errors;
         return 1;
     }
@@ -446,6 +535,25 @@ int cmdBuild(const std::string& path, std::string output, const char* argv0) {
         out << cpp;
         return out ? 0 : 1;
     }
+    if (targetIsWasm()) {
+        // app.wasm, and app.js next to it to run it with Node (node app.js)
+        if (output.empty()) output = fs::path(path).stem().string() + ".wasm";
+        std::string error;
+        if (!toolchain::compileWasm(cpp, output, argv0, error, false)) {
+            std::cerr << error;
+            return 1;
+        }
+        std::string runner = wasmRunner(error);
+        if (runner.empty()) {
+            std::cerr << error;
+            return 1;
+        }
+        fs::path js = fs::path(output).replace_extension(".js");
+        std::ofstream out(js, std::ios::binary);
+        out << runner << "\nprocess.exitCode = DessaWasm.main(require(\"path\").join(__dirname, " << "\"" + fs::path(output).filename().string() + "\""
+            << "), process.argv.slice(2));\n";
+        return out ? 0 : 1;
+    }
     if (output.empty()) {
         output = fs::path(path).stem().string();
 #ifdef _WIN32
@@ -467,7 +575,7 @@ int cmdRun(const std::string& path, const std::vector<std::string>& programArgs,
     if (web::isPage(path)) {
         // A page: serve its folder and open it in the browser
         fs::path p = fs::absolute(path);
-        return web::serve(p.parent_path().string(), g_port, p.filename().string(), compileScriptToJs);
+        return web::serve(p.parent_path().string(), g_port, p.filename().string(), compileScriptToWasm);
     }
     Compilation c;
     std::string cpp = generate(c, path);
@@ -490,6 +598,25 @@ int cmdRun(const std::string& path, const std::vector<std::string>& programArgs,
 #endif
         return code;
     }
+    if (targetIsWasm()) {
+        // Run the WebAssembly with Node (runtime/dessa_wasm.js)
+        std::string wasm, error;
+        if (!toolchain::compileWasmCached(cpp, argv0, wasm, error, false)) {
+            std::cerr << error;
+            return 1;
+        }
+        const std::string runtime = toolchain::runtimeDir(argv0);
+        std::string command = "node \"" + (fs::path(runtime) / "dessa_wasm.js").string() + "\" \"" + wasm + "\"";
+        for (const auto& a : programArgs) command += " \"" + a + "\"";
+        std::cout.flush();
+#ifdef _WIN32
+        int code = std::system(("\"" + command + "\"").c_str());
+#else
+        int code = std::system(command.c_str());
+        if (code != -1 && WIFEXITED(code)) code = WEXITSTATUS(code);
+#endif
+        return code;
+    }
     std::string exe;
     std::string error;
     std::vector<std::string> libraries(c.analyser.builtinLibrariesUsed().begin(), c.analyser.builtinLibrariesUsed().end());
@@ -500,6 +627,75 @@ int cmdRun(const std::string& path, const std::vector<std::string>& programArgs,
         }
     }
     return toolchain::run(exe, programArgs);
+}
+
+// dessa setup wasm: downloads the WebAssembly compiler (clang, the linker and
+// the WASI C library, cut down from wasi-sdk; about 50 MB) from the GitHub
+// release of this Dessa into <Dessa>/wasm, or ~/.dessa/wasm when that folder
+// can't be written
+int cmdSetup(const std::string& what) {
+    if (what != "wasm") {
+        std::cerr << "dessa setup: what to set up? `dessa setup wasm` (the compiler for WebAssembly)\n";
+        return 1;
+    }
+    if (const std::string found = toolchain::wasmCompiler(g_argv0); !found.empty()) {
+        std::cout << "A compiler for WebAssembly is already there: " << found << "\n";
+        return 0;
+    }
+#if defined(_WIN32)
+    const std::string platform = "windows-x64";
+#elif defined(__APPLE__)
+    const std::string platform = "macos-arm64";
+#else
+    const std::string platform = "linux-x64";
+#endif
+    const std::string url = "https://github.com/d-ustindwayne/Dessa/releases/download/v" + std::string(kVersion) + "/dessa-wasm-" + platform + ".tar.gz";
+    std::error_code ec;
+    fs::path folder;
+    const std::string runtime = toolchain::runtimeDir(g_argv0);
+    if (!runtime.empty()) {
+        folder = fs::path(runtime).parent_path() / "wasm";
+        fs::create_directories(folder, ec);
+        std::ofstream probe(folder / ".write-test");
+        if (!probe) folder.clear();
+        probe.close();
+        fs::remove(folder / ".write-test", ec);
+    }
+    if (folder.empty()) {
+#ifdef _WIN32
+        const char* home = std::getenv("USERPROFILE");
+#else
+        const char* home = std::getenv("HOME");
+#endif
+        folder = fs::path(home ? home : ".") / ".dessa" / "wasm";
+        fs::create_directories(folder, ec);
+    }
+    const fs::path archive = fs::temp_directory_path(ec) / ("dessa-wasm-" + platform + ".tar.gz");
+    std::cout << "Downloading the WebAssembly compiler (about 50 MB)\n  from " << url << "\n  into " << folder.string() << "\n" << std::flush;
+    auto shell = [](const std::string& command) {
+#ifdef _WIN32
+        return std::system(("\"" + command + "\"").c_str());
+#else
+        return std::system(command.c_str());
+#endif
+    };
+    if (shell("curl -fL --progress-bar -o \"" + archive.string() + "\" \"" + url + "\"") != 0) {
+        std::cerr << "dessa setup: the download failed. Check the internet connection, or install wasi-sdk yourself:\n"
+                     "       https://github.com/WebAssembly/wasi-sdk/releases (then set WASI_SDK_PATH to its folder)\n";
+        return 1;
+    }
+    if (shell("tar -xzf \"" + archive.string() + "\" -C \"" + folder.string() + "\"") != 0) {
+        std::cerr << "dessa setup: could not unpack " << archive.string() << "\n";
+        return 1;
+    }
+    fs::remove(archive, ec);
+    const std::string found = toolchain::wasmCompiler(g_argv0);
+    if (found.empty()) {
+        std::cerr << "dessa setup: unpacked into " << folder.string() << ", but no compiler was found there\n";
+        return 1;
+    }
+    std::cout << "Done. Pages now run as WebAssembly, and `dessa run app.ds --target wasm` works.\n";
+    return 0;
 }
 
 std::string typeString(const SemanticType& t) { return t.toString(); }
@@ -988,8 +1184,8 @@ int main(int argc, char* argv[]) {
             at = args[++i];
         } else if (a == "--target" && i + 1 < args.size()) {
             g_target = args[++i];
-            if (g_target != "native" && g_target != "js" && g_target != "web" && g_target != "c") {
-                std::cerr << "dessa: unknown target '" << g_target << "' (use native, c, js or web)\n";
+            if (g_target != "native" && g_target != "js" && g_target != "web" && g_target != "c" && g_target != "wasm") {
+                std::cerr << "dessa: unknown target '" << g_target << "' (use native, c, wasm, js or web)\n";
                 return 1;
             }
         } else if (a == "--port" && i + 1 < args.size()) {
@@ -1006,12 +1202,13 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    if (command == "setup") return cmdSetup(file);
     if (command == "serve") {
         if (!file.empty() && !fs::is_directory(file)) {
             std::cerr << "dessa serve: " << file << " is not a folder\n";
             return 1;
         }
-        return web::serve(file.empty() ? "." : file, g_port, "", compileScriptToJs);
+        return web::serve(file.empty() ? "." : file, g_port, "", compileScriptToWasm);
     }
     if (file.empty()) {
         std::cerr << "dessa " << command << ": missing <file.ds>\n";

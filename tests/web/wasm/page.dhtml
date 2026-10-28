@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+<head><title>WebAssembly page</title></head>
+<body>
+<div id="app" class="box">start</div>
+<ul id="list"></ul>
+<script>
+$("webutils") { document, window, log, Element, Event };
+
+var[Element] app = document.getElementById("app") ?? document.body;
+app.textContent = "Hello from WebAssembly";
+app.style.color = "red";
+app.classList.add("ready");
+var[Element] list = document.getElementById("list") ?? document.body;
+for (var[Int] i = 1; i <= 3; i++) {
+    var[Element] li = document.createElement("li");
+    li.textContent = $"item {i}";
+    list.appendChild(li);
+}
+var[Int] clicks = 0;
+var[Element] button = document.createElement("button");
+button.textContent = "Click";
+button.id = "btn";
+button.addEventListener("click", (e[Event]) := {
+    clicks += 1;
+    app.textContent = $"clicked {clicks} ({e.type})";
+});
+document.body.appendChild(button);
+log("children:", Str(list.children.length()));
+print($"wide {window.innerWidth > 0}");
+button.click();
+button.click();
+var[Element | Nil] missing = document.querySelector("#nothing");
+print(missing == nil);
+app.textContent += "!";
+var[Int] sum = 0;
+for (var[Int] k = 0; k < 1000000; k++) sum += k % 7;
+document.title = $"sum {sum}";
+try {
+    var[Int<>] xs = <1>;
+    print(xs<3>);
+} catch (e[IndexError]) {
+    print("caught in the page");
+}
+// An error in a listener is shown; the page goes on
+var[Element] broken = document.createElement("button");
+broken.addEventListener("click", (e[Event]) := { throw "oops"; });
+broken.click();
+print("still running");
+</script>
+</body>
+</html>

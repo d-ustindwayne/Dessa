@@ -1,9 +1,9 @@
 # Dessa
 
 Dessa is a statically typed programming language that compiles to C (for
-fast native programs; C++ for the few things C can't do yet) or to JavaScript
-(for Node and web pages). The goal is
-C++ speed without C++'s learning curve.
+fast native programs; C++ for the few things C can't do yet), to WebAssembly
+(web pages faster than JavaScript) or to JavaScript. The goal is C++ speed
+without C++'s learning curve.
 
 ```dessa
 class Item {
@@ -27,8 +27,8 @@ print($"{cart.length()} items, total {total.toFixed(2)}");
 - Classes, interfaces, enums, lambdas, default and named arguments
 - Errors you can catch, including runtime errors such as overflow and bad indexes
 - Unicode text that counts characters, not bytes
-- Two targets with identical output: native (through C, or C++) and JavaScript
-- Web pages written in Dessa (`.dhtml`) and a browser compiler (`dessa.js`)
+- Identical output everywhere: native (through C, or C++), WebAssembly and JavaScript
+- Web pages written in Dessa (`.dhtml`), compiled to WebAssembly, and a browser compiler (`dessa.js`)
 - `riv`, a package manager, and libraries for files, time zones, JSON, SQL, HTTP, desktop windows and more
 - VS Code support driven by the compiler: errors, completion, hover, go to definition
 

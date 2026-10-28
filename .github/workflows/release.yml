@@ -1,6 +1,6 @@
-# Push a tag like v0.3.0 to build prebuilt Dessa for Windows, Linux and macOS
+# Push a tag like v0.3.3 to build prebuilt Dessa for Windows, Linux and macOS
 # and attach them to a GitHub release:
-#     git tag v0.3.0 && git push origin v0.3.0
+#     git tag v0.3.3 && git push origin v0.3.3
 name: Release
 
 on:
@@ -108,8 +108,26 @@ jobs:
           name: dessa-vscode
           path: tools/vscode-dessa/*.vsix
 
+  wasm-tools:
+    # The WebAssembly compiler `dessa setup wasm` downloads: wasi-sdk cut down
+    # to what Dessa uses (tools/make_wasm_tools.py), for each platform
+    name: WebAssembly compiler downloads
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Make them
+        run: |
+          for p in windows-x64 linux-x64 macos-arm64; do
+            python3 tools/make_wasm_tools.py "$p" -o wasm-tools
+            rm -f wasm-tools/wasi-sdk-*.tar.gz
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dessa-wasm-tools
+          path: wasm-tools/dessa-wasm-*.tar.gz
+
   release:
-    needs: [build, web, vscode]
+    needs: [build, web, vscode, wasm-tools]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:

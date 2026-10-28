@@ -23,6 +23,7 @@ set(DESSA_FRONTEND
     src/codegen/cgen.cpp
     src/codegen/cgen_expr.cpp
     src/codegen/cglue.cpp
+    src/codegen/cgen_web.cpp
     src/codegen/jsgen.cpp
     src/driver/loader.cpp
 )

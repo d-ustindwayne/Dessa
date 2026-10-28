@@ -27,14 +27,32 @@ holds Dessa code:
 ```
 dessa run page.dhtml        serves the folder and opens the page in your browser
                             (Ctrl+R reloads the page, Ctrl+C stops and closes it)
-dessa build page.dhtml      writes page.html with the scripts compiled to JavaScript
+dessa build page.dhtml      writes page.html with the scripts compiled
 dessa serve .               a server for the whole folder; .dhtml pages are compiled on each request
 ```
 
-The built `page.html` is plain HTML and JavaScript. It runs anywhere (even
-opened straight from the disk) and doesn't need Dessa. Error messages point at
-the line and column in the `.dhtml` file. Imports (`$("utils")`) are relative
-to the page.
+The scripts are compiled to **WebAssembly**, the browser's engine for
+native-speed code: no JavaScript is made from your Dessa. They run about as
+fast as a native Dessa program, faster than the same program written in
+JavaScript (see the benchmark in `tests/bench/RESULTS.md`). `webutils` is
+the same either way: `document`, elements, events and timers are the
+browser's own, called straight from Dessa.
+
+WebAssembly needs a compiler for it, downloaded once:
+
+```
+dessa setup wasm            about 50 MB, into Dessa's folder
+```
+
+Without it (or with `--target js`), the scripts are compiled to JavaScript
+instead, and `dessa` says so. A script that uses something WebAssembly can't
+do yet (unions other than `T | Nil`, `Obj`, a library with a C++ part) is
+compiled to JavaScript on its own, with a note.
+
+The built `page.html` is one file with everything inside (the WebAssembly too).
+It runs anywhere, even opened straight from the disk, and doesn't need Dessa.
+Error messages point at the line and column in the `.dhtml` file. Imports
+(`$("utils")`) are relative to the page.
 
 ## 2. The browser compiler (dessa.js)
 
@@ -59,9 +77,14 @@ The page has to be served over HTTP, because browsers block loading files
 from `file://` pages: use `dessa serve .`, then open
 `http://localhost:8080/`. The example in `web/example/` works this way.
 
-## 3. JavaScript files
+`dessa.js` compiles to JavaScript (a browser can't run a C compiler); build
+the page with `dessa build` for WebAssembly.
+
+## 3. WebAssembly and JavaScript files
 
 ```
+dessa build app.ds --target wasm              app.wasm, and app.js to run it: node app.js
+dessa run app.ds --target wasm                run the WebAssembly with Node
 dessa build app.ds --target web -o app.js     one self-contained .js file (the runtime is inside)
 dessa run app.ds --target js                  run with Node
 ```
@@ -104,9 +127,10 @@ error, with its line.
 
 ## Libraries in the browser
 
-`math`, `time` (with time zones), `sys`, `webutils`, and the packages written
-in Dessa (`json`, `numbers`, `codes`, `colors`, `textfx`) work in the
-browser. The file functions of `os` work in Node only. Packages with C++ code
+`math`, `random`, `sys`, `time`, `webutils`, and the packages written in
+Dessa (`json`, `numbers`, `codes`, `colors`, `textfx`) work in WebAssembly and
+in JavaScript. `dcrypto` and the time zones of `time` have a C++ part, so a
+script that uses them is compiled to JavaScript. The file functions of `os` work in Node only. Packages with C++ code
 (`sql`, `request`, `ashwee`) can't run in a browser, and the compiler says so.
 
 ## npm

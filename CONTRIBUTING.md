@@ -43,6 +43,8 @@ confusing errors.
 | `python tests/test.py --c` | only through C (programs C can't do yet are skipped) |
 | `python tests/test.py --cpp` | only through C++ |
 | `python tests/test.py --js` | the run tests through the JavaScript backend, with Node |
+| `python tests/test.py --wasm` | the run tests through WebAssembly, with Node (needs `dessa setup wasm` or wasi-sdk) |
+| `node tests/web/wasm_page.js` | a page compiled to WebAssembly: page objects, events, errors |
 | `python tests/test.py <filter>` | only tests whose name contains the filter |
 | `python tests/test.py --update` | rewrite the expected `.out` files (check the diff!) |
 | `node tests/web/node_smoke.js` | `web/dessa.js` compiles and runs programs (needs the wasm build) |
@@ -64,7 +66,7 @@ There are two kinds of tests in `tests/cases`:
 
 A run test whose first line is `// exit: N` expects exit code N instead of 0.
 
-A change is ready when the default, `--c`, `--cpp` and `--js` runs all pass.
+A change is ready when the default, `--c`, `--cpp`, `--js` and `--wasm` runs all pass.
 CI runs the default and `--js` suites on Windows, Linux and macOS, the
 selfhost check, and the browser build, on every push and pull request.
 
@@ -115,7 +117,7 @@ selfhost check, and the browser build, on every push and pull request.
 
 Releases are made by a maintainer.
 
-1. Choose the version (`0.2.10`, or `0.3.0` for language changes) and change
+1. Choose the version (`0.3.4`, or `0.4.0` for language changes) and change
    it everywhere it appears:
 
    | File | Where |
@@ -127,13 +129,16 @@ Releases are made by a maintainer.
    | `tools/vscode-dessa/package.json` | `version` |
    | `tools/vscode-dessa/CHANGELOG.md` | the `Unreleased` heading becomes the version |
 
-   `git grep -n "0\.2\.9"` (the old version) finds them all
+   `git grep -n "0\.3\.3"` (the old version) finds them all
    (`tests/bench/RESULTS.md` changes with the benchmark instead).
 2. Run every test suite, and the benchmark; commit the new
    `tests/bench/RESULTS.md` and `results.csv`.
-3. Tag and push: `git tag v0.2.10 && git push origin main v0.2.10`.
+3. Tag and push: `git tag v0.3.4 && git push origin main v0.3.4`.
 4. The Release workflow builds the Windows, Linux and macOS archives,
-   `dessa.js` and the VS Code extension, and makes the GitHub release.
+   `dessa.js`, the VS Code extension and the WebAssembly compiler downloads
+   (`dessa-wasm-<platform>.tar.gz`, made by `tools/make_wasm_tools.py`; `dessa
+   setup wasm` takes them from the release of its own version), and makes the
+   GitHub release.
 5. Publishing to npm (`cd npm && npm publish --access public`) and uploading
    the `.vsix` to the VS Code Marketplace are done by hand by the maintainer
    (npm asks for a one-time password, so the workflow's npm step fails).

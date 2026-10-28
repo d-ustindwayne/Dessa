@@ -139,6 +139,11 @@ static inline void ds_free(void* p, size_t size) {
 typedef jmp_buf ds_jump;
 #define DS_TRY(frame) (_setjmp((frame).jump, NULL) == 0)
 #define DS_JUMP(frame) longjmp((frame)->jump, 1)
+#elif defined(__wasm__)
+/* WebAssembly: setjmp / longjmp are made of WebAssembly exceptions */
+typedef jmp_buf ds_jump;
+#define DS_TRY(frame) (setjmp((frame).jump) == 0)
+#define DS_JUMP(frame) longjmp((frame)->jump, 1)
 #else
 typedef jmp_buf ds_jump;
 #define DS_TRY(frame) (_setjmp((frame).jump) == 0)
@@ -171,6 +176,9 @@ DS_NORETURN void ds_fail(const char* format, ...) __attribute__((format(printf, 
 DS_NORETURN void ds_fail_str(ds_str* message);     /* takes the count */
 /* After a catch arm took the error: forget it */
 void ds_clear_error(void);
+/* Prints the error nobody caught (and forgets it); the program goes on.
+ * For pages: an event listener's error doesn't stop the page */
+void ds_report_uncaught(void);
 
 /* ============================================================
  * Int arithmetic (checked)

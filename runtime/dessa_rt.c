@@ -81,7 +81,7 @@ void ds_clear_error(void) {
     ds_error = NULL;
 }
 
-static DS_NORETURN void uncaught(void) {
+void ds_report_uncaught(void) {
     fflush(stdout);
     const char* file = ds_trace_file;   /* toStr() runs code: keep the error's place */
     int line = ds_trace_line;
@@ -90,12 +90,18 @@ static DS_NORETURN void uncaught(void) {
         /* An Error prints as it is (IndexError: ...), anything else as Uncaught: ... */
         const char* prefix = ds_error_type && ds_is_class(ds_thrown, ds_error_type) ? "" : "Uncaught: ";
         fprintf(stderr, "%s%.*s", prefix, (int)text->len, text->data);
+        ds_release(text);
     } else {
         fprintf(stderr, "Error: %.*s", ds_error ? (int)ds_error->len : 0, ds_error ? ds_error->data : "");
     }
     if (line > 0) fprintf(stderr, "\n  at %s:%d", file, line);
     fputs("\n", stderr);
     fflush(stderr);
+    ds_clear_error();
+}
+
+static DS_NORETURN void uncaught(void) {
+    ds_report_uncaught();
     exit(1);
 }
 
@@ -2118,6 +2124,7 @@ int ds_main(int argc, char** argv, void (*body)(void)) {
     } else {
         uncaught();
     }
+    ds_handler = NULL;   /* a page's event listeners run later, each with its own */
     fflush(stdout);
     return 0;
 }

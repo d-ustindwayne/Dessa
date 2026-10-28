@@ -74,6 +74,30 @@ jobs:
               print(open(log, errors="replace").read()[-4000:])
           EOF
 
+  wasm:
+    # Programs and pages compiled to WebAssembly, with the compiler users get
+    # from `dessa setup wasm` (wasi-sdk cut down by tools/make_wasm_tools.py)
+    name: WebAssembly target (wasi-sdk)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build dessa
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j 4
+      - name: The WebAssembly compiler, where `dessa setup wasm` puts it
+        run: |
+          python3 tools/make_wasm_tools.py linux-x64 -o /tmp/wasm-tools
+          mkdir -p wasm
+          tar -xzf /tmp/wasm-tools/dessa-wasm-linux-x64.tar.gz -C wasm
+      - name: Test through WebAssembly
+        run: python3 tests/test.py --wasm
+      - name: A page as WebAssembly
+        run: node tests/web/wasm_page.js
+
   web:
     name: Browser build (WebAssembly)
     runs-on: ubuntu-24.04

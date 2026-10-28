@@ -63,6 +63,8 @@ def cpu_name():
 
 def main():
     quick = "--quick" in sys.argv
+    # --runs N: every language N times, round after round; each task keeps its best time
+    runs = int(sys.argv[sys.argv.index("--runs") + 1]) if "--runs" in sys.argv else 1
     only = None
     if "--only" in sys.argv:
         only = {n.strip().lower() for n in sys.argv[sys.argv.index("--only") + 1].split(",")}
@@ -84,35 +86,44 @@ def main():
          [str(build / f"bench_dscpp{exe}")], version([str(EXE), "--version"]) + " (native, through C++: --cpp)"),
         ("Dessa (JS)", [[str(EXE), "build", str(HERE / "bench.ds"), "--target", "js", "-o", str(build / "bench_ds.js")]],
          ["node", str(build / "bench_ds.js")], version([str(EXE), "--version"]) + " compiled to JavaScript, Node"),
+        ("Dessa (wasm)", [[str(EXE), "build", str(HERE / "bench.ds"), "--target", "wasm", "-o", str(build / "bench_dsw.wasm")]],
+         ["node", str(build / "bench_dsw.js")], version([str(EXE), "--version"]) + " compiled to WebAssembly, Node"),
     ]
 
     results = {}   # language -> task -> (result, ms)
     totals = {}
-    for name, steps, command, about in languages:
-        if only and name.lower() not in only:
-            continue
-        print(f"== {name}: {about}", flush=True)
-        failed = False
-        for step in steps:
-            done = run(step)
-            if done.returncode != 0:
-                print(f"   could not build: {(done.stdout + done.stderr).strip()[:500]}")
-                failed = True
-                break
-        if failed:
-            continue
-        start = time.perf_counter()
-        process = subprocess.Popen(command + args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        results[name] = {}
-        for line in process.stdout:
-            parts = line.rstrip("\n").split("\t")
-            if len(parts) == 3 and parts[0] in TASKS:
-                results[name][parts[0]] = (parts[1], int(parts[2]))
-                print(f"   {parts[0]:<11} {int(parts[2]):>9,} ms   result {parts[1]}", flush=True)
-            elif line.strip():
-                print("   " + line.rstrip())
-        process.wait()
-        totals[name] = time.perf_counter() - start
+    built = set()
+    for round_ in range(runs):
+        if runs > 1:
+            print(f"#### round {round_ + 1} of {runs}", flush=True)
+        for name, steps, command, about in languages:
+            if only and name.lower() not in only:
+                continue
+            print(f"== {name}: {about}", flush=True)
+            failed = False
+            for step in steps if name not in built else []:
+                done = run(step)
+                if done.returncode != 0:
+                    print(f"   could not build: {(done.stdout + done.stderr).strip()[:500]}")
+                    failed = True
+                    break
+            if failed:
+                continue
+            built.add(name)
+            start = time.perf_counter()
+            process = subprocess.Popen(command + args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            by_task = results.setdefault(name, {})
+            for line in process.stdout:
+                parts = line.rstrip("\n").split("\t")
+                if len(parts) == 3 and parts[0] in TASKS:
+                    ms = int(parts[2])
+                    if parts[0] not in by_task or ms < by_task[parts[0]][1]:
+                        by_task[parts[0]] = (parts[1], ms)
+                    print(f"   {parts[0]:<11} {ms:>9,} ms   result {parts[1]}", flush=True)
+                elif line.strip():
+                    print("   " + line.rstrip())
+            process.wait()
+            totals[name] = min(totals.get(name, float("inf")), time.perf_counter() - start)
 
     # Every language must agree with C++ (or with the first one that ran)
     reference = results.get("C++") or next(iter(results.values()), {})
@@ -124,7 +135,7 @@ def main():
             elif task in reference and by_task[task][0] != reference[task][0]:
                 problems.append(f"{name}: {task} gave {by_task[task][0]}, expected {reference[task][0]}")
 
-    write_results(results, totals, languages, quick, problems)
+    write_results(results, totals, languages, quick, problems, runs)
     shutil.rmtree(build, ignore_errors=True)
     print()
     if problems:
@@ -136,7 +147,7 @@ def main():
     return 0
 
 
-def write_results(results, totals, languages, quick, problems):
+def write_results(results, totals, languages, quick, problems, runs=1):
     names = [n for n, *_ in languages if n in results]
     with open(HERE / "results.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
@@ -148,7 +159,8 @@ def write_results(results, totals, languages, quick, problems):
     lines.append(f"Measured {time.strftime('%Y-%m-%d %H:%M')} on {cpu_name()}, {platform.system()} {platform.release()}"
                  f"{' (quick sizes: the loop is 100,000,000 steps)' if quick else ''}.")
     lines.append("")
-    lines.append("Times are milliseconds for each task alone (lower is faster). Every language ran the")
+    lines.append("Times are milliseconds for each task alone (lower is faster)" +
+                 (f", the best of {runs} runs taken in turns." if runs > 1 else ".") + " Every language ran the")
     lines.append("same algorithm and gave the same result" + (" (see the problems below)." if problems else "."))
     lines.append("")
     lines.append("| Task | " + " | ".join(names) + " |")
@@ -184,6 +196,10 @@ def write_results(results, totals, languages, quick, problems):
     lines.append("- Dessa compiled to JavaScript keeps Int exact to 64 bits: an Int is a plain number while it")
     lines.append("  fits exactly (up to 2^53 - 1) and a BigInt beyond, and every Int operation is checked.")
     lines.append("  bench.js only uses JavaScript's own numbers.")
+    lines.append("- Dessa compiled to WebAssembly (`--target wasm`, what pages use) runs in Node's WebAssembly")
+    lines.append("  engine, the same one Chrome and Edge use for pages, with the same checks as native Dessa.")
+    lines.append("- The columns run with Node (JavaScript, Dessa (JS), Dessa (wasm)) vary more from day to day")
+    lines.append("  on a laptop than the native ones; compare them within one run.")
     lines.append("- Java's times include the JIT warming up; Python runs in the standard interpreter.")
     if problems:
         lines.append("")

@@ -624,6 +624,10 @@ CCodegen::CV CCodegen::assign(const AssignExpr* e) {
     const SemanticType& targetNow = analyser.typeOf(target) ? *analyser.typeOf(target) : kUnknown;
 
     if (target->kind == ExprKind::Member && analyser.isDynamicMember(target)) unsupported("Obj");
+    if (target->kind == ExprKind::Member) {
+        const SemanticType* ot = analyser.typeOf(static_cast<const MemberExpr*>(target)->object.get());
+        if (ot && isExtern(*ot)) return externAssign(e);   // el.textContent = "Hi"
+    }
 
     // map<k> = v / list<i> = v
     if (e->op.type == TokenType::EQUAL && target->kind == ExprKind::Index) {
@@ -985,6 +989,10 @@ CCodegen::CV CCodegen::call(const CallExpr* e) {
         }
         if (symbol && symbol->kind == SymbolKind::Function) {
             const std::string& name = symbol->originalName.empty() ? symbol->name : symbol->originalName;
+            if (isStubFunction(symbol->moduleId, name)) {
+                // alert(...), log(...), setTimeout(...): webutils, through the page bridge
+                return externCall("NULL", name, arguments(e, e->args, symbol->parameters), symbol->parameters, symbol->returnType);
+            }
             return {callWith(functionName(symbol->moduleId, name), arguments(e, e->args, symbol->parameters)), isCounted(symbol->returnType)};
         }
         if (symbol && symbol->kind == SymbolKind::Method) {
@@ -1170,6 +1178,9 @@ CCodegen::CV CCodegen::methodCall(const CallExpr* e, const MemberExpr* m, const 
         const ClassInfo* parent = classOf(ot);
         if (!parent) unsupported("super here");
         called = classMethodCall(parent, nullptr, thisValue().code, m->name.lexeme, symbol, list, true);
+    } else if (isExtern(ot)) {
+        // el.appendChild(child): a page object's method
+        return externCall("ds_ref(" + use(expr(object), ot) + ")", m->name.lexeme, args, symbol.parameters, symbol.returnType);
     } else {
         std::string objectCode = isThisExpr(object) ? thisValue().code : "ds_ref(" + use(expr(object), ot) + ")";
         if (const ClassInfo* info = classOf(ot)) {
@@ -1521,6 +1532,7 @@ CCodegen::CV CCodegen::member(const MemberExpr* e) {
         return {"(*({ ds_head* " + o + " = ds_ref(" + use(expr(object), ot) + "); ((const dst_m" + std::to_string(iface->moduleId) + "_" +
                     iface->name + "*)ds_interface(" + o + ", " + std::to_string(it->second) + "))->get_" + e->name.lexeme + "(" + o + "); }))", false};
     }
+    if (isExtern(ot)) return externGet(e, symbol->type);
     if (!classOf(ot)) unsupported("a member of " + ot.toString());
     return {"((" + cType(withoutNil(ot)) + ")ds_ref(" + use(expr(object), ot) + "))->" + mangle(e->name.lexeme), false};
 }

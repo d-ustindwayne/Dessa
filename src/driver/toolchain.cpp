@@ -472,6 +472,200 @@ bool isCSource(const std::string& source) {
     return isC(source);
 }
 
+// ============================================================
+// WebAssembly
+// ============================================================
+
+namespace {
+
+// A compiler for WebAssembly: a clang with the WASI C library (wasi-sdk, or
+// what `dessa setup wasm` puts in <Dessa>/wasm), or Emscripten's emcc
+struct WasmTool {
+    std::string cc;
+    bool emcc = false;
+    std::string sysroot;   // clang: the WASI C library
+};
+
+std::string onPath(const std::vector<std::string>& names) {
+    const char* path = std::getenv("PATH");
+    if (!path) return "";
+#ifdef _WIN32
+    const char separator = ';';
+#else
+    const char separator = ':';
+#endif
+    std::stringstream dirs(path);
+    for (std::string dir; std::getline(dirs, dir, separator);) {
+        for (const auto& name : names) {
+            std::error_code ec;
+            if (!dir.empty() && fs::is_regular_file(fs::path(dir) / name, ec)) return (fs::path(dir) / name).string();
+        }
+    }
+    return "";
+}
+
+WasmTool findWasm(const char* argv0) {
+    std::error_code ec;
+#ifdef _WIN32
+    const std::string exe = ".exe";
+    const char* homeVar = "USERPROFILE";
+#else
+    const std::string exe = "";
+    const char* homeVar = "HOME";
+#endif
+    const char* home = std::getenv(homeVar);
+    WasmTool tool;
+    auto withSysroot = [&](const fs::path& cc) {
+        tool.cc = cc.string();
+        tool.emcc = cc.filename().string().find("emcc") != std::string::npos;
+        if (const char* root = std::getenv("DESSA_WASM_SYSROOT"); root && *root) tool.sysroot = root;
+        else if (fs::is_directory(cc.parent_path() / ".." / "share" / "wasi-sysroot", ec)) {
+            tool.sysroot = fs::weakly_canonical(cc.parent_path() / ".." / "share" / "wasi-sysroot", ec).string();
+        }
+        return tool;
+    };
+    if (const char* cc = std::getenv("DESSA_WASM_CC"); cc && *cc) return withSysroot(cc);
+    // wasi-sdk: Dessa's own copy, WASI_SDK_PATH, the usual places
+    std::vector<fs::path> roots;
+    const std::string runtime = runtimeDir(argv0);
+    if (!runtime.empty()) roots.push_back(fs::path(runtime).parent_path() / "wasm");
+    if (const char* sdk = std::getenv("WASI_SDK_PATH"); sdk && *sdk) roots.push_back(sdk);
+#ifdef _WIN32
+    roots.push_back("C:/wasi-sdk");
+    if (const char* local = std::getenv("LOCALAPPDATA"); local && *local) roots.push_back(fs::path(local) / "wasi-sdk");
+#else
+    roots.push_back("/opt/wasi-sdk");
+    roots.push_back("/usr/local/wasi-sdk");
+#endif
+    if (home && *home) roots.push_back(fs::path(home) / ".dessa" / "wasm");   // dessa setup wasm, when <Dessa> can't be written
+    if (home && *home) roots.push_back(fs::path(home) / "wasi-sdk");
+    for (const auto& root : roots) {
+        const fs::path cc = root / "bin" / ("clang" + exe);
+        if (fs::is_regular_file(cc, ec) && fs::is_directory(root / "share" / "wasi-sysroot", ec)) return withSysroot(cc);
+    }
+    // Emscripten
+#ifdef _WIN32
+    std::string emcc = onPath({"emcc.exe", "emcc.bat"});
+    for (const char* name : {"emcc.exe", "emcc.bat"}) {
+        if (emcc.empty() && home && *home && fs::is_regular_file(fs::path(home) / "emsdk/upstream/emscripten" / name, ec)) {
+            emcc = (fs::path(home) / "emsdk/upstream/emscripten" / name).string();
+        }
+    }
+#else
+    std::string emcc = onPath({"emcc"});
+    if (emcc.empty() && home && *home && fs::is_regular_file(fs::path(home) / "emsdk/upstream/emscripten/emcc", ec)) {
+        emcc = (fs::path(home) / "emsdk/upstream/emscripten/emcc").string();
+    }
+#endif
+    if (!emcc.empty()) {
+        tool.cc = emcc;
+        tool.emcc = true;
+    }
+    return tool;
+}
+
+// Compiling (-c) and linking flags. Errors (try / catch) are made of
+// WebAssembly exceptions; a page is a "reactor": the bridge starts it and
+// calls its listeners afterwards
+std::string wasmCompileFlags(const WasmTool& tool) {
+    if (tool.emcc) return " -O2 -fwasm-exceptions -sSUPPORT_LONGJMP=wasm";
+    std::string flags = " --target=wasm32-wasip1 -O2 -fwasm-exceptions -mllvm -wasm-enable-sjlj";
+    if (!tool.sysroot.empty()) flags += " --sysroot=" + quoteArg(tool.sysroot);
+    return flags;
+}
+
+std::string wasmLinkFlags(const WasmTool& tool, bool page) {
+    if (tool.emcc) {
+        return wasmCompileFlags(tool) + " -sSTANDALONE_WASM -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=8MB" +
+               (page ? " --no-entry -sEXPORTED_FUNCTIONS=_dsw_start,_dsw_invoke" : "");
+    }
+    return wasmCompileFlags(tool) + " -lsetjmp -Wl,-z,stack-size=8388608" + (page ? " -mexec-model=reactor" : "");
+}
+
+// A runtime file compiled for WebAssembly once and kept in the cache
+bool wasmObject(const WasmTool& tool, const std::string& runtime, const std::string& file, std::string& object, std::string& error) {
+    std::error_code ec;
+    const fs::path source = fs::path(runtime) / file;
+    std::uint64_t key = fnv1a(tool.cc + wasmCompileFlags(tool), fnv1a(readFile(source)));
+    key = fnv1a(readFile(fs::path(runtime) / "dessa_rt.h"), key);
+    key = fnv1a(readFile(fs::path(runtime) / "dessa_web.h"), key);
+    fs::path dir = workDir() / "objects";
+    fs::create_directories(dir, ec);
+    fs::path target = dir / ("wasm_" + source.stem().string() + "_" + hex(key) + ".o");
+    object = target.string();
+    if (fs::exists(target, ec)) return true;
+    fs::path log = dir / ("wasm_" + source.stem().string() + ".log");
+    fs::path partial = target;
+    partial += ".part.o";
+    std::string command = quoteArg(tool.cc) + wasmCompileFlags(tool) + " -I" + quoteArg(runtime) + " -c " + quoteArg(source.string()) +
+                          " -o " + quoteArg(partial.string()) + " > " + quoteArg(log.string()) + " 2>&1";
+    if (system(command) != 0) {
+        error = "dessa: could not compile the runtime for WebAssembly with " + tool.cc + "; details: " + log.string() + "\n";
+        return false;
+    }
+    fs::rename(partial, target, ec);
+    return !ec;
+}
+
+} // namespace
+
+std::string wasmCompiler(const char* argv0) {
+    return findWasm(argv0).cc;
+}
+
+std::string wasmHelp() {
+    return "       WebAssembly needs a compiler for it: run `dessa setup wasm` (it downloads one, about 50 MB),\n"
+           "       or install wasi-sdk (set WASI_SDK_PATH) or Emscripten, or set DESSA_WASM_CC.\n";
+}
+
+bool compileWasm(const std::string& c, const std::string& outputWasm, const char* argv0, std::string& error, bool page) {
+    const WasmTool tool = findWasm(argv0);
+    if (tool.cc.empty()) {
+        error = "dessa: no compiler for WebAssembly was found.\n" + wasmHelp();
+        return false;
+    }
+    std::string runtime = runtimeDir(argv0);
+    if (runtime.empty()) {
+        error = "dessa: cannot find the runtime folder (set DESSA_HOME to the Dessa install folder)\n";
+        return false;
+    }
+    std::string rt, web;
+    if (!wasmObject(tool, runtime, "dessa_rt.c", rt, error) || !wasmObject(tool, runtime, "dessa_web.c", web, error)) return false;
+    fs::path dir = workDir();
+    std::string id = hex(fnv1a(c));
+    fs::path source = dir / ("dessa_" + id + ".c");
+    fs::path log = dir / ("dessa_" + id + ".log");
+    {
+        std::ofstream out(source, std::ios::binary);
+        out << c;
+    }
+    std::string command = quoteArg(tool.cc) + wasmLinkFlags(tool, page) + " -I" + quoteArg(runtime) + " " + quoteArg(source.string()) + " " +
+                          quoteArg(rt) + " " + quoteArg(web) + " -o " + quoteArg(outputWasm) + " -lm > " + quoteArg(log.string()) + " 2>&1";
+    if (system(command) != 0) {
+        error = "dessa: internal compiler error -- the WebAssembly build failed. This is a bug in Dessa, not in your code.\n"
+                "       Please report it with this file: " + log.string() + "\n";
+        if (const char* verbose = std::getenv("DESSA_VERBOSE"); verbose && *verbose) error += "\n" + readFile(log);
+        return false;
+    }
+    std::error_code ec;
+    fs::remove(log, ec);
+    return true;
+}
+
+bool compileWasmCached(const std::string& c, const char* argv0, std::string& wasm, std::string& error, bool page) {
+    const WasmTool tool = findWasm(argv0);
+    std::string runtime = runtimeDir(argv0);
+    std::uint64_t key = fnv1a(c, fnv1a(tool.cc + (page ? " page" : "")));
+    for (const char* file : {"dessa_rt.c", "dessa_rt.h", "dessa_web.c", "dessa_web.h"}) key = fnv1a(readFile(fs::path(runtime) / file), key);
+    std::error_code ec;
+    fs::path cache = workDir() / "cache";
+    fs::create_directories(cache, ec);
+    fs::path target = cache / ("wasm_" + hex(key) + ".wasm");
+    wasm = target.string();
+    if (fs::exists(target, ec)) return true;
+    return compileWasm(c, wasm, argv0, error, page);
+}
+
 int run(const std::string& exe, const std::vector<std::string>& args) {
     std::string command = quoteArg(exe);
     for (const auto& a : args) command += " " + quoteArg(a);

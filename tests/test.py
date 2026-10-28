@@ -21,11 +21,13 @@ Two kinds of tests:
   A first line `// exit: N` expects exit code N instead of 0.
 
 Usage:
-    python tests/test.py [--update] [--js | --c | --cpp] [filter]
+    python tests/test.py [--update] [--js | --wasm | --c | --cpp] [filter]
 
 --js runs the run tests through the JavaScript backend (dessa run --target js,
 needs Node) and compares with the same .out files; tests that use libraries
-with a C++ part are skipped.
+with a C++ part are skipped. --wasm does the same through WebAssembly
+(dessa run --target wasm: needs a WebAssembly compiler and Node); programs it
+can't build yet are skipped.
 """
 
 import json
@@ -46,6 +48,7 @@ EXIT_RE = re.compile(r"^//\s*exit:\s*(-?\d+)")
 STDERR_RE = re.compile(r"^//\s*stderr:\s*(.+)$", re.MULTILINE)
 SAMPLES = ROOT / "sample"
 JS = False   # --js: run tests through the JavaScript backend
+WASM = False # --wasm: through WebAssembly
 MODE = []    # --c: only through C (programs C can't do yet are skipped); --cpp: only through C++
 PACKAGES = ROOT / "tools" / "riv" / "packages"
 # Libraries that are riv packages (sql, request, json, phl, ashwee, ...) are
@@ -176,14 +179,16 @@ def run_test(path, update):
     # `// needs: display` tests (ashwee windows): Windows and macOS always have
     # one; on Linux a desktop or xvfb (DISPLAY / WAYLAND_DISPLAY). Not in JS.
     if "// needs: display" in path.read_text(encoding="utf-8"):
-        if JS:
+        if JS or WASM:
             return ["SKIP", "native windows"]
         if sys.platform.startswith("linux") and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
             return ["SKIP", "no display"]
-    command = ["run", str(path.relative_to(ROOT))] + (["--target", "js"] if JS else MODE)
+    command = ["run", str(path.relative_to(ROOT))] + (["--target", "js"] if JS else ["--target", "wasm"] if WASM else MODE)
     result = run(command, stdin_file=path.with_suffix(".in"))
     if JS and "has a C++ part" in result.stderr:
         return ["SKIP", "library with a C++ part"]
+    if WASM and "can't be built for WebAssembly yet" in result.stderr:
+        return ["SKIP", result.stderr.strip().split("(it uses ", 1)[-1].rstrip(")")]
     if "can't be built from C yet" in result.stderr:
         return ["SKIP", result.stderr.strip().split("(it uses ", 1)[-1].rstrip(")")]
     output = result.stdout.replace("\r\n", "\n")
@@ -408,8 +413,9 @@ def main():
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     update = "--update" in sys.argv
-    global JS, MODE
+    global JS, WASM, MODE
     JS = "--js" in sys.argv
+    WASM = "--wasm" in sys.argv
     MODE = ["--target", "c"] if "--c" in sys.argv else ["--cpp"] if "--cpp" in sys.argv else []
     pattern = args[0] if args else ""
 
@@ -420,7 +426,7 @@ def main():
 
     start_http_server()
     passed = failed = 0
-    if not JS and (not pattern or pattern in "declarations"):
+    if not JS and not WASM and (not pattern or pattern in "declarations"):
         problems = declarations_test()
         if problems:
             failed += 1
@@ -430,7 +436,7 @@ def main():
         else:
             passed += 1
             print("ok   declarations (runtime/decl, include/)")
-    if not JS and (not pattern or pattern in "editor"):
+    if not JS and not WASM and (not pattern or pattern in "editor"):
         problems = editor_test()
         if problems:
             failed += 1
@@ -440,7 +446,7 @@ def main():
         else:
             passed += 1
             print("ok   editor (dessa complete / hover)")
-    if not JS and (not pattern or pattern in "riv"):
+    if not JS and not WASM and (not pattern or pattern in "riv"):
         problems = riv_test()
         if problems is None:
             print("skip riv (build it: cmake --build build --target riv)")
@@ -463,7 +469,7 @@ def main():
             for i, line in enumerate(lines)
             if (m := EXPECT_RE.search(line))
         ]
-        if JS and expectations:
+        if (JS or WASM) and expectations:
             continue   # compile errors don't depend on the backend
         try:
             problems = diagnostic_test(path, expectations) if expectations else run_test(path, update)

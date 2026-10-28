@@ -8,7 +8,7 @@ test and release is in [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 Dessa is a statically typed programming language that compiles to **native
 programs** (through C, or C++ for the few things C can't do yet) and to
-**JavaScript** (Node and web pages). It aims for C++ speed without C++'s
+**WebAssembly** and **JavaScript** (web pages and Node). It aims for C++ speed without C++'s
 learning curve: the syntax reads like a scripting language, but every value has
 a type that is checked before the program runs.
 
@@ -33,8 +33,9 @@ print($"{cart.length()} items, total {total.toFixed(2)}");
 - **Fast without being hard.** Programs run as fast as the same program in C++
   or Java, with no manual memory management, no headers and no build files.
 - **One language for the desktop and the browser.** The same source gives the
-  same output whether it runs natively or as JavaScript. Web pages can be
-  written in Dessa (`.dhtml`).
+  same output whether it runs natively, as WebAssembly or as JavaScript. Web
+  pages written in Dessa (`.dhtml`) run as WebAssembly, faster than
+  JavaScript.
 - **Safe by default.** Nil safety (`?.`, `??`, narrowing), checked 64-bit
   integer arithmetic, bounds-checked lists, and errors you can catch, including
   runtime ones such as overflow.
@@ -48,8 +49,9 @@ print($"{cart.length()} items, total {total.toFixed(2)}");
 |---|---|
 | Language | Types, nil safety, unions, classes, interfaces, enums, generics, lambdas, error classes, modules, operator methods |
 | Native backend | C by default (fast to compile), C++ fallback for unions, `Obj` and a few other features |
-| JavaScript backend | Complete; identical output to native on every test |
-| Browser | `dessa.js`: the compiler itself in WebAssembly; `.dhtml` pages; `webutils` for the DOM |
+| WebAssembly | The C backend's output for pages and `--target wasm`; `webutils` calls the page directly through a fixed bridge; the compiler comes from `dessa setup wasm` |
+| JavaScript backend | Complete; identical output to native on every test; used where WebAssembly can't go yet |
+| Browser | `.dhtml` pages (WebAssembly); `dessa.js`: the compiler itself in the browser |
 | Libraries | Core: `math`, `os`, `sys`, `time` (time zones), `random`, `dsds` (data structures), `dcrypto`, `webutils`. Packages: `json`, `sql` (SQLite), `request` (HTTP), `ashwee` (desktop windows), `torrent`, and smaller ones |
 | Package manager | `riv`, written in Dessa: version ranges, lock file, packages shared over BitTorrent with a GitHub web seed |
 | Editor | VS Code extension: errors as you type, completion from the real types, hover, go to definition, quick fixes, typing helpers |
@@ -59,20 +61,22 @@ print($"{cart.length()} items, total {total.toFixed(2)}");
 ## Performance
 
 The benchmark in `tests/bench` runs the same eight tasks in each language
-(milliseconds, lower is faster, 2026-10-27):
+(milliseconds, lower is faster, best of 3 runs, 2026-10-28):
 
 | | Total | Compared with C++ |
 |---|---:|---:|
-| C++ | 3,706 | 1.0x |
-| Java | 3,616 | 1.0x |
-| **Dessa (native)** | **3,399** | **0.9x** |
-| JavaScript | 11,460 | 3.1x |
-| **Dessa (JavaScript)** | **17,787** | **4.8x** |
-| Python | 77,847 | 21.0x |
+| C++ | 3,944 | 1.0x |
+| Java | 3,903 | 1.0x |
+| **Dessa (native)** | **3,427** | **0.9x** |
+| **Dessa (WebAssembly)** | **8,873** | **2.2x** |
+| JavaScript | 17,631 | 4.5x |
+| Dessa (JavaScript) | 27,812 | 7.1x |
+| Python | 96,131 | 24.4x |
 
-Dessa compiled to JavaScript is slower than hand-written JavaScript mainly
-because every `Int` operation is checked for overflow to keep 64-bit
-semantics; the ideas to close that gap are in [future.md](future.md).
+Pages written in Dessa run as WebAssembly: twice as fast as the same program
+written in JavaScript. Dessa compiled to JavaScript (the fallback) is slower
+than hand-written JavaScript mainly because every `Int` operation is checked
+for overflow to keep 64-bit semantics.
 
 ## Size
 
@@ -108,7 +112,7 @@ self-hosted lexer check. CI runs on Windows, Linux and macOS for every push.
 | C backend | Unions other than `T \| Nil`, `Obj` and anonymous objects in C, so fewer programs fall back to C++ | C, C++ |
 | JavaScript speed | Proving where Ints can't overflow and leaving the check out; `Bul<>` as typed arrays | C++, JavaScript |
 | Self-hosting | The parser in Dessa, matching `dessa ast` output exactly | Dessa |
-| WebAssembly for pages | Running native-speed Dessa in the browser (needs a DOM bridge) | C, Emscripten |
+| WebAssembly | More of the browser's API in `webutils`; unions and `Obj` (through the C backend); a backend writing WebAssembly directly, so `dessa.js` can make it in the browser | C, C++, JavaScript |
 | Libraries | New packages, more of the standard library | Dessa |
 | riv | Signed packages, a Dessa-version requirement for packages | Dessa, networking |
 | Editor | Rename, find references, more quick fixes (needs new compiler queries) | JavaScript, C++ |

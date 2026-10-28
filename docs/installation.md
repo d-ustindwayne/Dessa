@@ -17,6 +17,17 @@ There are two ways to install:
 Either way you end up with `dessa` (the compiler) and `riv` (the package
 manager) on your PATH.
 
+For web pages as WebAssembly (faster than JavaScript), get the WebAssembly
+compiler once, after installing:
+
+```
+dessa setup wasm
+```
+
+It downloads about 50 MB into Dessa's folder (`~/.dessa/wasm` if that folder
+can't be written). Without it, pages are compiled to JavaScript. See
+[web.md](web.md).
+
 ## Windows
 
 1. Unpack the release zip (or clone the repository).

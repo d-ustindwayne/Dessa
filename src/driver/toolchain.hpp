@@ -28,6 +28,18 @@ bool compileCached(const std::string& cpp, const char* argv0, std::string& exe, 
 // Generated C (from CCodegen), not C++
 bool isCSource(const std::string& source);
 
+// ---- WebAssembly (--target wasm, and pages) ----
+// The compiler used for it ("" if there is none): DESSA_WASM_CC, a wasi-sdk
+// (<Dessa>/wasm from `dessa setup wasm`, WASI_SDK_PATH, the usual places),
+// or Emscripten's emcc
+std::string wasmCompiler(const char* argv0);
+// How to get one (for messages)
+std::string wasmHelp();
+// Generated C (CCodegen, setWasm) to a .wasm file. `page`: a page's script
+bool compileWasm(const std::string& c, const std::string& outputWasm, const char* argv0, std::string& error, bool page);
+// The same, reusing an earlier build of identical code
+bool compileWasmCached(const std::string& c, const char* argv0, std::string& wasm, std::string& error, bool page);
+
 // Runs an executable, forwarding stdio, and returns its exit code.
 int run(const std::string& exe, const std::vector<std::string>& args);
 
