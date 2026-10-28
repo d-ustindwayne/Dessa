@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.6
+
+- No changes to the extension (Dessa 0.3.6: WebAssembly programs in Node can use files)
+
 ## 0.3.5
 
 - No changes to the extension (Dessa 0.3.5 fixes `dessa setup wasm` on Linux and macOS)

@@ -117,7 +117,7 @@ selfhost check, and the browser build, on every push and pull request.
 
 Releases are made by a maintainer.
 
-1. Choose the version (`0.3.6`, or `0.4.0` for language changes) and change
+1. Choose the version (`0.3.7`, or `0.4.0` for language changes) and change
    it everywhere it appears:
 
    | File | Where |
@@ -129,11 +129,11 @@ Releases are made by a maintainer.
    | `tools/vscode-dessa/package.json` | `version` |
    | `tools/vscode-dessa/CHANGELOG.md` | the `Unreleased` heading becomes the version |
 
-   `git grep -n "0\.3\.5"` (the old version) finds them all
+   `git grep -n "0\.3\.6"` (the old version) finds them all
    (`tests/bench/RESULTS.md` changes with the benchmark instead).
 2. Run every test suite, and the benchmark; commit the new
    `tests/bench/RESULTS.md` and `results.csv`.
-3. Tag and push: `git tag v0.3.6 && git push origin main v0.3.6`.
+3. Tag and push: `git tag v0.3.7 && git push origin main v0.3.7`.
 4. The Release workflow builds the Windows, Linux and macOS archives,
    `dessa.js`, the VS Code extension and the WebAssembly compiler downloads
    (`dessa-wasm-<platform>.tar.gz`, made by `tools/make_wasm_tools.py`; `dessa

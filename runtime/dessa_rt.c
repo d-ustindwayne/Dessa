@@ -2116,6 +2116,10 @@ int ds_main(int argc, char** argv, void (*body)(void)) {
     SetConsoleOutputCP(65001);
 #endif
     setvbuf(stdout, out_buffer, _IOFBF, sizeof out_buffer);
+#ifdef __wasi__
+    /* WebAssembly in Node: start in the folder it was run from (dessa_wasm.js) */
+    if (getenv("DESSA_WASM_CWD")) chdir(getenv("DESSA_WASM_CWD"));
+#endif
     ds_program_args = ds_list_new(&ds_elem_str, argc);
     for (int i = 1; i < argc; ++i) push_str(ds_program_args, ds_str_cstr(argv[i]));
     ds_catch top;

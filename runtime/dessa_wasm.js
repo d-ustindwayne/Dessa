@@ -320,9 +320,13 @@
                 NodeWasi = null;
             }
             if (NodeWasi) {
-                const preopens = { ".": process.cwd() };
+                // The WASI C library reads "." and "/" as the same folder, so the current
+                // folder gets a name of its own (/cwd), and the program starts in it
+                // (DESSA_WASM_CWD, see ds_main); elsewhere than Windows "/" is the disk
+                const preopens = { "/cwd": process.cwd() };
                 if (process.platform !== "win32") preopens["/"] = "/";
-                const wasi = new NodeWasi({ version: "preview1", args: ["dessa", ...args], env: process.env, preopens, returnOnExit: true });
+                const variables = Object.assign({}, process.env, { DESSA_WASM_CWD: "/cwd" });
+                const wasi = new NodeWasi({ version: "preview1", args: ["dessa", ...args], env: variables, preopens, returnOnExit: true });
                 process.emitWarning = warn;
                 const env = environment({ args });
                 const module = new WebAssembly.Module(fs.readFileSync(file));
