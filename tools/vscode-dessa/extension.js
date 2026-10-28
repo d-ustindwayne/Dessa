@@ -806,44 +806,195 @@ async function importableNames(doc, spec, data) {
     return [...names.values()];
 }
 
-// $ at the start of a line becomes $(|); a space right after var, const or
-// func becomes [|] (a type goes there); Enter inside $("x"|) puts the list
-// over several lines. Then suggestions open.
-// The [] just added after var / const / func: a lowercase letter typed into
-// it means a name was meant (variable = 5), so the brackets go again
-let addedDeclBrackets = null;   // { doc, line, column of [ }
+// Typing helpers (setting dessa.autoBrackets):
+//   $ at the start of a line        -> $(|)
+//   var, const, func                -> var[|]        (a type goes there)
+//   init in a class, super in init  -> init(|), super(|);
+//   space after if, while, for ...  -> if (|)
+//   space after loop                -> loop { | } over three lines
+//   < where a value starts          -> <|>           (a list); Int< in a type -> Int<>
+//   { after an import               -> {  }
+//   !! in a type                    -> spaces around it
+//   Enter inside $("x")             -> the import list over several lines
+// Backspace on an opening bracket with its closing one right after removes
+// both, and a closing bracket typed in front of the same one steps over it.
+
+const NO_UNDO_STOP = { undoStopBefore: false, undoStopAfter: false };
+const CLOSING = { '(': ')', '[': ']', '{': '}', '<': '>' };
+
+// The cursor's line as it was before the latest change: a change only says
+// where text went, this says what it was (and whether it was a backspace)
+let lineBefore = null;          // { doc, line, text, cursor }
+// Brackets just added after var/const/func/init/super, while nothing else was typed
+let justAdded = null;           // { doc, line, column of the bracket, kind: 'decl' | 'init' | 'super' }
+// The empty body just added after loop
+let loopBody = null;            // { doc, line of `loop {` }
+// The cursor just left a type's [] after a type was picked: var[Int] |
+let leftType = null;            // { doc, line, close: column of ], cursor }
+
+// Edits made here are not typing: the change handler ignores them
+let ownEdits = 0;
+function edit(editor, build) {
+    ownEdits++;
+    return editor.edit(build, NO_UNDO_STOP).then((ok) => {
+        ownEdits--;
+        return ok;
+    }, (err) => {
+        ownEdits--;
+        throw err;
+    });
+}
+
+function rememberLine(editor) {
+    if (!editor || editor.document.uri.scheme !== 'file') return;
+    const at = editor.selection.active;
+    lineBefore = { doc: editor.document, line: at.line, text: editor.document.lineAt(at.line).text, cursor: at.character };
+}
+
+function moveTo(editor, position) {
+    editor.selection = new vscode.Selection(position, position);
+}
+
+// The text before the { of the block the position is in (`class Shop`, `init(x[Int])`, ...)
+function blockHeader(doc, position) {
+    const text = doc.getText(new vscode.Range(new vscode.Position(Math.max(0, position.line - 400), 0), position));
+    let depth = 0;
+    for (let i = text.length - 1; i >= 0; i--) {
+        if (text[i] === '}') depth++;
+        else if (text[i] === '{') {
+            if (depth === 0) return text.slice(Math.max(0, i - 300), i).replace(/\s+$/, '');
+            depth--;
+        }
+    }
+    return '';
+}
+
+// How many more closing than opening brackets the line has (strings left out)
+function excess(text, open, close) {
+    const code = text.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, '""');
+    let n = 0;
+    for (const c of code) {
+        if (c === open) n--;
+        else if (c === close) n++;
+    }
+    return n;
+}
 
 function autoBrackets(e) {
     if (!vscode.workspace.getConfiguration('dessa').get('autoBrackets')) return;
     const editor = vscode.window.visibleTextEditors.find((ed) => ed.document === e.document);
-    if (!editor || e.contentChanges.length !== 1) return;
+    if (!editor || e.contentChanges.length !== 1 || ownEdits > 0) return;
     const change = e.contentChanges[0];
     const doc = e.document;
     const at = change.range.start;
-    const added = addedDeclBrackets;
-    addedDeclBrackets = null;
+    const prev = lineBefore;
+    const added = justAdded, loop = loopBody, left = leftType;
+    justAdded = null;
+    leftType = null;
+    if (change.text === '' && change.rangeLength > 0) {
+        loopBody = null;
+        if (loop && loop.doc === doc && collapseLoop(editor, change, loop.line)) return;
+        if (isDessa(doc)) deletePair(editor, change, prev);
+        return;
+    }
+    loopBody = null;
     if (/^\r?\n\s*$/.test(change.text)) {
         if (isDessa(doc) && inDessaScript(doc, at) && !inStringOrComment(doc, at)) importOnEnter(editor, at.line);
         return;
     }
-    if (added && added.doc === doc && change.rangeLength === 0 && /^[a-z_0-9]$/.test(change.text) &&
-        at.line === added.line && at.character === added.column + 1 &&
-        doc.lineAt(at.line).text.slice(added.column, added.column + 3) === '[' + change.text + ']') {
-        const start = new vscode.Position(at.line, added.column);
-        editor.edit((b) => b.replace(new vscode.Range(start, start.translate(0, 3)), change.text),
-            { undoStopBefore: false, undoStopAfter: false }).then((ok) => {
-            if (!ok) return;
-            const cursor = start.translate(0, 1);
-            editor.selection = new vscode.Selection(cursor, cursor);
-            vscode.commands.executeCommand('hideSuggestWidget');
-        });
-        return;
-    }
-    if (change.rangeLength !== 0 || !['$', ' ', '{', '{}', '!', 'r', 't', 'c'].includes(change.text)) return;
-    if (!isDessa(doc) || !inDessaScript(doc, at) || inStringOrComment(doc, at)) return;
+    if (change.rangeLength !== 0 || !isDessa(doc)) return;
     const text = doc.lineAt(at.line).text;
     const before = text.slice(0, at.character);
     const after = text.slice(at.character + change.text.length);
+
+    if (added && added.doc === doc && at.line === added.line && at.character === added.column + 1) {
+        // var[x] -> varx: a lowercase letter means a name was meant (variable = 5)
+        if (added.kind === 'decl' && /^[a-z_0-9]$/.test(change.text) &&
+            text.slice(added.column, added.column + 3) === '[' + change.text + ']') {
+            const start = new vscode.Position(at.line, added.column);
+            edit(editor, (b) => b.replace(new vscode.Range(start, start.translate(0, 3)), change.text)).then((ok) => {
+                if (!ok) return;
+                moveTo(editor, start.translate(0, 1));
+                vscode.commands.executeCommand('hideSuggestWidget');
+            });
+            return;
+        }
+        // super(.) -> super.
+        if (added.kind === 'super' && change.text === '.' && text.slice(added.column).startsWith('(.)')) {
+            const start = new vscode.Position(at.line, added.column);
+            const end = text.slice(added.column).startsWith('(.);') ? 4 : 3;
+            edit(editor, (b) => b.replace(new vscode.Range(start, start.translate(0, end)), '.')).then((ok) => {
+                if (!ok) return;
+                moveTo(editor, start.translate(0, 1));
+                vscode.commands.executeCommand('editor.action.triggerSuggest');
+            });
+            return;
+        }
+        // The bracket typed out of habit (var[[]]): it is already there
+        const open = text[added.column];
+        if (change.text === open || change.text === open + CLOSING[open]) {
+            edit(editor, (b) => b.delete(new vscode.Range(at, at.translate(0, change.text.length)))).then((ok) => {
+                if (!ok) return;
+                moveTo(editor, at);
+                justAdded = added;
+            });
+            return;
+        }
+    }
+
+    // var[Int] | then < | : ! go back inside the brackets: var[Int<>] |, var[Int | |]
+    if (left && left.doc === doc && at.line === left.line && at.character === left.cursor &&
+        ['<', '|', ':', '!'].includes(change.text) && text[left.close] === ']') {
+        const between = text.slice(left.close + 1, at.character);
+        const lead = text[left.close - 1] === ' ' ? '' : ' ';
+        const inside = { '<': '<>', '|': lead + '| ', ':': ':', '!': '!' }[change.text];
+        const start = new vscode.Position(at.line, left.close);
+        edit(editor, (b) => b.replace(new vscode.Range(start, at.translate(0, 1)), inside + ']' + between)).then((ok) => {
+            if (!ok) return;
+            if (change.text === '<') {
+                const cursor = at.translate(0, 2);
+                moveTo(editor, cursor);
+                leftType = { doc, line: at.line, close: left.close + 2, cursor: cursor.character };
+                return;
+            }
+            moveTo(editor, start.translate(0, inside.length));
+            if (change.text !== '!') vscode.commands.executeCommand('editor.action.triggerSuggest');
+        });
+        return;
+    }
+
+    // A closing bracket typed in front of the same one: step over it, unless
+    // the line needs both (it had all its brackets closed before)
+    if ([')', ']', '>'].includes(change.text) && after.startsWith(change.text) && !inStringOrComment(doc, at)) {
+        const open = change.text === ')' ? '(' : change.text === ']' ? '[' : '<';
+        if (excess(text, open, change.text) === 1) {
+            edit(editor, (b) => b.delete(new vscode.Range(at.translate(0, 1), at.translate(0, 2)))).then((ok) => {
+                if (ok) moveTo(editor, at.translate(0, 1));
+            });
+            return;
+        }
+    }
+
+    if (!['$', ' ', '{', '{}', '!', 'r', 't', 'c', '<'].includes(change.text)) return;
+    if (!inDessaScript(doc, at) || inStringOrComment(doc, at)) return;
+
+    // init (directly in a class) -> init(|); super (in an init) -> super(|);
+    if (/^[tr]$/.test(change.text)) {
+        const call = /(^\s*|[;{}]\s*)(init|super)$/.exec(before + change.text);
+        if (call && after.trim() === '') {
+            const header = blockHeader(doc, at);
+            const fits = call[2] === 'init' ? /\bclass\s+\w[^;{}]*$/.test(header) : /\binit\s*\([^(){};]*\)$/.test(header);
+            if (!fits) return;
+            const end = at.translate(0, 1);
+            edit(editor, (b) => b.insert(end, call[2] === 'init' ? '()' : '();')).then((ok) => {
+                if (!ok) return;
+                moveTo(editor, end.translate(0, 1));
+                justAdded = { doc, line: end.line, column: end.character, kind: call[2] };
+                if (call[2] === 'super') vscode.commands.executeCommand('editor.action.triggerParameterHints');
+            });
+            return;
+        }
+    }
     // `var` typed at the start of a statement -> `var[|]` (not in `var[Int] variable`)
     if (/^[rtc]$/.test(change.text)) {
         const word = before + change.text;
@@ -851,12 +1002,24 @@ function autoBrackets(e) {
         if (!start || !/^\s*\)?\s*$/.test(after)) return;
         if (/\b(var|const|func)\b/.test(word.slice(0, word.length - start[2].length))) return;
         const end = at.translate(0, 1);
-        editor.edit((b) => b.insert(end, '[]'), { undoStopBefore: false, undoStopAfter: false }).then((ok) => {
+        edit(editor, (b) => b.insert(end, '[]')).then((ok) => {
             if (!ok) return;
-            const inside = end.translate(0, 1);
-            editor.selection = new vscode.Selection(inside, inside);
-            addedDeclBrackets = { doc, line: end.line, column: end.character };
+            moveTo(editor, end.translate(0, 1));
+            justAdded = { doc, line: end.line, column: end.character, kind: 'decl' };
             vscode.commands.executeCommand('editor.action.triggerSuggest');
+        });
+        return;
+    }
+    // `loop |` -> loop {
+    //                 |
+    //             }
+    if (change.text === ' ' && /(^|[;{}])\s*loop$/.test(before) && after.trim() === '') {
+        const indent = /^\s*/.exec(text)[0];
+        const unit = editor.options.insertSpaces ? ' '.repeat(Number(editor.options.tabSize) || 4) : '\t';
+        edit(editor, (b) => b.replace(new vscode.Range(at, at.translate(0, 1)), ` {\n${indent}${unit}\n${indent}}`)).then((ok) => {
+            if (!ok) return;
+            moveTo(editor, new vscode.Position(at.line + 1, indent.length + unit.length));
+            loopBody = { doc, line: at.line };
         });
         return;
     }
@@ -884,28 +1047,101 @@ function autoBrackets(e) {
         replace = '{  }';
         cursor = 2;
     }
+    // `x = <|` -> `x = <|>` where a value starts (a list), `var[Int<|]` -> `var[Int<>|]`
+    if (change.text === '<' && !after.startsWith('>')) {
+        if (/(^|[^<>!=]=|[(,]|\breturn|:=)\s*$/.test(before) && /^\s*[),;]?\s*$/.test(after)) {
+            replace = '<>';
+            cursor = 1;
+            suggest = false;
+        } else if (/\w$/.test(before) && inTypeBrackets(before)) {
+            replace = '<>';
+            cursor = 2;
+            suggest = false;
+        }
+    }
     // `func[Dbl!!|` -> `func[Dbl !! |]`: what a function may throw
     if (change.text === '!' && before.endsWith('!') && !before.endsWith('!!') && inTypeBrackets(before.slice(0, -1))) {
         const start = at.translate(0, -1);
         const lead = /\s$/.test(before.slice(0, -1)) ? '' : ' ';
         const trail = /^\s/.test(after) ? '' : ' ';
-        editor.edit((b) => b.replace(new vscode.Range(start, at.translate(0, 1)), lead + '!!' + trail),
-            { undoStopBefore: false, undoStopAfter: false }).then((ok) => {
+        edit(editor, (b) => b.replace(new vscode.Range(start, at.translate(0, 1)), lead + '!!' + trail)).then((ok) => {
             if (!ok) return;
-            const inside = start.translate(0, lead.length + 2 + trail.length);
-            editor.selection = new vscode.Selection(inside, inside);
+            moveTo(editor, start.translate(0, lead.length + 2 + trail.length));
             vscode.commands.executeCommand('editor.action.triggerSuggest');
         });
         return;
     }
     if (replace === null) return;
-    editor.edit((b) => b.replace(new vscode.Range(at, at.translate(0, change.text.length)), replace),
-        { undoStopBefore: false, undoStopAfter: false }).then((ok) => {
+    edit(editor, (b) => b.replace(new vscode.Range(at, at.translate(0, change.text.length)), replace)).then((ok) => {
         if (!ok) return;
-        const inside = at.translate(0, cursor);
-        editor.selection = new vscode.Selection(inside, inside);
+        moveTo(editor, at.translate(0, cursor));
         if (suggest) vscode.commands.executeCommand('editor.action.triggerSuggest');
     });
+}
+
+// Backspace on an opening bracket whose closing one comes right after: (|)
+// both go. In an import's {  } the braces and spaces go together.
+function deletePair(editor, change, prev) {
+    const doc = editor.document;
+    const at = change.range.start;
+    if (change.rangeLength !== 1 || change.range.end.line !== at.line) return;
+    // A backspace (the cursor was just after the deleted character), not Delete
+    if (!prev || prev.doc !== doc || prev.line !== at.line || prev.cursor !== at.character + 1) return;
+    const gone = prev.text[at.character];
+    const text = doc.lineAt(at.line).text;
+    const before = text.slice(0, at.character);
+    const after = text.slice(at.character);
+    if (!inDessaScript(doc, at) || inStringOrComment(doc, at)) return;
+    let range = null;
+    if (CLOSING[gone] && after.startsWith(CLOSING[gone])) range = new vscode.Range(at, at.translate(0, 1));
+    else if (gone === ' ' && after.startsWith(' }') && /\$\([^()]*\)\s*\{$/.test(before)) range = new vscode.Range(at.translate(0, -1), at.translate(0, 2));
+    if (!range) return;
+    edit(editor, (b) => b.delete(range)).then((ok) => {
+        if (ok) moveTo(editor, range.start);
+    });
+}
+
+// A backspace in the empty body that `loop ` added takes the body away again
+function collapseLoop(editor, change, line) {
+    const doc = editor.document;
+    const at = change.range.start;
+    if (at.line !== line + 1 && !(at.line === line && change.range.end.line === line + 1)) return false;
+    if (line + 1 >= doc.lineCount) return false;
+    const head = doc.lineAt(line).text;
+    const next = doc.lineAt(line + 1).text;
+    let end = null;
+    if (/^\s*loop \{\s*$/.test(head) && /^\s*\}\s*$/.test(next)) end = new vscode.Position(line + 1, next.length);
+    else if (/^\s*loop \{$/.test(head) && /^\s*$/.test(next) && line + 2 < doc.lineCount && /^\s*\}\s*$/.test(doc.lineAt(line + 2).text)) {
+        end = new vscode.Position(line + 2, doc.lineAt(line + 2).text.length);
+    }
+    if (!end) return false;
+    const start = new vscode.Position(line, head.indexOf('loop {') + 5);
+    edit(editor, (b) => b.delete(new vscode.Range(start, end))).then((ok) => {
+        if (ok) moveTo(editor, start);
+    });
+    return true;
+}
+
+// A type was picked from the suggestions inside var[...], func[...] or a
+// parameter's [...]: the cursor goes past the ], with a space after var,
+// const and func (var[Int] |) and none after a parameter (x[Int]|)
+async function leaveType(space) {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) return;
+    const doc = editor.document;
+    const at = editor.selection.active;
+    const text = doc.lineAt(at.line).text;
+    if (text[at.character] !== ']') return;
+    let target = at.character + 1;
+    if (space) {
+        if (text[target] === ' ') target++;
+        else {
+            if (!await edit(editor, (b) => b.insert(new vscode.Position(at.line, target), ' '))) return;
+            target++;
+        }
+    }
+    moveTo(editor, new vscode.Position(at.line, target));
+    leftType = { doc, line: at.line, close: at.character, cursor: target };
 }
 
 const IMPORT_SPEC = String.raw`"[\w.]+"(?:\s+as\s+\w+)?`;
@@ -947,7 +1183,7 @@ function importOnEnter(editor, line) {
         const lines = [indent + braces[2].replace(/\s+$/, ''), ...first.map((n) => indent + unit + n + ','), indent + unit,
             ...later.map((n) => indent + unit + n + ','), indent + '}' + closeText.slice(closeText.indexOf('}') + 1)];
         const range = new vscode.Range(line, 0, close, closeText.length);
-        editor.edit((b) => b.replace(range, lines.join('\n')), { undoStopBefore: false, undoStopAfter: false }).then((ok) => {
+        edit(editor, (b) => b.replace(range, lines.join('\n'))).then((ok) => {
             if (!ok) return;
             const cursor = new vscode.Position(line + first.length + 1, indent.length + unit.length);
             editor.selection = new vscode.Selection(cursor, cursor);
@@ -965,7 +1201,7 @@ function importOnEnter(editor, line) {
                 return;
             }
             const end = new vscode.Position(line, text.replace(/\s+$/, '').length);
-            editor.edit((b) => b.insert(end, ','), { undoStopBefore: false, undoStopAfter: false }).then((ok) => {
+            edit(editor, (b) => b.insert(end, ',')).then((ok) => {
                 if (ok) suggest();
             });
             return;
@@ -979,7 +1215,7 @@ function importOnEnter(editor, line) {
         const specs = oneLine[2].match(new RegExp(IMPORT_SPEC, 'g'));
         const lines = [indent + '$(', ...specs.map((s) => indent + unit + s + ','), indent + unit, indent];
         const range = new vscode.Range(line, 0, line + 1, close[0].length - 1);
-        editor.edit((b) => b.replace(range, lines.join('\n')), { undoStopBefore: false, undoStopAfter: false }).then((ok) => {
+        edit(editor, (b) => b.replace(range, lines.join('\n'))).then((ok) => {
             if (!ok) return;
             const cursor = new vscode.Position(line + specs.length + 1, indent.length + unit.length);
             editor.selection = new vscode.Selection(cursor, cursor);
@@ -999,7 +1235,7 @@ function importOnEnter(editor, line) {
         return;
     }
     const end = new vscode.Position(line, text.replace(/\s+$/, '').length);
-    editor.edit((b) => b.insert(end, ','), { undoStopBefore: false, undoStopAfter: false }).then((ok) => {
+    edit(editor, (b) => b.insert(end, ',')).then((ok) => {
         if (ok) suggest();
     });
 }
@@ -1008,6 +1244,11 @@ function importOnEnter(editor, line) {
 // [ right after a word is always a type: var[, func[, x[ (a parameter),
 // Map[, Func[, Int[. A dotted name (m.Big) is left to member completion.
 function inTypeBrackets(before) {
+    return typeBracketsOf(before) !== null;
+}
+
+// The word the type's [ belongs to (var, func, a parameter's name, Map ...), or null
+function typeBracketsOf(before) {
     let depth = 0;
     for (let i = before.length - 1; i >= 0; i--) {
         const c = before[i];
@@ -1017,20 +1258,31 @@ function inTypeBrackets(before) {
                 depth--;
                 continue;
             }
-            const word = /[A-Za-z_]\w*\s*$/.test(before.slice(Math.max(0, i - 200), i));
-            return word && !/\.\s*\w*$/.test(before.slice(i + 1));
+            const word = /([A-Za-z_]\w*)\s*$/.exec(before.slice(Math.max(0, i - 200), i));
+            return word && !/\.\s*\w*$/.test(before.slice(i + 1)) ? word[1] : null;
         } else if (c === ';' || c === '=' || c === '"' || c === '\n') {
-            return false;
+            return null;
         }
     }
-    return false;
+    return null;
+}
+
+// After a type is picked in var[...] / const[...] / func[...], the cursor
+// leaves the brackets with a space; in a parameter's x[...], without one.
+// Inside Map[...], Func[...] and the like it stays.
+function leaveTypeCommand(before) {
+    const owner = typeBracketsOf(before);
+    if (!owner) return null;
+    if (['var', 'const', 'func'].includes(owner)) return { command: 'dessa.leaveType', title: 'Leave the type', arguments: [true] };
+    if (/^[a-z_]/.test(owner)) return { command: 'dessa.leaveType', title: 'Leave the type', arguments: [false] };
+    return null;
 }
 
 const TYPE_KINDS = new Set(['class', 'interface', 'enum']);
 
 // The types: built in, then the classes, interfaces and enums in scope
 // (the compiler's list, or the file's globals when it couldn't answer)
-function typeItems(fromCompiler, data) {
+function typeItems(fromCompiler, data, leave) {
     const items = [];
     const seen = new Set();
     const push = (item) => {
@@ -1048,6 +1300,7 @@ function typeItems(fromCompiler, data) {
         const item = new vscode.CompletionItem(p, vscode.CompletionItemKind.TypeParameter);
         item.detail = desc;
         item.sortText = `0${p}`;
+        item.insertText = new vscode.SnippetString(`${p}[$0]`);
         push(item);
     }
     for (const item of fromCompiler || []) {
@@ -1063,6 +1316,7 @@ function typeItems(fromCompiler, data) {
         item.sortText = `1${g.name}`;
         push(item);
     }
+    if (leave) for (const item of items) if (!(item.insertText instanceof vscode.SnippetString)) item.command = leave;
     return items;
 }
 
@@ -1078,6 +1332,42 @@ function symbolKind(kind) {
         case 'module': return vscode.CompletionItemKind.Module;
         default: return vscode.CompletionItemKind.Variable;
     }
+}
+
+// The events addEventListener("|") suggests
+const EVENTS = {
+    click: 'a click (or a tap)', dblclick: 'a double click', contextmenu: 'the right mouse button (the context menu)',
+    mousedown: 'a mouse button pressed', mouseup: 'a mouse button released', mousemove: 'the mouse moved',
+    mouseover: 'the mouse came over the element (or a child)', mouseout: 'the mouse left the element (or a child)',
+    mouseenter: 'the mouse came over the element', mouseleave: 'the mouse left the element', wheel: 'the mouse wheel turned',
+    pointerdown: 'a mouse, pen or finger pressed', pointerup: 'a mouse, pen or finger released', pointermove: 'a mouse, pen or finger moved',
+    pointerenter: 'a pointer came over the element', pointerleave: 'a pointer left the element', pointercancel: 'a pointer was cancelled',
+    touchstart: 'a finger touched', touchmove: 'a finger moved', touchend: 'a finger lifted', touchcancel: 'a touch was cancelled',
+    keydown: 'a key pressed', keyup: 'a key released', keypress: 'a character typed (old; use keydown)',
+    input: 'the value of an input changed (each keystroke)', change: 'the value changed and was committed',
+    submit: 'a form was sent', reset: 'a form was reset', select: 'text was selected in an input',
+    focus: 'the element got the focus', blur: 'the element lost the focus', focusin: 'focus (bubbles)', focusout: 'blur (bubbles)',
+    copy: 'something was copied', cut: 'something was cut', paste: 'something was pasted',
+    dragstart: 'dragging started', drag: 'being dragged', dragend: 'dragging ended', dragenter: 'something dragged came over',
+    dragover: 'something dragged is over', dragleave: 'something dragged left', drop: 'something was dropped',
+    scroll: 'the element or page scrolled', resize: 'the window was resized', load: 'the page (or an image) finished loading',
+    DOMContentLoaded: 'the page\'s HTML is ready', beforeunload: 'the page is about to close', unload: 'the page is closing',
+    error: 'loading failed', hashchange: 'the # part of the address changed', popstate: 'back or forward in the history',
+    visibilitychange: 'the tab was hidden or shown', online: 'the network came back', offline: 'the network went away',
+    play: 'media started playing', pause: 'media paused', ended: 'media reached the end', timeupdate: 'the media\'s time moved',
+    volumechange: 'the volume changed', loadeddata: 'media data loaded',
+    animationstart: 'a CSS animation started', animationend: 'a CSS animation ended', transitionend: 'a CSS transition ended',
+};
+
+function eventItems(doc, position, typed) {
+    const close = doc.lineAt(position).text.slice(position.character).startsWith('"') ? '' : '"';
+    return Object.entries(EVENTS).map(([name, desc]) => {
+        const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Event);
+        item.detail = desc;
+        item.range = new vscode.Range(position.translate(0, -typed.length), position);
+        item.insertText = name + close;
+        return item;
+    });
 }
 
 // ============================================================
@@ -1149,12 +1439,18 @@ const completionProvider = {
             for (const module of projectModules(doc)) items.push(make(module, vscode.CompletionItemKind.File, 'a file of this project'));
             return items;
         }
+        // addEventListener("cl|"): the events
+        const event = /\b(?:add|remove)EventListener\s*\(\s*"(\w*)$/.exec(linePrefix);
+        if (event) return eventItems(doc, position, event[1]);
         // A quote typed anywhere else starts an ordinary string
         if (context && context.triggerCharacter === '"') return undefined;
         if (inStringOrComment(doc, position)) return undefined;
 
         // var[|], func[|], name[|] in parameters: a type goes there, not a variable
-        if (inTypeBrackets(before.slice(-2000))) return typeItems(await compilerCompletions(doc, position), data);
+        if (inTypeBrackets(before.slice(-2000))) {
+            const leave = vscode.workspace.getConfiguration('dessa').get('autoBrackets') ? leaveTypeCommand(before.slice(-2000)) : null;
+            return typeItems(await compilerCompletions(doc, position), data, leave);
+        }
 
         // Ask the compiler first: exact types, locals, narrowing, imports
         const fromCompiler = await compilerCompletions(doc, position);
@@ -1205,6 +1501,110 @@ const completionProvider = {
         return item;
     },
 };
+
+// Quick fixes (the light bulb) for the compiler's messages
+const codeActionProvider = {
+    provideCodeActions(doc, range, context) {
+        const actions = [];
+        const oldLists = [];
+        for (const diag of context.diagnostics) {
+            if (diag.source !== 'dessa') continue;
+            // ... install it with: riv add sql
+            const riv = /riv add ([\w.-]+)/.exec(diag.message);
+            if (riv) {
+                const action = new vscode.CodeAction(`Install the package: riv add ${riv[1]}`, vscode.CodeActionKind.QuickFix);
+                action.command = { command: 'dessa.rivAdd', title: 'riv add', arguments: [riv[1], doc.uri] };
+                action.diagnostics = [diag];
+                action.isPreferred = true;
+                actions.push(action);
+            }
+            if (diag.tags && diag.tags.includes(vscode.DiagnosticTag.Unnecessary)) {
+                const action = new vscode.CodeAction('Remove the unused import', vscode.CodeActionKind.QuickFix);
+                action.edit = new vscode.WorkspaceEdit();
+                action.edit.delete(doc.uri, unusedImportRange(doc, diag.range));
+                action.diagnostics = [diag];
+                action.isPreferred = true;
+                actions.push(action);
+            }
+            if (diag.message.startsWith('Lists are written with < >')) {
+                const fix = oldListFix(doc, diag.range.start);
+                if (!fix) continue;
+                const action = new vscode.CodeAction('Write the list with < >', vscode.CodeActionKind.QuickFix);
+                action.edit = new vscode.WorkspaceEdit();
+                for (const [r, t] of fix) action.edit.replace(doc.uri, r, t);
+                action.diagnostics = [diag];
+                action.isPreferred = true;
+                actions.push(action);
+                oldLists.push(diag);
+            }
+        }
+        // Every old list in the file at once
+        const all = vscode.languages.getDiagnostics(doc.uri).filter((d) => d.source === 'dessa' && d.message.startsWith('Lists are written with < >'));
+        if (oldLists.length && all.length > 1) {
+            const action = new vscode.CodeAction(`Write all ${all.length} lists in this file with < >`, vscode.CodeActionKind.QuickFix);
+            action.edit = new vscode.WorkspaceEdit();
+            const done = new Set();
+            for (const d of all) {
+                for (const [r, t] of oldListFix(doc, d.range.start) || []) {
+                    const key = `${r.start.line}:${r.start.character}`;
+                    if (done.has(key)) continue;
+                    done.add(key);
+                    action.edit.replace(doc.uri, r, t);
+                }
+            }
+            actions.push(action);
+        }
+        return actions;
+    },
+};
+
+// What to delete for an unused import: the whole line when the import is
+// all there is on it, a name in { PI, E } with its comma
+function unusedImportRange(doc, range) {
+    const line = doc.lineAt(range.start.line);
+    const word = doc.getText(range);
+    if (word.startsWith('$(')) {
+        if (range.isSingleLine && line.text.trim() === word.trim()) return line.rangeIncludingLineBreak;
+        return range;
+    }
+    const text = line.text;
+    const after = /^\s*,\s*/.exec(text.slice(range.end.character));
+    if (after) return new vscode.Range(range.start, range.end.translate(0, after[0].length));
+    const before = /,\s*$/.exec(text.slice(0, range.start.character));
+    if (before) return new vscode.Range(range.start.translate(0, -before[0].length), range.end);
+    return range;
+}
+
+// [1, 2] -> <1, 2>: the [ at `start` and the ] that closes it
+function oldListFix(doc, start) {
+    const text = doc.getText();
+    const open = doc.offsetAt(start);
+    if (text[open] !== '[') return null;
+    let depth = 0, quote = null;
+    for (let i = open; i < text.length; i++) {
+        const c = text[i];
+        if (quote) {
+            if (c === '\\') i++;
+            else if (c === quote) quote = null;
+            continue;
+        }
+        if (c === '"' || c === "'") quote = c;
+        else if (c === '[') depth++;
+        else if (c === ']' && --depth === 0) {
+            const close = doc.positionAt(i);
+            return [[new vscode.Range(start, start.translate(0, 1)), '<'], [new vscode.Range(close, close.translate(0, 1)), '>']];
+        }
+    }
+    return null;
+}
+
+function rivAdd(name, uri) {
+    const folder = uri && vscode.workspace.getWorkspaceFolder(uri);
+    const cwd = folder ? folder.uri.fsPath : uri ? path.dirname(uri.fsPath) : undefined;
+    const terminal = vscode.window.createTerminal({ name: 'riv', cwd });
+    terminal.show();
+    terminal.sendText(`riv add ${name}`);
+}
 
 async function describe(doc, word) {
     if (PRIMITIVES[word]) return `**${word}**: ${PRIMITIVES[word]}`;
@@ -1292,6 +1692,92 @@ const htmlCompletionProvider = {
             return item;
         });
         return new vscode.CompletionList(items, list.isIncomplete);
+    },
+};
+
+// Typing in a page's HTML, as in .html files: `>` closes the tag
+// (<div>|</div>), `</` finishes the closing tag, `=` after an attribute adds
+// the quotes (class="|")
+function htmlTyping(e) {
+    const doc = e.document;
+    if (doc.languageId !== 'dessa-html' || e.contentChanges.length !== 1) return;
+    const change = e.contentChanges[0];
+    if (change.rangeLength !== 0 || !['>', '/', '=', '"'].includes(change.text)) return;
+    const editor = vscode.window.visibleTextEditors.find((ed) => ed.document === doc);
+    if (!editor) return;
+    const after = change.range.start.translate(0, 1);
+    if (!inPageHtml(doc, after)) return;
+    // class="x"|" -> class="x"|: a " typed in front of the closing one steps over it
+    if (change.text === '"') {
+        const line = doc.lineAt(after.line).text;
+        if (line[after.character] === '"' && (line.split('"').length - 1) % 2 === 1) {
+            edit(editor, (b) => b.delete(new vscode.Range(after, after.translate(0, 1))));
+        }
+        return;
+    }
+    const html = htmlFor(doc);
+    if (!html) return;
+    const version = doc.version;
+    // `=` right after an attribute's name in a tag (the HTML service misses
+    // some, such as <span id=</div> on one line)
+    const line = doc.lineAt(after.line).text;
+    const attribute = /<[A-Za-z][\w-]*(?:\s+[^\s=<>"'/]+(?:=(?:"[^"]*"|'[^']*'|[^\s<>"']+))?)*\s+[^\s=<>"'/]+=$/;
+    const snippet = change.text === '='
+        ? (attribute.test(line.slice(0, after.character)) && !/^["']/.test(line.slice(after.character)) ? '"$1"' : null)
+        : html.ls.doTagComplete(html.td, after, html.parsed);
+    if (!snippet) return;
+    // `$0</div>` or `"$1"`: the text, and the cursor where the $ was
+    const cursor = snippet.search(/\$\d/);
+    const text = snippet.replace(/\$\d/g, '');
+    // Only if nothing else was typed meanwhile
+    setTimeout(() => {
+        if (doc.version !== version) return;
+        vscode.commands.executeCommand('hideSuggestWidget');
+        edit(editor, (b) => b.insert(after, text)).then((ok) => {
+            if (ok) moveTo(editor, after.translate(0, Math.max(0, cursor)));
+        });
+    }, 0);
+}
+
+const htmlLinkedEditingProvider = {
+    provideLinkedEditingRanges(doc, position) {
+        if (!inPageHtml(doc, position)) return null;
+        const html = htmlFor(doc);
+        const ranges = html && html.ls.findLinkedEditingRanges(html.td, position, html.parsed);
+        return ranges ? new vscode.LinkedEditingRanges(ranges.map(lspRange)) : null;
+    },
+};
+
+const htmlSymbolProvider = {
+    provideDocumentSymbols(doc) {
+        const html = htmlFor(doc);
+        if (!html) return [];
+        return html.ls.findDocumentSymbols(html.td, html.parsed).map((sym) =>
+            new vscode.SymbolInformation(sym.name, sym.kind - 1, sym.containerName || '', new vscode.Location(doc.uri, lspRange(sym.location.range))));
+    },
+};
+
+const htmlSelectionProvider = {
+    provideSelectionRanges(doc, positions) {
+        const html = htmlFor(doc);
+        if (!html) return [];
+        const convert = (r) => r && new vscode.SelectionRange(lspRange(r.range), convert(r.parent));
+        return html.ls.getSelectionRanges(html.td, positions).map(convert);
+    },
+};
+
+// Format Document: the HTML is formatted as in .html files; the Dessa scripts
+// (and <pre>, <textarea>) are left as they are
+const htmlFormattingProvider = {
+    provideDocumentFormattingEdits(doc, options) {
+        const html = htmlFor(doc);
+        if (!html) return [];
+        return html.ls.format(html.td, undefined, {
+            tabSize: options.tabSize,
+            insertSpaces: options.insertSpaces,
+            contentUnformatted: 'pre,code,textarea,script',
+            endWithNewline: true,
+        }).map((edit) => vscode.TextEdit.replace(lspRange(edit.range), edit.newText));
     },
 };
 
@@ -1463,9 +1949,39 @@ async function activeDessaDocument() {
     return editor.document;
 }
 
+// The terminals running a page (dessa run page.dhtml), by the page's path
+const pageTerminals = new Map();
+
+function updatePageContext() {
+    const active = vscode.window.activeTerminal;
+    vscode.commands.executeCommand('setContext', 'dessa.pageRunning', pageTerminals.size > 0);
+    vscode.commands.executeCommand('setContext', 'dessa.pageTerminal', !!active && [...pageTerminals.values()].includes(active));
+}
+
+// Ctrl+R: save the page and reload it in the browser (dessa run reloads on
+// Ctrl+R); runs it when it isn't running yet
+async function reloadPage() {
+    const editor = vscode.window.activeTextEditor;
+    let terminal = vscode.window.activeTerminal;
+    if (!terminal || ![...pageTerminals.values()].includes(terminal) || (editor && editor.document.languageId === 'dessa-html')) {
+        terminal = editor && pageTerminals.get(editor.document.fileName);
+        if (!terminal && editor && editor.document.languageId === 'dessa-html') return runFile();
+        if (!terminal) terminal = [...pageTerminals.values()].pop();
+    }
+    if (!terminal) return;
+    await vscode.workspace.saveAll(false);
+    terminal.sendText('\x12', false);
+}
+
 async function runFile() {
     const doc = await activeDessaDocument();
     if (!doc) return;
+    const running = pageTerminals.get(doc.fileName);
+    if (running) {
+        running.show(true);
+        running.sendText('\x12', false);
+        return;
+    }
     const terminal = vscode.window.createTerminal({
         name: `Dessa: ${path.basename(doc.fileName)}`,
         shellPath: compilerPath(),
@@ -1473,6 +1989,10 @@ async function runFile() {
         cwd: path.dirname(doc.fileName),
         env: { DESSA_PACKAGES: compilerEnv().DESSA_PACKAGES },
     });
+    if (doc.languageId === 'dessa-html') {
+        pageTerminals.set(doc.fileName, terminal);
+        updatePageContext();
+    }
     terminal.show();
 }
 
@@ -1521,18 +2041,33 @@ function activate(context) {
         vscode.languages.registerSignatureHelpProvider(selector, signatureHelpProvider, '(', ','),
         vscode.languages.registerDefinitionProvider(selector, definitionProvider),
         vscode.languages.registerDocumentLinkProvider(selector, documentLinkProvider),
+        vscode.languages.registerCodeActionsProvider(selector, codeActionProvider, { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }),
         // The HTML of .dhtml pages
         vscode.languages.registerCompletionItemProvider({ language: 'dessa-html' }, htmlCompletionProvider, '<', ' ', '"', "'", '=', '/', ':'),
         vscode.languages.registerDocumentHighlightProvider({ language: 'dessa-html' }, htmlHighlightProvider),
         vscode.languages.registerFoldingRangeProvider({ language: 'dessa-html' }, htmlFoldingProvider),
+        vscode.languages.registerLinkedEditingRangeProvider({ language: 'dessa-html' }, htmlLinkedEditingProvider),
+        vscode.languages.registerDocumentSymbolProvider({ language: 'dessa-html' }, htmlSymbolProvider),
+        vscode.languages.registerSelectionRangeProvider({ language: 'dessa-html' }, htmlSelectionProvider),
+        vscode.languages.registerDocumentFormattingEditProvider({ language: 'dessa-html' }, htmlFormattingProvider),
         vscode.languages.registerDocumentSymbolProvider(dessaOnly, documentSymbolProvider),
         vscode.commands.registerCommand('dessa.run', runFile),
         vscode.commands.registerCommand('dessa.showCpp', showCpp),
         vscode.commands.registerCommand('dessa.check', checkCommand),
+        vscode.commands.registerCommand('dessa.leaveType', leaveType),
+        vscode.commands.registerCommand('dessa.rivAdd', rivAdd),
+        vscode.commands.registerCommand('dessa.reloadPage', reloadPage),
+        vscode.window.onDidCloseTerminal((t) => {
+            for (const [file, terminal] of pageTerminals) if (terminal === t) pageTerminals.delete(file);
+            updatePageContext();
+        }),
+        vscode.window.onDidChangeActiveTerminal(updatePageContext),
+        vscode.window.onDidChangeTextEditorSelection((e) => rememberLine(e.textEditor)),
         vscode.workspace.onDidOpenTextDocument((doc) => scheduleCheck(doc, 0)),
         vscode.workspace.onDidSaveTextDocument((doc) => scheduleCheck(doc, 0)),
         vscode.workspace.onDidChangeTextDocument((e) => {
             autoBrackets(e);
+            htmlTyping(e);
             if (vscode.workspace.getConfiguration('dessa').get('checkOnType')) scheduleCheck(e.document, 400);
         }),
         vscode.workspace.onDidCloseTextDocument((doc) => {

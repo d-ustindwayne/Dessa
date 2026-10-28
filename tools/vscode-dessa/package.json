@@ -2,7 +2,7 @@
   "name": "dessa",
   "displayName": "Dessa",
   "description": "Dessa language support: highlighting, errors as you type, completion, hover, go to definition and run, for .ds files, .dhtml pages and Dessa scripts inside HTML.",
-  "version": "0.2.9",
+  "version": "0.3.0",
   "publisher": "d-ustindwayne",
   "author": {
     "name": "d-ustindwayne"
@@ -27,7 +27,6 @@
   },
   "categories": [
     "Programming Languages",
-    "Snippets",
     "Linters"
   ],
   "keywords": [
@@ -123,12 +122,6 @@
         }
       }
     ],
-    "snippets": [
-      {
-        "language": "dessa",
-        "path": "./snippets/dessa.json"
-      }
-    ],
     "commands": [
       {
         "command": "dessa.run",
@@ -142,6 +135,10 @@
       {
         "command": "dessa.check",
         "title": "Dessa: Check File"
+      },
+      {
+        "command": "dessa.reloadPage",
+        "title": "Dessa: Reload the Running Page"
       }
     ],
     "menus": {
@@ -158,6 +155,12 @@
         "command": "dessa.run",
         "key": "ctrl+f5",
         "when": "editorLangId == dessa || editorLangId == dessa-html"
+      },
+      {
+        "command": "dessa.reloadPage",
+        "key": "ctrl+r",
+        "mac": "cmd+r",
+        "when": "dessa.pageRunning && editorTextFocus && editorLangId == dessa-html || dessa.pageTerminal && terminalFocus"
       }
     ],
     "configuration": {
@@ -176,7 +179,7 @@
         "dessa.autoBrackets": {
           "type": "boolean",
           "default": true,
-          "description": "Typing $ at the start of a line adds (), a space right after var, const or func becomes [] and after if, while, for, switch or catch becomes () (the cursor goes inside), { after an import becomes {  }, !! in a type gets spaces, and Enter inside $(\"x\") puts the import list over several lines."
+          "description": "Typing helpers: $ at the start of a line adds (); var, const and func get [] and init (in a class) and super (in an init) get (); a space after if, while, for, switch or catch becomes () and after loop an empty { } body; < where a value starts becomes <> (a list); { after an import becomes {  }; !! in a type gets spaces; picking a type in var[...] or a parameter's [...] moves the cursor past the ]; Backspace on an opening bracket also removes the closing one right after it; Enter inside $(\"x\") puts the import list over several lines."
         },
         "dessa.unusedImports": {
           "type": "string",
@@ -207,6 +210,9 @@
       "[dessa]": {
         "editor.snippetSuggestions": "none",
         "editor.wordBasedSuggestions": "off"
+      },
+      "emmet.includeLanguages": {
+        "dessa-html": "html"
       }
     }
   }

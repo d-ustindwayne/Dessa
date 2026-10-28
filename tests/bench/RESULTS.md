@@ -1,6 +1,6 @@
 # Benchmark results
 
-Measured 2026-10-27 (the code of 0.2.9, before its version number changed) on 11th Gen Intel(R) Core(TM) i5-1155G7 @ 2.50GHz, Windows 11.
+Measured 2026-10-27 (the code of 0.2.9; 0.3.0 generates the same programs, so these times hold for it too) on 11th Gen Intel(R) Core(TM) i5-1155G7 @ 2.50GHz, Windows 11.
 
 Times are milliseconds for each task alone (lower is faster). Every language ran the
 same algorithm and gave the same result.

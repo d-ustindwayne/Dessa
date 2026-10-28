@@ -93,3 +93,54 @@ The operators `?=`, `?!`, `|>`, `@` (annotations) and `!!` (what a function
 throws), classes usable as values, operator methods (`_add`, `_eq`, ...),
 `Obj` improvements and the new import syntax are in the review that goes with
 the next round of fixes.
+
+## Dessa in the browser without JavaScript (to decide)
+
+The aim: pages written in Dessa run faster than JavaScript, and `webutils` is
+Dessa's own copy of the browser's API rather than something compiled to
+JavaScript. The ways to get there:
+
+| Way | Possible? | Notes |
+|---|---|---|
+| A browser add-on with a Dessa engine | No | Add-ons (WebExtensions) can't add native code or a new script engine to a browser any more. Chrome had this (NaCl) and removed it in favour of WebAssembly. An add-on can only talk to a separate program (native messaging), which can't touch the page and is slower. Visitors without the add-on couldn't run the page either. |
+| Our own browser, or a fork of Chromium | Technically | Far too big to build and keep secure. |
+| **WebAssembly** | **Yes, in every browser today** | The engine browsers already ship for native-speed code; nothing to install. Dessa's C goes to WebAssembly: the benchmark ran in 6.0 s, against 11.5 s for plain JavaScript and 17.8 s for Dessa compiled to JavaScript. |
+
+With WebAssembly, `webutils` becomes a set of functions the page imports:
+Dessa calls `document`, elements, events and timers directly, and only a thin
+layer underneath touches the browser (browsers let only JavaScript reach the
+page itself, so every engine, WebAssembly included, goes through that layer).
+Work on numbers, text, lists and objects stays inside WebAssembly at native
+speed; each call to the page costs a little.
+
+What it would take:
+
+1. `--target wasm`: the C backend compiled with clang's WebAssembly target and
+   a small C library shipped with Dessa (so users don't need Emscripten).
+2. Errors (`try`/`catch`) without `setjmp` (WebAssembly exceptions).
+3. The page bridge: handles for page objects, text passed both ways, events
+   and timers calling back into Dessa.
+4. `dessa run` / `build` / `serve` for pages producing a `.wasm` next to the
+   page, with the JavaScript backend kept for browsers or cases that need it.
+5. Later, the browser compiler (`dessa.js`) producing WebAssembly too.
+
+Programs that need unions or `Obj` would wait for the C backend to support
+them (they go through C++ today).
+
+## A website for Dessa (planned)
+
+A public website for Dessa, so people don't have to start from the GitHub
+repository. It would show what Dessa is, with short examples and the
+benchmark, and have clear links to:
+
+- **Download**: the latest release for Windows, Linux and macOS, the VS Code
+  extension, `npm install dessalang`, and the installation guide.
+- **Documentation**: the language, the libraries, riv, pages and the editor.
+- **Try it**: a playground in the browser, using `dessa.js`.
+- **Contributing**: the overview for new maintainers, the architecture guide,
+  `CONTRIBUTING.md`, and the issues where help is wanted.
+- **Support**: where to report bugs and ask questions, and how to support the
+  project.
+
+Still to decide: where it is hosted (GitHub Pages is the simplest), its
+address, and whether the pages are written in Dessa (`.dhtml`) to show it off.

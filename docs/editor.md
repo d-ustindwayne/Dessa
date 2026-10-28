@@ -13,8 +13,8 @@ compiler itself, so what it shows always matches what `dessa` does.
   customer's class, including inherited ones, and works after `is` checks, in
   lambdas, through `?.` and along call chains (`win.button("OK").onClick(...)`).
   It suggests names only (variables, functions, classes, members): no
-  keywords, and no `()` added after a function. Snippets are still there
-  through **Insert Snippet**.
+  keywords, no snippets, and no `()` added after a function.
+  `addEventListener("` suggests the event names.
 - **Hover** shows the type at that spot, the documentation comment, and a
   "Defined in" link.
 - **Go to definition** (F12 or ctrl+click) on variables, functions, classes,
@@ -23,11 +23,24 @@ compiler itself, so what it shows always matches what `dessa` does.
 - **Ctrl+click on imports**: `$("webutils")` or `$("utils.strings")` opens
   the module.
 - **Parameter hints** while you type a call, with default values.
-- **HTML help in `.dhtml` pages**: outside the Dessa scripts you get what
-  VS Code gives in `.html` files: tag and attribute completion, hover with the
-  tag's description, matching tag highlights and folding.
+- **HTML in `.dhtml` pages**: outside the Dessa scripts the page works like
+  an `.html` file: Emmet (`!`, `p` + Tab), tag and attribute completion,
+  closing tags added for you, quotes after `=`, hover, matching tags, the
+  outline, folding and Format Document. Inside the scripts it's all Dessa.
 - **Run** (Ctrl+F5 or the play button) for `.ds` files and `.dhtml` pages.
-- Commands: **Dessa: Run File**, **Dessa: Show Generated C++**, **Dessa: Check File**.
+  For a page, **Ctrl+R** saves and reloads it in the browser, and **Ctrl+C**
+  in its terminal stops it and closes its tab.
+- **Quick fixes**: remove an unused import, install a missing package with
+  `riv add`, rewrite old `[1, 2]` lists as `<1, 2>`.
+- **Typing helpers** (setting `dessa.autoBrackets`): `$` becomes `$(|)`;
+  `var`, `const` and `func` get `[|]`, and picking a type there moves the
+  cursor out (`var[Bul] |`, or `x[Bul]|` for a parameter); `init` and `super`
+  get `()`; a space after `if`, `while`, `for`, `switch` or `catch` gives
+  `if (|)`, after `loop` an empty body; `<` where a value starts gives `<|>`;
+  Backspace on an opening bracket also removes its closing one. The full list
+  is in the extension's README.
+- Commands: **Dessa: Run File**, **Dessa: Show Generated C++**, **Dessa: Check File**,
+  **Dessa: Reload the Running Page**.
 
 PHL is a separate project with its own VS Code extension.
 
@@ -39,6 +52,7 @@ PHL is a separate project with its own VS Code extension.
 | `dessa.checkOnType` | `true` | check for errors while typing (otherwise on open and save) |
 | `dessa.unusedImports` | `dim` | imports the file never uses: `dim` (faded), `warning`, or `off` |
 | `dessa.packageFolders` | `[]` | extra folders with packages (like `DESSA_PACKAGES`) |
+| `dessa.autoBrackets` | `true` | the typing helpers above |
 
 ## Installing
 

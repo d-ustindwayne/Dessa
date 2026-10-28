@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.0
+
+- `init` in a class body becomes `init(|)`, `super` in an `init` becomes `super(|);` (a `.` typed right after gives `super.` instead)
+- `loop` + space adds an empty body with the cursor inside; Backspace before anything is typed in it takes it away again
+- Picking a type from the suggestions in `var[|]`, `const[|]` or `func[|]` moves the cursor out with a space (`var[Bul] |`); in a parameter's `x[|]` without one (`x[Bul]|`). Typing `<`, `|`, `:` or `!` right after puts it back inside the brackets: `var[Int<>] |`, `var[Int | |]`
+- Backspace on an opening bracket (`(`, `[`, `{`, `<`) also removes the closing one right after it, including the ones these helpers add; Backspace in an import's `{ | }` removes both braces
+- A `)`, `]` or `>` typed in front of the same one steps over it when the line doesn't need both
+- `<` where a value starts (`x = <`, `f(<`, `return <`) becomes `<|>`, and `Int<` in a type becomes `Int<>`
+- `Map` and `Func` picked from the type suggestions come with `[]`
+- Quick fixes (the light bulb): remove an unused import, install a missing package with `riv add`, write an old `[1, 2]` list as `<1, 2>` (one, or all in the file)
+- `.dhtml` pages work like `.html` outside the scripts: Emmet (`!`, `p` + Tab), `<div>` closed as `<div>|</div>`, `</` finished, quotes after `attribute=`, renaming both tags of a pair, the outline, smart selection and Format Document (scripts left as they are)
+- `addEventListener("` suggests the event names
+- Ctrl+R reloads a page started with Run (from its editor or its terminal), after saving; Run on a page that is already running reloads it
+- The snippets are gone: Dessa doesn't do snippets
+
 ## 0.2.9
 
 - No changes to the extension (Dessa 0.2.9 makes programs compiled to JavaScript faster)

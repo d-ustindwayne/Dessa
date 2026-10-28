@@ -62,6 +62,8 @@ if(EMSCRIPTEN)
 endif()
 
 add_executable(dessa src/main.cpp src/driver/toolchain.cpp src/driver/web.cpp ${DESSA_FRONTEND})
+find_package(Threads REQUIRED)
+target_link_libraries(dessa PRIVATE Threads::Threads)   # dessa serve reads keys on its own thread
 if(WIN32)
     target_link_libraries(dessa PRIVATE ws2_32)   # dessa serve
 endif()

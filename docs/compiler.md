@@ -64,6 +64,10 @@ dessa check page.dhtml               errors in the page's scripts, with the page
 dessa serve [folder] [--port 8080]   a web server: .dhtml pages are compiled on each request
 ```
 
+While a page is served, press **Ctrl+R** (or `r`) in the terminal to reload it
+in the browser, and **Ctrl+C** to stop: the page then closes its tab (or, if
+the browser doesn't allow that, says it can be closed).
+
 `dessa build` and `dessa serve` also work on a normal `.html` page that holds
 `<script type="text/dessa">` scripts. See [web.md](web.md).
 

@@ -26,6 +26,7 @@ holds Dessa code:
 
 ```
 dessa run page.dhtml        serves the folder and opens the page in your browser
+                            (Ctrl+R reloads the page, Ctrl+C stops and closes it)
 dessa build page.dhtml      writes page.html with the scripts compiled to JavaScript
 dessa serve .               a server for the whole folder; .dhtml pages are compiled on each request
 ```

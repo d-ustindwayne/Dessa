@@ -199,9 +199,8 @@ off), `RIV_TIMEOUT` (seconds to wait for peers, default 60).
 
 For whoever keeps an index: `riv index <packages folder> --out <index folder>
 --webseed <url>` writes the entries of every package in a folder, and
-`--check` reports packages whose files changed without a new index entry (CI
-runs it for the official index). Packages named in `index-skip.txt` in the
+`--check` reports packages whose files changed without a new index entry. Packages named in `index-skip.txt` in the
 packages folder (one per line) are left out of the index and of `riv bundled`;
 `phl` is there for now, while its syntax is being revised.
 
-Not done yet: version ranges (`^1.0`) and a lock file, and signing packages.
+Not done yet: signing packages.

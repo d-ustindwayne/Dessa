@@ -42,8 +42,8 @@ the page itself.
 customer's class, inherited ones included. It also works after `is` checks,
 inside lambdas, through `?.` and along call chains such as
 `win.button("OK").onClick(...)`. Library imports complete too. Only names are
-suggested (no keywords), and picking a function doesn't add `()`. Snippets
-are in **Insert Snippet**.
+suggested (no keywords, no snippets), and picking a function doesn't add `()`.
+`addEventListener("` suggests the event names.
 
 **Hover** shows the type at that spot, the documentation comment, and a
 "Defined in" link.
@@ -57,14 +57,40 @@ open the module.
 
 **Parameter hints** while you type a call, with the default values.
 
-**HTML help in `.dhtml` pages.** Outside the Dessa scripts you get what
-VS Code gives in `.html` files: tag and attribute completion, hover with the
-tag's description, matching tag highlights and folding.
+**HTML in `.dhtml` pages.** Outside the Dessa scripts the page works like an
+`.html` file: Emmet (`!` + Tab for a whole page, `p` + Tab for `<p></p>`),
+tag and attribute completion, `<div>` closed for you as `<div>|</div>`, `</`
+finished, `class=` given its quotes (`class="|"`), hover with the tag's
+description, matching tag highlights, renaming both tags of a pair (with
+`editor.linkedEditing`), the outline, folding, and Format Document (the Dessa
+scripts are left as they are). Inside the scripts everything is Dessa.
 
 **Run** with Ctrl+F5 or the play button in the editor title. `.ds` files run
-as native programs; `.dhtml` pages are served locally (`dessa run page.dhtml`).
+as native programs; `.dhtml` pages are served locally (`dessa run page.dhtml`)
+and open in the browser. **Ctrl+R** (in the page's editor or its terminal)
+saves and reloads the page in the browser; **Ctrl+C** in the terminal stops
+the server and closes the page's tab.
 
-**Snippets** for common forms (functions, classes, loops, imports).
+**Quick fixes** (the light bulb): remove an unused import, install a missing
+package with `riv add`, rewrite old `[1, 2]` lists as `<1, 2>`.
+
+**Typing helpers** (`dessa.autoBrackets`, on by default; `|` is where the
+cursor ends up):
+
+| You type | You get |
+|---|---|
+| `$` at the start of a line | `$(\|)` and the libraries and files |
+| `var`, `const`, `func` | `var[\|]` and the types (a lowercase letter next takes the `[]` away) |
+| a type picked in `var[\|]` / `func[\|]` | `var[Bul] \|`; in a parameter `x[Bul]\|` |
+| `<`, `\|`, `:`, `!` right after that | back inside: `var[Int<>] \|`, `var[Int \| \|]` |
+| `init` in a class, `super` in an `init` | `init(\|)`, `super(\|);` |
+| `if`, `while`, `for`, `switch`, `catch` + space | `if (\|)` |
+| `loop` + space | `loop {` with the cursor in an empty body (Backspace takes it away) |
+| `<` where a value starts, `Int<` in a type | `<\|>`, `Int<>` |
+| `{` after an import | `$("math") { \| }` |
+| `!!` in a type | `func[Dbl !! \|]` |
+| Enter inside `$("x")` or `{ PI, E }` | the list over several lines |
+| Backspace on `(`, `[`, `{`, `<` | the closing one right after it goes too |
 
 ## Commands
 
@@ -73,6 +99,7 @@ as native programs; `.dhtml` pages are served locally (`dessa run page.dhtml`).
 | Dessa: Run File | runs the file or page (Ctrl+F5) |
 | Dessa: Show Generated C++ | opens the C++ the compiler makes from the file |
 | Dessa: Check File | checks the file for errors now |
+| Dessa: Reload the Running Page | saves and reloads the page started with Run (Ctrl+R) |
 
 ## Settings
 
@@ -80,7 +107,7 @@ as native programs; `.dhtml` pages are served locally (`dessa run page.dhtml`).
 |---|---|---|
 | `dessa.compilerPath` | `dessa` | the `dessa` executable, if it isn't on PATH |
 | `dessa.checkOnType` | `true` | check while typing (otherwise on open and save) |
-| `dessa.autoBrackets` | `true` | `$` at the start of a line adds `()`; `var`, `const` or `func` at the start of a statement get `[]`; a space after `if`, `while`, `for`, `switch` or `catch` becomes ` ()`; `{` after an import becomes `{  }`; `!!` in a type gets spaces; Enter splits an import list over lines |
+| `dessa.autoBrackets` | `true` | the typing helpers below |
 | `dessa.unusedImports` | `dim` | imports the file never uses: `dim` (faded), `warning`, or `off` |
 | `dessa.packageFolders` | `[]` | extra folders with riv packages for `$("lib")` imports (like `DESSA_PACKAGES`) |
 

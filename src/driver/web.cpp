@@ -1,12 +1,15 @@
 #include "web.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
+#include <csignal>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <thread>
 #include <vector>
 
 #ifdef _WIN32
@@ -15,12 +18,14 @@
 #endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <windows.h>
 using socket_t = SOCKET;
 #define DESSA_CLOSE closesocket
 #else
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <termios.h>
 #include <unistd.h>
 using socket_t = int;
 #define INVALID_SOCKET (-1)
@@ -281,6 +286,101 @@ void respond(socket_t client, int status, const std::string& type, const std::st
     sendAll(client, head + body);
 }
 
+// ---- Reloading and closing the page ----
+// A served page asks /__dessa/reload every half second for this number;
+// Ctrl+R in the terminal raises it and the page reloads. When the server is
+// gone (Ctrl+C), the page closes its tab, or says it can be closed.
+std::atomic<int> g_reloads{0};
+
+const char* kPageWatcher =
+    "<script>(() => {\n"
+    "  let seen = null, missed = 0;\n"
+    "  const stopped = () => {\n"
+    "    window.close();\n"
+    "    document.title = 'Stopped';\n"
+    "    document.body.innerHTML = '<p style=\"font-family:system-ui,sans-serif;padding:16px\">dessa has stopped. You can close this tab.</p>';\n"
+    "  };\n"
+    "  const tick = async () => {\n"
+    "    try {\n"
+    "      const n = await (await fetch('/__dessa/reload', { cache: 'no-store' })).text();\n"
+    "      missed = 0;\n"
+    "      if (seen === null) seen = n;\n"
+    "      else if (n !== seen) return location.reload();\n"
+    "    } catch (e) {\n"
+    "      if (++missed >= 2) return stopped();\n"
+    "    }\n"
+    "    setTimeout(tick, 500);\n"
+    "  };\n"
+    "  tick();\n"
+    "})();</script>\n";
+
+// The watcher goes just before </body> (or at the end)
+std::string withWatcher(const std::string& html) {
+    size_t at = lower(html).rfind("</body");
+    if (at == std::string::npos) return html + kPageWatcher;
+    return html.substr(0, at) + kPageWatcher + html.substr(at);
+}
+
+void reloadPages() {
+    ++g_reloads;
+    std::cout << "  reloading the page\n" << std::flush;
+}
+
+// Ctrl+R (or r) in the terminal reloads the pages. The terminal is put in a
+// mode where keys arrive one by one; Ctrl+C still stops the server, and the
+// terminal is put back as it was.
+#ifdef _WIN32
+HANDLE g_input = INVALID_HANDLE_VALUE;
+DWORD g_inputMode = 0;
+
+BOOL WINAPI restoreConsole(DWORD) {
+    SetConsoleMode(g_input, g_inputMode);
+    return FALSE;   // and stop as usual
+}
+
+void watchKeys() {
+    g_input = GetStdHandle(STD_INPUT_HANDLE);
+    if (g_input == INVALID_HANDLE_VALUE || !GetConsoleMode(g_input, &g_inputMode)) return;   // not a console
+    SetConsoleMode(g_input, (g_inputMode & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT)) | ENABLE_PROCESSED_INPUT);
+    SetConsoleCtrlHandler(restoreConsole, TRUE);
+    std::thread([] {
+        INPUT_RECORD record;
+        DWORD count = 0;
+        while (ReadConsoleInputW(g_input, &record, 1, &count)) {
+            if (record.EventType != KEY_EVENT || !record.Event.KeyEvent.bKeyDown) continue;
+            const wchar_t c = record.Event.KeyEvent.uChar.UnicodeChar;
+            if (c == 0x12 || c == L'r' || c == L'R') reloadPages();
+        }
+    }).detach();
+}
+#else
+termios g_terminal{};
+
+void restoreTerminal(int signal) {
+    tcsetattr(STDIN_FILENO, TCSANOW, &g_terminal);
+    std::signal(signal, SIG_DFL);
+    std::raise(signal);
+}
+
+void watchKeys() {
+    if (!isatty(STDIN_FILENO) || tcgetattr(STDIN_FILENO, &g_terminal) != 0) return;
+    termios raw = g_terminal;
+    raw.c_lflag &= static_cast<tcflag_t>(~(ICANON | ECHO));
+    raw.c_iflag &= static_cast<tcflag_t>(~IXON);   // so Ctrl+R isn't eaten by flow control
+    raw.c_cc[VMIN] = 1;
+    raw.c_cc[VTIME] = 0;
+    tcsetattr(STDIN_FILENO, TCSANOW, &raw);
+    std::signal(SIGINT, restoreTerminal);
+    std::signal(SIGTERM, restoreTerminal);
+    std::thread([] {
+        char c;
+        while (read(STDIN_FILENO, &c, 1) == 1) {
+            if (c == 0x12 || c == 'r' || c == 'R') reloadPages();
+        }
+    }).detach();
+}
+#endif
+
 void openBrowser(const std::string& url) {
 #ifdef _WIN32
     std::string command = "start \"\" \"" + url + "\"";
@@ -327,7 +427,8 @@ int serve(const std::string& folderArg, int port, const std::string& open, const
         return 1;
     }
     const std::string base = "http://localhost:" + std::to_string(chosen) + "/";
-    std::cout << "Serving " << root.string() << " at " << base << "  (Ctrl+C to stop)\n" << std::flush;
+    std::cout << "Serving " << root.string() << " at " << base << "  (Ctrl+R to reload the page, Ctrl+C to stop)\n" << std::flush;
+    watchKeys();
     if (!open.empty()) openBrowser(base + open);
 
     while (true) {
@@ -345,6 +446,11 @@ int serve(const std::string& folderArg, int port, const std::string& open, const
         first >> method >> target;
         std::string pathPart = urlDecode(target.substr(0, target.find('?')));
         if (pathPart.empty() || pathPart[0] != '/') pathPart = "/" + pathPart;
+        if (pathPart == "/__dessa/reload") {
+            respond(client, 200, "text/plain", std::to_string(g_reloads.load()));
+            DESSA_CLOSE(client);
+            continue;
+        }
         fs::path file = fs::weakly_canonical(root / pathPart.substr(1), ec);
         // Stay inside the folder
         std::string rootText = root.string(), fileText = file.string();
@@ -373,15 +479,17 @@ int serve(const std::string& folderArg, int port, const std::string& open, const
                                 (lower(body).find("text/dessa") != std::string::npos || lower(body).find("text/ds") != std::string::npos))) {
             std::string html, errors;
             if (buildPage(file.string(), compile, html, errors)) {
-                respond(client, 200, "text/html; charset=utf-8", html);
+                respond(client, 200, "text/html; charset=utf-8", withWatcher(html));
                 std::cout << "  " << pathPart << " (compiled)\n" << std::flush;
             } else {
                 std::cerr << errors << std::flush;
                 respond(client, 200, "text/html; charset=utf-8",
                         "<!doctype html><meta charset=\"utf-8\"><title>Dessa error</title><body style=\"font-family:monospace;padding:16px\">"
                         "<h2 style=\"color:#c62828\">This page has errors</h2><pre>" + escapeHtml(errors) + "</pre>"
-                        "<p>Fix them and reload.</p></body>");
+                        "<p>Fix them and reload (Ctrl+R in the terminal).</p>" + std::string(kPageWatcher) + "</body>");
             }
+        } else if (ext == ".html" || ext == ".htm") {
+            respond(client, 200, mimeType(file.string()), withWatcher(body));
         } else {
             respond(client, 200, mimeType(file.string()), body);
         }
