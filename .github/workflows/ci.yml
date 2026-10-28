@@ -77,8 +77,16 @@ jobs:
   wasm:
     # Programs and pages compiled to WebAssembly, with the compiler users get
     # from `dessa setup wasm` (wasi-sdk cut down by tools/make_wasm_tools.py)
-    name: WebAssembly target (wasi-sdk)
-    runs-on: ubuntu-24.04
+    name: WebAssembly target (wasi-sdk, ${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux-x64
+          - os: macos-latest
+            platform: macos-arm64
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -90,9 +98,9 @@ jobs:
           cmake --build build -j 4
       - name: The WebAssembly compiler, where `dessa setup wasm` puts it
         run: |
-          python3 tools/make_wasm_tools.py linux-x64 -o /tmp/wasm-tools
+          python3 tools/make_wasm_tools.py ${{ matrix.platform }} -o /tmp/wasm-tools
           mkdir -p wasm
-          tar -xzf /tmp/wasm-tools/dessa-wasm-linux-x64.tar.gz -C wasm
+          tar -xzf /tmp/wasm-tools/dessa-wasm-${{ matrix.platform }}.tar.gz -C wasm
       - name: Test through WebAssembly
         run: python3 tests/test.py --wasm
       - name: A page as WebAssembly
