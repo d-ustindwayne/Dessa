@@ -18,7 +18,7 @@ func[Emp] exit(code[Int]) {
     ...
 }
 
-// "windows", "macos", "linux" or "unknown".
+// "windows", "macos", "linux", "web" (a page compiled to JavaScript), "wasm" (WebAssembly) or "unknown".
 func[Str] platform() {
     ...
 }

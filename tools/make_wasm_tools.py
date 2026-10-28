@@ -29,6 +29,7 @@ KEEP = [
     re.compile(r"^bin/(clang|clang-\d+|wasm-ld|lld)(\.exe)?$"),
     re.compile(r"^bin/clang\.cfg$"),
     re.compile(r"^bin/(?!libclang|liblldb)[^/]+\.dll$"),         # what clang and lld need on Windows (libxml2, zlib)
+    re.compile(r"^lib/lib(LLVM|clang-cpp|xml2)[^/]*\.(so|dylib)[^/]*$"),   # Linux, macOS: clang and lld are small programs using these
     re.compile(r"^lib/clang/\d+/include/"),                        # stddef.h, stdarg.h, ...
     re.compile(r"^lib/clang/\d+/lib/wasm32-unknown-wasip1/"),       # clang's builtins
     re.compile(r"^share/wasi-sysroot/include/wasm32-wasip1/(?!c\+\+/)"),

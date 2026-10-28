@@ -97,6 +97,9 @@ jobs:
         run: python3 tests/test.py --wasm
       - name: A page as WebAssembly
         run: node tests/web/wasm_page.js
+      - name: Show the WebAssembly compiler's logs if something failed
+        if: failure()
+        run: for f in /tmp/dessa/objects/*.log /tmp/dessa/*.log; do [ -f "$f" ] && { echo "===== $f"; tail -c 4000 "$f"; }; done; true
 
   web:
     name: Browser build (WebAssembly)

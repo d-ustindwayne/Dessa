@@ -2013,6 +2013,8 @@ ds_str* ds_sys_platform(void) {
     return ds_str_cstr("windows");
 #elif defined(__APPLE__)
     return ds_str_cstr("macos");
+#elif defined(__wasm__)
+    return ds_str_cstr("wasm");
 #elif defined(__linux__)
     return ds_str_cstr("linux");
 #else
