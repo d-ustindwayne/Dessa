@@ -1,0 +1,45 @@
+@use '@angular/material' as mat;
+
+// Dessa's colours come from the turtle logo: #14743C, #1C614D and #D2CB71
+html {
+  height: 100%;
+  color-scheme: light dark;
+  @include mat.theme(
+    (
+      color: (
+        primary: mat.$green-palette,
+        tertiary: mat.$yellow-palette,
+      ),
+      typography: (
+        plain-family: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+        brand-family: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+      ),
+      density: 0,
+    )
+  );
+  @include mat.theme-overrides(
+    (
+      primary: light-dark(#14743c, #7fcf9c),
+      on-primary: light-dark(#ffffff, #00391c),
+      primary-container: light-dark(#cdebd5, #1c614d),
+      on-primary-container: light-dark(#0b3d22, #d6f2de),
+      secondary-container: light-dark(#e3eddf, #2b3a2f),
+      on-secondary-container: light-dark(#14321f, #d7e8d9),
+      surface: light-dark(#fbfaf3, #121512),
+      on-surface: light-dark(#1b1c18, #e3e3dc),
+      on-surface-variant: light-dark(#4a5249, #c0c8bd),
+      surface-container: light-dark(#f2f0e4, #1c201c),
+      surface-container-low: light-dark(#f6f4ea, #181b18),
+      surface-container-high: light-dark(#eceadc, #232823),
+      outline-variant: light-dark(#d9d7c6, #3a423a),
+    )
+  );
+}
+
+body {
+  background-color: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-large);
+  margin: 0;
+  min-height: 100%;
+}

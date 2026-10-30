@@ -1,0 +1,9 @@
+{
+  "name": "Dessa programming language",
+  "short_name": "Dessa",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#ffffff",
+  "theme_color": "#2a78d6",
+  "icons": [{ "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }]
+}

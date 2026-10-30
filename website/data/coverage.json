@@ -1,0 +1,714 @@
+{
+ "date": "2026-10-30",
+ "cases": {
+  "errors/big": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   }
+  },
+  "errors/classes": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   }
+  },
+  "errors/classes2": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   }
+  },
+  "errors/control": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   }
+  },
+  "errors/convert": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   }
+  },
+  "errors/functions": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   }
+  },
+  "errors/generics": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   }
+  },
+  "errors/imports": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   }
+  },
+  "errors/is": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   }
+  },
+  "errors/maps": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   }
+  },
+  "errors/names": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   }
+  },
+  "errors/nullable": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   }
+  },
+  "errors/obj": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   }
+  },
+  "errors/old_lists": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   }
+  },
+  "errors/operators2": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   }
+  },
+  "errors/params": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   }
+  },
+  "errors/syntax": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   }
+  },
+  "errors/throws": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   }
+  },
+  "errors/types": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   }
+  },
+  "errors/zip_sort": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   }
+  },
+  "errors/zip_union_brackets": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   }
+  },
+  "run/angle_lists": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/ashwee_lib": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "skip",
+    "reason": "native windows"
+   }
+  },
+  "run/basics": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/big": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/catch_print": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/classes": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/classes2": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/control": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/convert": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/datetime": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/dcrypto_lib": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/declarations": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/dsds_lib": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/edge": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/error_classes": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/errors": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/extras": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/files": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/functions": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/generics": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/hello": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/import_alias": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/import_multiline": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/int_bases": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/int_boxes": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/int_edges": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/is": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/json_lib": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/maps": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/modules": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/mssql": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "skip",
+    "reason": "no SQL Server here"
+   }
+  },
+  "run/multiline": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/nullable": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/obj": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/operators2": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/params": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/random_lib": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/recursion": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/request_lib": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/sqlite": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/stdlib": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/stress": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/stress2": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/this_init": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/throw_line": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/throws": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/typeof_zip_sort": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/uncaught": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  },
+  "run/unicode": {
+   "native": {
+    "status": "pass"
+   },
+   "c": {
+    "status": "pass"
+   },
+   "wasm": {
+    "status": "pass"
+   }
+  }
+ }
+}
