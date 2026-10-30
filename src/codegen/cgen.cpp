@@ -153,11 +153,18 @@ bool CCodegen::isCounted(const SemanticType& t) const {
             return !t.isEnum();
         case SemanticTypeKind::Union: {
             SemanticType base = withoutNil(t);
-            return base.kind != SemanticTypeKind::Union && isCounted(base);
+            return base.kind == SemanticTypeKind::Union || isCounted(base);
         }
+        case SemanticTypeKind::Obj:
+            return true;
         default:
             return false;
     }
+}
+
+bool CCodegen::isDynamic(const SemanticType& t) const {
+    if (t.is(SemanticTypeKind::Obj)) return true;
+    return t.kind == SemanticTypeKind::Union && withoutNil(t).kind == SemanticTypeKind::Union;
 }
 
 bool CCodegen::isOptValue(const SemanticType& t) const {
@@ -199,12 +206,12 @@ std::string CCodegen::cType(const SemanticType& t) const {
             if (t.isInterface()) return "ds_head*";
             return structName(t) + "*";
         case SemanticTypeKind::Union: {
+            if (isDynamic(t)) return "ds_head*";
             SemanticType base = withoutNil(t);
-            if (!t.containsNil() || base.kind == SemanticTypeKind::Union) unsupported("union types (" + t.toString() + ")");
             if (isCounted(base)) return cType(base);
             return optType(base);
         }
-        case SemanticTypeKind::Obj: unsupported("Obj");
+        case SemanticTypeKind::Obj: return "ds_head*";
         case SemanticTypeKind::Set: return "ds_list*";
         default: unsupported("the type " + t.toString());
     }
@@ -233,7 +240,7 @@ std::string CCodegen::elem(const SemanticType& t) {
                 if (!elemNames.count(name)) {
                     elemNames[name] = name;
                     data << "static const ds_elem " << name << " = {DS_E_ENUM, sizeof(ds_int), dse_m" << t.moduleId << "_" << t.name
-                         << ", 10, NULL};\n";
+                         << ", 10, NULL, " << cString(t.toString()) << "};\n";
                 }
                 return "&" + name;
             }
@@ -638,7 +645,7 @@ void CCodegen::findReachable() {
 std::string CCodegen::generate(std::string& reason) {
     try {
         for (const auto& module : program.modules) {
-            if (module->jsNative.empty()) continue;
+            if (!module->browserLibrary) continue;
             if (!wasm) unsupported("a browser library");
             usesWeb = true;
         }
@@ -985,10 +992,49 @@ void CCodegen::emitClassCode(const ClassInfo& info) {
         ifaces = "dsif_" + base;
     }
 
+    // Its own fields, so an Obj holding one can read and write them by name
+    std::string fieldTable = "NULL";
+    int fieldCount = 0;
+    if (!info.fieldOrder.empty()) {
+        std::string rows;
+        int rowCount = 0;
+        for (const auto& name : info.fieldOrder) {
+            auto it = info.fields.find(name);
+            if (it == info.fields.end()) continue;
+            const SemanticType& ft = it->second.type;
+            const SemanticType fb = withoutNil(ft);
+            const bool dyn = isDynamic(ft), opt = isOptValue(ft) || (isCounted(ft) && ft.containsNil());
+            std::string et = dyn ? "&ds_elem_ref" : elem(fb);
+            std::string kind = "0";
+            if (!dyn && isCounted(fb)) {
+                if (fb.is(SemanticTypeKind::List)) kind = "DS_K_LIST";
+                else if (fb.is(SemanticTypeKind::Set)) kind = "DS_K_SET";
+                else if (fb.is(SemanticTypeKind::Map)) kind = "DS_K_MAP";
+                else if (fb.is(SemanticTypeKind::Function)) kind = "DS_K_FN";
+            }
+            std::string cls = !dyn && fb.isClass() ? "&" + clsName(fb) + ".t" : std::string("NULL");
+            std::string accepts = "NULL";
+            if (dyn && !ft.is(SemanticTypeKind::Obj)) {
+                std::string test = dynIs("v", ft);
+                if (!test.empty()) {
+                    accepts = "dsfa_" + base + "_" + name;
+                    code << "static bool " << accepts << "(ds_head* v) { return " << test << "; }\n";
+                }
+            }
+            ++rowCount;
+            rows += "    {" + cString(name) + ", offsetof(" + s + ", " + mangle(name) + "), " + et + ", " + (opt ? "1" : "0") + ", " +
+                    (dyn ? "1" : "0") + ", " + kind + ", " + cls + ", " + cString(ft.toString()) + ", " + accepts + "},\n";
+        }
+        code << "static const ds_field dsfl_" << base << "[] = {\n" << rows << "};\n";
+        fieldTable = "dsfl_" + base;
+        fieldCount = rowCount;
+    }
+
     // The class description: its type, then the method table
     code << "const " << s << "_cls " << clsName(t) << " = {\n";
     code << "    {" << cString(info.type().toString()) << ", DS_K_OBJECT, dsd_" << base << ", dss_" << base << ", "
-         << (info.parent ? "&" + clsName(*info.parent) + ".t" : std::string("NULL")) << ", " << ifaces << ", " << count << "}";
+         << (info.parent ? "&" + clsName(*info.parent) + ".t" : std::string("NULL")) << ", " << ifaces << ", " << count << ", "
+         << fieldTable << ", " << fieldCount << "}";
     for (const auto& method : allMethods(info)) {
         const ClassInfo* owner = methodOwner(info, method);
         const ClassInfo* top = nullptr;

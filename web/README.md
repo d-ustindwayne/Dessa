@@ -1,7 +1,11 @@
 # web
 
-- `engine.js`: the loader built into `dessa.js` (runs `<script type="text/dessa">` in a page)
-- `dessa.js`: the Dessa compiler for the browser (built with Emscripten, attached to releases)
-- `example/`: a to-do page using `dessa.js`, and `counter.dhtml`, a page written as `.dhtml`
+`example/counter.dhtml` is a web page written in Dessa: a plain `<script>`
+in a `.dhtml` file is Dessa, compiled to WebAssembly.
+
+```
+dessa run web/example/counter.dhtml      opens it in the browser
+dessa build web/example/counter.dhtml    writes counter.html, one file that runs anywhere
+```
 
 How it all works: [docs/web.md](../docs/web.md).

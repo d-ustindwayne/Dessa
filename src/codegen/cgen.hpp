@@ -149,6 +149,10 @@ private:
 
     // ---- Types ----
     bool isCounted(const SemanticType& type) const;          // a counted heap value (may be nil)
+    bool isDynamic(const SemanticType& type) const;
+    std::string box(const std::string& code, const SemanticType& type);     // a plain value into a ds_head*
+    std::string unbox(const std::string& code, const SemanticType& type);   // and back
+    std::string dynIs(const std::string& v, const SemanticType& target);    // `is` on a ds_head*          // Obj, Int | Str and the like: a ds_head* (numbers boxed)
     bool isOptValue(const SemanticType& type) const;         // Int | Nil and the like: a ds_opt_* struct
     std::string cType(const SemanticType& type) const;
     std::string optType(const SemanticType& base) const;

@@ -151,6 +151,23 @@ The functions live in the C++ namespace `dessa::<name>`. Usually they start
 with `_` and the package's `.dm` file wraps them in friendly Dessa classes.
 `tools/riv/packages/sql` and `tools/riv/packages/ashwee` are complete examples.
 
+To also run in WebAssembly (pages and `--target wasm`), write the same
+functions in C and name the file with `c`. Native programs built through C use
+it too, instead of the C++ part:
+
+```
+c sql.c                             the functions in C: dsx_<package>_<function>
+wasm.cflags -DSQLITE_THREADSAFE=0   extra flags for compiling the C for WebAssembly
+wasm.link -lwasi-emulated-mman      extra flags for linking it into WebAssembly
+```
+
+Each C function takes and returns the C types of the runtime (`ds_str*`,
+`ds_int`, `ds_list*`, ...): arguments are borrowed, results are new, and
+errors are raised with `ds_fail`. Only the `.c` files among the sources are
+used with it. `tools/riv/packages/sql/sql.c` and
+`tools/riv/packages/request/request.c` are examples; `request.c` calls
+JavaScript for the request when it runs as WebAssembly.
+
 ## How packages are shared
 
 There is no package server: packages travel like torrents, with the
@@ -200,7 +217,6 @@ off), `RIV_TIMEOUT` (seconds to wait for peers, default 60).
 For whoever keeps an index: `riv index <packages folder> --out <index folder>
 --webseed <url>` writes the entries of every package in a folder, and
 `--check` reports packages whose files changed without a new index entry. Packages named in `index-skip.txt` in the
-packages folder (one per line) are left out of the index and of `riv bundled`;
-`phl` is there for now, while its syntax is being revised.
+packages folder (one per line) are left out of the index and of `riv bundled`.
 
 Not done yet: signing packages.

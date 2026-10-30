@@ -21,13 +21,14 @@ If none of them has it, the error says `riv add <name>`.
 | `dcrypto` | hashes (md5, sha1, sha256, sha512, hmac), passwords, AES-256-GCM `encrypt` / `decrypt`, base64, hex |
 | `sys` | command-line arguments, exit, platform |
 | `time` | clocks, sleep, `DateTime` (time zones, formatting, month / day names in 11+ languages; in `time.dm`) |
-| `webutils` | the web page: `document`, elements, events, `alert` / `prompt` / `confirm`, `log`, timers, `fetchText` (browser only; JavaScript part `webutils.js`, see `web/README.md`) |
+| `webutils` | the web page: `document`, elements, events, `alert` / `prompt` / `confirm`, `log`, timers, `fetchText` (pages only; done by the page bridge in `runtime/dessa_web.c` and `dessa_wasm.js`, see `docs/web.md`) |
 
 A core library is a folder `include/<name>/` containing:
 
 | File | What it is |
 |---|---|
 | `<name>.hpp` | **native part** in C++. Its functions are registered in `src/analyser/builtins.cpp` |
+| `<name>.c`   | the same native part in C (`dsx_<name>_<function>`), used by programs built through C and by WebAssembly |
 | `<name>.ds`  | declarations of the native functions, for people and for Ctrl+click in VS Code |
 | `<name>.dm`  | **Dessa part**: classes and functions written in Dessa, loaded automatically |
 
@@ -39,9 +40,8 @@ These libraries are packages, so programs that don't use them stay small. Instal
 | Package | Native | What it does |
 |---|---|---|
 | `json` | | `Json` values, `parseJson`, `stringify`, builders |
-| `phl` | | PHL documents: `parsePhl`, `toPhl` (uses `json`; being revised, frozen for now) |
-| `request` | ✓ (uses curl) | HTTP: `get`, `post`, `put`, `patch`, `delete`, `Response` |
-| `sql` | ✓ (`sql.cpp` + SQLite) | databases: `connectMssql`, `connect` (any ODBC), `openSqlite` |
+| `request` | ✓ (curl natively, the browser or Node in WebAssembly) | HTTP: `get`, `post`, `put`, `patch`, `delete`, `Response` |
+| `sql` | ✓ (`sql.c` / `sql.cpp` + SQLite) | databases: `connectMssql`, `connect` (any ODBC), `openSqlite` (also in WebAssembly) |
 | `ashwee` | ✓ | desktop GUI: `Window`, `Button`, `TextBox`, `ListBox`, ... (Windows, Linux with GTK 3, macOS) |
 | `torrent` | ✓ | BitTorrent: share folders peer to peer (riv uses it) |
 | `colors`, `textfx` | | small examples of plain Dessa packages |
@@ -56,6 +56,9 @@ source sql.cpp
 link.windows -lodbc32                 link flags (link = every OS, link.windows / link.unix = one OS)
 link.unix -lodbc
 namespace dessa::sql                  optional; default dessa::<name>
+c sql.c                               the same functions in C, for C programs and WebAssembly
+wasm.cflags -DSQLITE_THREADSAFE=0     extra flags for compiling the C for WebAssembly
+wasm.link -lwasi-emulated-mman        extra flags for linking it into WebAssembly
 func[Int] _sqliteOpen(path[Str])      each function: a Dessa signature
 const[Dbl] PI                         a constant
 ```
@@ -66,8 +69,10 @@ Functions whose names start with `_` are helpers for the package's own `.dm` fil
 ## Adding a library
 
 - **Pure Dessa:** `riv init` a folder and write `<name>.dm` (or `lib.ds`). Share it with `riv publish`.
-- **With C++:** add `<name>.hpp` (namespace `dessa::<name>`), any `.cpp` / `.c` files, and a
-  `<name>.native` that lists them.
+- **With native code:** add `<name>.hpp` (namespace `dessa::<name>`), any `.cpp` / `.c` files, and a
+  `<name>.native` that lists them. To run in WebAssembly too, write the functions in C as well
+  (`c <file>.c`): arguments are borrowed runtime values (`ds_str*`, `ds_int`, `ds_list*`), results
+  are new ones, and errors go through `ds_fail`.
 - **Core library:** put it in `include/<name>/` and register its functions in `builtinLibraries()` in
   `src/analyser/builtins.cpp`. Only do this for things nearly every program needs.
 - Add a test in `tests/cases/run/`.

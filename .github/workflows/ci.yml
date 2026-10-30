@@ -57,9 +57,6 @@ jobs:
       - name: Test
         run: ${{ matrix.os == 'ubuntu-24.04' && 'xvfb-run -a ' || '' }}python3 tests/test.py
 
-      - name: Test the JavaScript backend (same tests, run with Node)
-        run: python3 tests/test.py --js
-
       - name: The Dessa lexer gives the same tokens as the C++ one (selfhost)
         if: matrix.os == 'ubuntu-24.04'
         run: python3 selfhost/check.py
@@ -105,28 +102,8 @@ jobs:
         run: python3 tests/test.py --wasm
       - name: A page as WebAssembly
         run: node tests/web/wasm_page.js
+      - name: The npm package (with this dessa)
+        run: DESSALANG_DESSA="$PWD/build/dessa" node npm/test.js
       - name: Show the WebAssembly compiler's logs if something failed
         if: failure()
         run: for f in /tmp/dessa/objects/*.log /tmp/dessa/*.log; do [ -f "$f" ] && { echo "===== $f"; tail -c 4000 "$f"; }; done; true
-
-  web:
-    name: Browser build (WebAssembly)
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: mymindstorm/setup-emsdk@v14
-      - name: Build web/dessa.js
-        run: |
-          emcmake cmake -S . -B build-wasm -DCMAKE_BUILD_TYPE=Release
-          cmake --build build-wasm -j 4
-      - name: Smoke test
-        run: node tests/web/node_smoke.js
-      - name: Test the npm package
-        run: |
-          cd npm
-          npm run build
-          npm test
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dessa-web
-          path: web/dessa.js

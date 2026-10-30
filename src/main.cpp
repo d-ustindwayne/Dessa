@@ -27,7 +27,6 @@
 #include "builtins.hpp"
 #include "cgen.hpp"
 #include "codegen.hpp"
-#include "jsgen.hpp"
 #include "web.hpp"
 #include "json.hpp"
 #include "lexer.hpp"
@@ -40,7 +39,7 @@ namespace fs = std::filesystem;
 
 namespace {
 
-constexpr const char* kVersion = "0.3.6";
+constexpr const char* kVersion = "0.5.0";
 const char* g_argv0 = nullptr; // to find runtime/ and include/ next to the compiler
 
 void printUsage() {
@@ -50,7 +49,8 @@ void printUsage() {
         "  dessa check   <file.ds> [--json] [--stdin]   type-check and report problems\n"
         "  dessa emit    <file.ds> [-o out.c]           show the generated C (C++ with --cpp)\n"
         "  dessa build   <file.ds> [-o program]         compile to an executable (--release: fully optimized, slower to build)\n"
-        "                                               programs go through C; --cpp uses C++ instead\n"
+        "                                               programs go through C; --cpp uses C++ instead;\n"
+        "                                               --target wasm makes WebAssembly (app.wasm, and app.js for Node)\n"
         "  dessa run     <file.ds> [-- args...]         compile and run\n"
         "  dessa fix-lists <file.ds>                    rewrite old [1, 2] lists as <1, 2>\n"
         "  dessa symbols <file.ds> [--stdin]            symbol table as JSON (for editors)\n"
@@ -266,57 +266,19 @@ int cmdCheck(const std::string& path, bool asJson, bool fromStdin) {
     return hasError(diagnostics) ? 1 : 0;
 }
 
-// Generated C++ for the program, or "" (with diagnostics printed) on failure.
-// --target native (C++, the default) or js / web (JavaScript for Node or a browser)
+// --target native (the default: through C), c (C only) or wasm (WebAssembly;
+// "web" is another name for it)
 std::string g_target = "native";
 bool g_cpp = false;       // --cpp: build from C++ instead of C
 bool g_release = false;   // dessa build --release: -O2 instead of -O1
 int g_port = 8080;   // dessa serve / dessa run page.dhtml
-bool targetIsJs() { return g_target == "js" || g_target == "web"; }
-bool targetIsWasm() { return g_target == "wasm"; }
+bool targetIsWasm() { return g_target == "wasm" || g_target == "web"; }
 
 std::string readTextFile(const fs::path& p) {
     std::ifstream in(p, std::ios::binary);
     std::stringstream buffer;
     buffer << in.rdbuf();
     return buffer.str();
-}
-
-// Generated C++ (or JavaScript with --target js) for the program, or "" (with
-// diagnostics printed) on failure.
-// JavaScript for an analysed program, or "" with the reason in `errors`.
-std::string javascriptFor(Compilation& c, std::string& errors) {
-    // Libraries with a C++ part can't run in JavaScript (except the core ones, which have JS twins)
-    static const std::set<std::string> withJs = {"math", "os", "sys", "time", "random", "dcrypto"};
-    for (const auto& lib : c.analyser.builtinLibrariesUsed()) {
-        if (!withJs.count(lib)) {
-            errors += "dessa: the library '" + lib + "' has a C++ part, so it can't run in JavaScript or a browser "
-                      "(only libraries written in Dessa, or with a .js part, can)\n";
-            return "";
-        }
-    }
-    std::string runtime = toolchain::runtimeDir(g_argv0);
-    std::string runtimeJs = runtime.empty() ? "" : readTextFile(fs::path(runtime) / "dessa_runtime.js");
-    if (runtimeJs.empty()) {
-        errors += "dessa: cannot find runtime/dessa_runtime.js (set DESSA_HOME to the Dessa install folder)\n";
-        return "";
-    }
-    JsCodegen js(c.program, c.analyser);
-    return js.generate(runtimeJs);
-}
-
-// For pages (.dhtml): compiles one script's source, as if it were `path`
-bool compileScriptToJs(const std::string& path, const std::string& source, std::string& js, std::string& errors) {
-    Compilation c;
-    compileFrontEnd(c, path, &source);
-    std::ostringstream text;
-    printDiagnostics(c.diagnostics, false, text);
-    if (!c.ok) {
-        errors += text.str();
-        return false;
-    }
-    js = javascriptFor(c, errors);
-    return !js.empty();
 }
 
 // C for WebAssembly (webutils through the page bridge), or "" and the reason
@@ -330,9 +292,14 @@ std::string wasmSourceFor(Compilation& c, bool page, std::string& reason) {
     std::string glued = start == std::string::npos ? "" : source.substr(start + 14, end - start - 14);
     glued.erase(0, glued.find_first_not_of(' '));
     glued.erase(glued.find_last_not_of(' ') + 1);
-    if (!glued.empty()) {
-        reason = "the library " + glued + ", which has a C++ part";
-        return "";
+    // only those whose native part is in C as well can
+    std::istringstream names(glued);
+    for (std::string name; names >> name;) {
+        const BuiltinLibrary* lib = findBuiltinLibrary(name);
+        if (!lib || lib->cImpl.empty()) {
+            reason = "the library " + name + ", which has a C++ part";
+            return "";
+        }
     }
     return source;
 }
@@ -361,17 +328,11 @@ std::string base64(const std::string& bytes) {
     return out;
 }
 
-// For pages: one script as WebAssembly when it can be (the page bridge and
-// the module, as base64), else as JavaScript. --target js keeps JavaScript.
+// For pages: one script as WebAssembly (the page bridge and the module, as base64)
 bool compileScriptToWasm(const std::string& path, const std::string& source, std::string& js, std::string& errors) {
-    if (targetIsJs()) return compileScriptToJs(path, source, js, errors);
-    static bool toldNoTools = false;
     if (toolchain::wasmCompiler(g_argv0).empty()) {
-        if (!toldNoTools) {
-            std::cerr << "dessa: pages run as JavaScript here; for WebAssembly (faster), get its compiler with: dessa setup wasm\n";
-            toldNoTools = true;
-        }
-        return compileScriptToJs(path, source, js, errors);
+        errors += "dessa: pages run as WebAssembly, and its compiler isn't here yet. Get it once with: dessa setup wasm\n";
+        return false;
     }
     Compilation c;
     compileFrontEnd(c, path, &source);
@@ -384,10 +345,8 @@ bool compileScriptToWasm(const std::string& path, const std::string& source, std
     std::string reason;
     std::string cSource = wasmSourceFor(c, true, reason);
     if (cSource.empty()) {
-        std::cerr << "dessa: " << fs::path(path).filename().string() << ": a script runs as JavaScript (WebAssembly can't do " << reason
-                  << " yet)\n";
-        js = javascriptFor(c, errors);
-        return !js.empty();
+        errors += "dessa: " + fs::path(path).filename().string() + ": this script can't run in a page (it uses " + reason + ")\n";
+        return false;
     }
     std::string wasm, error;
     if (!toolchain::compileWasmCached(cSource, g_argv0, wasm, error, true)) {
@@ -404,12 +363,6 @@ std::string generate(Compilation& c, const std::string& path) {
     compileFrontEnd(c, path, nullptr);
     printDiagnostics(c.diagnostics, false, std::cerr);
     if (!c.ok) return "";
-    if (targetIsJs()) {
-        std::string errors;
-        std::string js = javascriptFor(c, errors);
-        std::cerr << errors;
-        return js;
-    }
     if (targetIsWasm()) {
         std::string reason;
         std::string source = wasmSourceFor(c, false, reason);
@@ -417,9 +370,9 @@ std::string generate(Compilation& c, const std::string& path) {
         return source;
     }
     for (const auto& module : c.program.modules) {
-        if (!module->jsNative.empty()) {
-            std::cerr << "dessa: " << module->displayPath << " belongs to a library that only runs in a browser / JavaScript;\n"
-                      << "       build with --target web, e.g. dessa build " << path << " --target web\n";
+        if (module->browserLibrary) {
+            std::cerr << "dessa: " << module->displayPath << " is the web page's library, so it only runs in a page;\n"
+                      << "       put the code in a .dhtml page (see docs/web.md), or build it with --target wasm\n";
             return "";
         }
     }
@@ -502,7 +455,7 @@ int cmdEmit(const std::string& path, const std::string& output) {
     return 0;
 }
 
-// page.dhtml -> page.html with its Dessa scripts compiled (runs without dessa.js)
+// page.dhtml -> page.html with its Dessa scripts compiled to WebAssembly (one file, runs anywhere)
 int buildPageCommand(const std::string& path, std::string output) {
     std::string html, errors;
     if (!web::buildPage(path, compileScriptToWasm, html, errors)) {
@@ -528,13 +481,6 @@ int cmdBuild(const std::string& path, std::string output, const char* argv0) {
     Compilation c;
     std::string cpp = generate(c, path);
     if (cpp.empty()) return 1;
-    if (targetIsJs()) {
-        // One self-contained .js file (runtime included)
-        if (output.empty()) output = fs::path(path).stem().string() + ".js";
-        std::ofstream out(output, std::ios::binary);
-        out << cpp;
-        return out ? 0 : 1;
-    }
     if (targetIsWasm()) {
         // app.wasm, and app.js next to it to run it with Node (node app.js)
         if (output.empty()) output = fs::path(path).stem().string() + ".wasm";
@@ -580,24 +526,6 @@ int cmdRun(const std::string& path, const std::vector<std::string>& programArgs,
     Compilation c;
     std::string cpp = generate(c, path);
     if (cpp.empty()) return 1;
-    if (targetIsJs()) {
-        // Run the JavaScript with Node
-        std::error_code ec;
-        fs::path dir = fs::temp_directory_path(ec) / "dessa" / "js";
-        fs::create_directories(dir, ec);
-        fs::path file = dir / (fs::path(path).stem().string() + ".js");
-        {
-            std::ofstream out(file, std::ios::binary);
-            out << cpp;
-        }
-        std::string command = "node \"" + file.string() + "\"";
-        for (const auto& a : programArgs) command += " \"" + a + "\"";
-        int code = std::system(command.c_str());
-#ifndef _WIN32
-        if (code != -1 && WIFEXITED(code)) code = WEXITSTATUS(code);
-#endif
-        return code;
-    }
     if (targetIsWasm()) {
         // Run the WebAssembly with Node (runtime/dessa_wasm.js)
         std::string wasm, error;
@@ -638,7 +566,9 @@ int cmdSetup(const std::string& what) {
         std::cerr << "dessa setup: what to set up? `dessa setup wasm` (the compiler for WebAssembly)\n";
         return 1;
     }
-    if (const std::string found = toolchain::wasmCompiler(g_argv0); !found.empty()) {
+    // Emscripten doesn't count: its programs can't read or write files, so
+    // the WASI compiler is downloaded (it is found before Emscripten)
+    if (const std::string found = toolchain::wasmCompiler(g_argv0); !found.empty() && !toolchain::wasmIsEmscripten(g_argv0)) {
         std::cout << "A compiler for WebAssembly is already there: " << found << "\n";
         return 0;
     }
@@ -684,13 +614,21 @@ int cmdSetup(const std::string& what) {
                      "       https://github.com/WebAssembly/wasi-sdk/releases (then set WASI_SDK_PATH to its folder)\n";
         return 1;
     }
-    if (shell("tar -xzf \"" + archive.string() + "\" -C \"" + folder.string() + "\"") != 0) {
+    // On Windows, Windows' own tar: a GNU tar earlier on PATH (Git, MSYS2)
+    // reads "C:\..." as a remote host
+    std::string tar = "tar";
+#ifdef _WIN32
+    if (const char* windows = std::getenv("SystemRoot"); windows && fs::is_regular_file(fs::path(windows) / "System32" / "tar.exe", ec)) {
+        tar = "\"" + (fs::path(windows) / "System32" / "tar.exe").string() + "\"";
+    }
+#endif
+    if (shell(tar + " -xzf \"" + archive.string() + "\" -C \"" + folder.string() + "\"") != 0) {
         std::cerr << "dessa setup: could not unpack " << archive.string() << "\n";
         return 1;
     }
     fs::remove(archive, ec);
     const std::string found = toolchain::wasmCompiler(g_argv0);
-    if (found.empty()) {
+    if (found.empty() || toolchain::wasmIsEmscripten(g_argv0)) {
         std::cerr << "dessa setup: unpacked into " << folder.string() << ", but no compiler was found there\n";
         return 1;
     }
@@ -1184,8 +1122,12 @@ int main(int argc, char* argv[]) {
             at = args[++i];
         } else if (a == "--target" && i + 1 < args.size()) {
             g_target = args[++i];
-            if (g_target != "native" && g_target != "js" && g_target != "web" && g_target != "c" && g_target != "wasm") {
-                std::cerr << "dessa: unknown target '" << g_target << "' (use native, c, wasm, js or web)\n";
+            if (g_target == "js") {
+                std::cerr << "dessa: Dessa doesn't make JavaScript any more; --target wasm makes WebAssembly, which runs in Node and browsers\n";
+                return 1;
+            }
+            if (g_target != "native" && g_target != "web" && g_target != "c" && g_target != "wasm") {
+                std::cerr << "dessa: unknown target '" << g_target << "' (use native, c or wasm)\n";
                 return 1;
             }
         } else if (a == "--port" && i + 1 < args.size()) {

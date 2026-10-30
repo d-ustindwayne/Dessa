@@ -187,11 +187,6 @@ Fields that are `Str`, `Int`, `Dbl`, `Flt`, `Bul`, `Json` or lists of `Str`,
 `Int`, `Dbl`, `Bul` are filled; a value that doesn't fit its field is a
 `JsonError` naming the key.
 
-### phl (left out for now)
-
-PHL's syntax is being revised, so the `phl` package isn't in the index and
-doesn't come with Dessa until the new syntax is final. Its source stays in
-`tools/riv/packages/phl` (frozen, old syntax).
 
 ### sql
 

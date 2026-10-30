@@ -112,6 +112,16 @@ CCodegen::CV CCodegen::convert(CV v, const SemanticType& from, const SemanticTyp
         if (isOptValue(to)) return {"(" + cType(to) + "){0}", false};
         return {"NULL", false};
     }
+    // Obj and unions such as Int | Str: a ds_head*, with numbers boxed
+    if (isDynamic(to)) {
+        if (isDynamic(from)) return v;
+        if (isCounted(from)) return {"((ds_head*)(" + v.code + "))", v.owned};
+        return {box(v.code, from), true};
+    }
+    if (isDynamic(from)) {
+        if (isCounted(to)) return {"((" + cType(to) + ")(" + v.code + "))", v.owned};
+        return {unbox(use(v, from), to), false};
+    }
     if (isOptValue(to)) {
         const SemanticType base = withoutNil(to);
         if (isOptValue(from)) {
@@ -132,6 +142,44 @@ CCodegen::CV CCodegen::convert(CV v, const SemanticType& from, const SemanticTyp
     if (isOptValue(from)) return {"((" + cType(to) + ")DS_UNWRAP(" + v.code + "))", false};
     if (cType(f) == cType(to)) return v;
     return {"((" + cType(to) + ")(" + v.code + "))", false};
+}
+
+// A number, Bul, Chr or enum value (or a nullable one) in a box
+std::string CCodegen::box(const std::string& code, const SemanticType& type) {
+    const bool opt = isOptValue(type);
+    const SemanticType base = withoutNil(type);
+    const std::string o = opt ? "opt_" : "";
+    switch (base.kind) {
+        case SemanticTypeKind::Dbl: return "ds_box_" + o + "d(" + code + ")";
+        case SemanticTypeKind::Flt: return "ds_box_" + o + "f(" + code + ")";
+        case SemanticTypeKind::Bul: return "ds_box_" + o + "b(" + code + ")";
+        case SemanticTypeKind::Chr: return "ds_box_" + o + "c(" + code + ")";
+        case SemanticTypeKind::Int: return "ds_box_" + o + "i(" + elem(base) + ", " + code + ")";
+        case SemanticTypeKind::UserDefined:
+            if (base.isEnum()) return "ds_box_" + o + "i(" + elem(base) + ", " + code + ")";
+            break;
+        default: break;
+    }
+    unsupported("putting " + type.toString() + " in an Obj");
+}
+
+// The value in a box (already checked to be that type)
+std::string CCodegen::unbox(const std::string& code, const SemanticType& type) {
+    const bool opt = isOptValue(type);
+    const SemanticType base = withoutNil(type);
+    const std::string o = opt ? "opt_" : "";
+    switch (base.kind) {
+        case SemanticTypeKind::Dbl: return "ds_unbox_" + o + "d(" + code + ")";
+        case SemanticTypeKind::Flt: return "ds_unbox_" + o + "f(" + code + ")";
+        case SemanticTypeKind::Bul: return "ds_unbox_" + o + "b(" + code + ")";
+        case SemanticTypeKind::Chr: return "ds_unbox_" + o + "c(" + code + ")";
+        case SemanticTypeKind::Int: return "ds_unbox_" + o + "i(" + code + ")";
+        case SemanticTypeKind::UserDefined:
+            if (base.isEnum()) return "ds_unbox_" + o + "i(" + code + ")";
+            break;
+        default: break;
+    }
+    unsupported("taking " + type.toString() + " out of an Obj");
 }
 
 CCodegen::CV CCodegen::exprAs(const Expr* e, const SemanticType& target) {
@@ -197,6 +245,14 @@ CCodegen::CV CCodegen::expr(const Expr* e) {
                 return {std::string(p->op.type == TokenType::PLUS_PLUS ? "ds_post_inc(&" : "ds_post_dec(&") + lv + ")", false};
             }
             if (isNumber(t)) return {"(" + lv + p->op.lexeme + ")", false};
+            if (isOptValue(t) && isNumber(withoutNil(t))) {
+                // Int | Nil: fails on nil, like any other use of a nil number
+                const SemanticType base = withoutNil(t);
+                std::string ptr = blockVar(tempCounter);
+                std::string step = base.isInteger() ? std::string(p->op.type == TokenType::PLUS_PLUS ? "ds_post_inc(&" : "ds_post_dec(&") + ptr + "->value)"
+                                                    : "(" + ptr + "->value" + p->op.lexeme + ")";
+                return {"({ " + cType(t) + "* " + ptr + " = &(" + lv + "); if (!" + ptr + "->has) ds_nil_value(); " + step + "; })", false};
+            }
             unsupported("++ / -- on " + t.toString());
         }
         case ExprKind::Binary: return binary(static_cast<const BinaryExpr*>(e));
@@ -304,15 +360,9 @@ CCodegen::CV CCodegen::identifier(const IdentifierExpr* e) {
     if (e->name.type == TokenType::THIS) return thisValue();
     const Symbol* symbol = analyser.symbolOf(e);
     if (!symbol) unsupported("the name '" + e->name.lexeme + "'");
-    if (analyser.isRecursiveRef(e)) {
-        // inside its own lambda (not a lambda within it): the closure itself
-        for (size_t i = scopes.size(); i-- > 0;) {
-            if (!scopes[i].lambda) continue;
-            if (scopes[i].lambda->selfName == e->name.lexeme) return {"ds_self", false};
-            break;
-        }
-        unsupported("a lambda that calls itself from a lambda inside it");
-    }
+    // inside its own lambda the name is the closure itself (ds_self, a local
+    // of the lambda's body, which a lambda inside it captures like any other)
+    if (analyser.isRecursiveRef(e) && !symbol->isGlobal) return {resolveLocal(e->name.lexeme), false};
 
     std::string name;
     switch (symbol->kind) {
@@ -340,14 +390,13 @@ CCodegen::CV CCodegen::identifier(const IdentifierExpr* e) {
     const SemanticType& declared = symbol->type;
     if (now.isUnknown() || now == declared) return {name, false};
     if (isOptValue(declared) && now == withoutNil(declared)) return {"DS_UNWRAP(" + name + ")", false};
-    if (declared.is(SemanticTypeKind::Obj)) unsupported("Obj");
+    if (isDynamic(declared)) return convert({name, false}, declared, now);
     if (now.isReference()) {
         if (withoutNil(declared) == now) return {name, false};
         if (now.isInterface()) return {"((ds_head*)(" + name + "))", false};
         return {"((" + cType(now) + ")ds_cast(" + name + ", &" + clsName(now) + ".t))", false};
     }
     if (isCounted(declared) && withoutNil(declared) == now) return {name, false};
-    if (withoutNil(declared).kind == SemanticTypeKind::Union) unsupported("union types");
     return {name, false};
 }
 
@@ -527,8 +576,13 @@ CCodegen::CV CCodegen::equality(const Expr* l, const Expr* r, bool negate) {
     std::string a = use(expr(l), lt);
     std::string b = use(expr(r), rt);
     const SemanticType lb = withoutNil(lt), rb = withoutNil(rt);
-    if (lb.kind == SemanticTypeKind::Union || rb.kind == SemanticTypeKind::Union) unsupported("union types");
-    if (lb.is(SemanticTypeKind::Obj) || rb.is(SemanticTypeKind::Obj)) unsupported("Obj");
+    if (isDynamic(lt) || isDynamic(rt)) {
+        // both as dynamic values: 41 == 41.0, "a" == "a", objects by identity
+        const SemanticType& dt = isDynamic(lt) ? lt : rt;
+        std::string x = use(convert({a, false}, lt, dt), dt);
+        std::string y = use(convert({b, false}, rt, dt), dt);
+        return {"(" + no + "ds_dyn_eq(" + x + ", " + y + "))", false};
+    }
 
     // The plain test on two present values
     auto test = [&](const std::string& x, const std::string& y) -> std::string {
@@ -623,7 +677,17 @@ CCodegen::CV CCodegen::assign(const AssignExpr* e) {
     SemanticType tt;
     const SemanticType& targetNow = analyser.typeOf(target) ? *analyser.typeOf(target) : kUnknown;
 
-    if (target->kind == ExprKind::Member && analyser.isDynamicMember(target)) unsupported("Obj");
+    if (target->kind == ExprKind::Member && analyser.isDynamicMember(target)) {
+        if (e->op.type != TokenType::EQUAL) unsupported("this operator on a field of an Obj");
+        const auto* m = static_cast<const MemberExpr*>(target);
+        const SemanticType& ot = analyser.typeOf(m->object.get()) ? *analyser.typeOf(m->object.get()) : kUnknown;
+        const SemanticType obj = simpleType(SemanticTypeKind::Obj);
+        std::string o = use(convert(expr(m->object.get()), ot, obj), obj);
+        std::string v = blockVar(tempCounter);
+        std::string value = own(exprAs(e->value.get(), obj), obj);
+        return {"({ ds_head* " + v + " = " + value + "; ds_dyn_set(" + o + ", \"" + m->name.lexeme + "\", (ds_head*)ds_retain(" + v + ")); " +
+                    v + "; })", true};
+    }
     if (target->kind == ExprKind::Member) {
         const SemanticType* ot = analyser.typeOf(static_cast<const MemberExpr*>(target)->object.get());
         if (ot && isExtern(*ot)) return externAssign(e);   // el.textContent = "Hi"
@@ -864,12 +928,40 @@ CCodegen::CV CCodegen::printCall(const CallExpr* e) {
         if (arg.name && *arg.name == "sep") sep = use(exprAs(arg.value.get(), str), str);
         if (arg.name && *arg.name == "end") end = use(exprAs(arg.value.get(), str), str);
     }
+    // With effects (print(d, d.popFront())), every value is taken first and
+    // turned into text afterwards, as the other backends do
+    size_t positional = 0;
+    bool effects = false, typed = true;
+    for (const auto& arg : e->args) {
+        if (arg.name) continue;
+        ++positional;
+        effects = effects || hasSideEffects(arg.value.get());
+        const SemanticType* t = analyser.typeOf(arg.value.get());
+        if (!t || t->isVoidLike()) typed = false;
+    }
+    std::vector<std::pair<std::string, SemanticType>> taken;
+    if (positional >= 2 && effects && typed) {
+        for (const auto& arg : e->args) {
+            if (arg.name) continue;
+            const SemanticType* t = analyser.typeOf(arg.value.get());
+            std::string v = blockVar(tempCounter);
+            // its own count: a list or map keeps the value it had here
+            code += cType(*t) + " " + v + " = " + own(expr(arg.value.get()), *t) + "; ";
+            taken.push_back({v, *t});
+        }
+    }
     bool first = true;
+    size_t at = 0;
     for (const auto& arg : e->args) {
         if (arg.name) continue;
         if (!first) code += sep.empty() ? "ds_sb_bytes(&" + b + ", \" \", 1); " : "ds_sb_str(&" + b + ", " + sep + "); ";
         first = false;
-        appendText(code, b, arg.value.get());
+        if (taken.empty()) appendText(code, b, arg.value.get());
+        else code += "ds_sb_take(&" + b + ", " + toText({taken[at].first, false}, taken[at].second) + "); ";
+        ++at;
+    }
+    for (const auto& [v, t] : taken) {
+        if (isCounted(t)) code += "ds_release(" + v + "); ";
     }
     std::string s = blockVar(tempCounter);
     if (end.empty()) {
@@ -907,7 +999,10 @@ CCodegen::CallArgs CCodegen::arguments(const Expr* callExpr, const std::vector<A
             p = &params[a].type;
         }
         types[a] = *p;
-        code[a] = use(exprAs(args[a].value.get(), *p), *p);
+        // A parameter of any type (typeof, zip, getField): the value keeps its own type,
+        // which says whether it's counted (and so released after the call)
+        const SemanticType* own = p->isUnknown() ? analyser.typeOf(args[a].value.get()) : nullptr;
+        code[a] = use(exprAs(args[a].value.get(), *p), own ? *own : *p);
     }
     CallArgs result;
     if (args.size() >= 2 && std::any_of(args.begin(), args.end(), [](const Argument& a) { return hasSideEffects(a.value.get()); })) {
@@ -1041,6 +1136,9 @@ CCodegen::CV CCodegen::builtinCall(const CallExpr* e, const Symbol& symbol) {
         const Expr* value = e->args[0].value.get();
         const SemanticType& t = analyser.typeOf(value) ? *analyser.typeOf(value) : kUnknown;
         std::string known = t.toString();
+        if (isDynamic(t)) {
+            return {"ds_dyn_typeof(" + arg(0) + ", " + (t.is(SemanticTypeKind::Obj) ? std::string("NULL") : "\"" + known + "\"") + ")", true};
+        }
         if (withoutNil(t).isReference()) return {"ds_class_name(" + arg(0) + ")", true};
         std::string name = known;
         const SemanticType b = withoutNil(t);
@@ -1130,6 +1228,57 @@ CCodegen::CV CCodegen::builtinCall(const CallExpr* e, const Symbol& symbol) {
     if (n == "dessa::os::makeDir") return {"ds_os_make_dir(" + arg(0) + ")", false};
     if (n == "dessa::os::cwd") return {"ds_os_cwd()", true};
     if (n == "dessa::os::getEnv") return {"ds_os_get_env(" + arg(0) + ")", true};
+    // zip(a, b): pairs as 2-item lists (stops at the shorter list); zip(a, b, combine)
+    if (n == "dessa::zip") {
+        const SemanticType* ta = analyser.typeOf(e->args[0].value.get());
+        const SemanticType* tb = analyser.typeOf(e->args[1].value.get());
+        if (!ta || !tb || !withoutNil(*ta).elementType || !withoutNil(*tb).elementType || !result.elementType) unsupported("this zip");
+        const SemanticType ea = *withoutNil(*ta).elementType, eb = *withoutNil(*tb).elementType;
+        const SemanticType item = *result.elementType;
+        std::string A = blockVar(tempCounter), B = blockVar(tempCounter), out = blockVar(tempCounter), i = blockVar(tempCounter);
+        auto push = [&](const std::string& list, const SemanticType& t, const std::string& value) {
+            return "{ " + cType(t) + " ds_v = " + value + "; if (" + list + "->len == " + list + "->cap) ds_list_grow(" + list + "); ((" +
+                   cType(t) + "*)" + list + "->data)[" + list + "->len++] = ds_v; } ";
+        };
+        const std::string x = "((" + cType(ea) + "*)" + A + "->data)[" + i + "]", y = "((" + cType(eb) + "*)" + B + "->data)[" + i + "]";
+        std::string code = "({ ds_list* " + A + " = (ds_list*)ds_retain(" + arg(0) + "); ds_list* " + B + " = (ds_list*)ds_retain(" + arg(1) +
+                           "); int64_t ds_n = " + A + "->len < " + B + "->len ? " + A + "->len : " + B + "->len; ds_list* " + out +
+                           " = ds_list_new(" + elem(item) + ", ds_n); ";
+        std::string value;
+        if (e->args.size() == 3) {
+            const SemanticType* tf = analyser.typeOf(e->args[2].value.get());
+            if (!tf || !withoutNil(*tf).is(SemanticTypeKind::Function)) unsupported("this zip");
+            const SemanticType fn = withoutNil(*tf);
+            if (fn.parameterTypes.size() != 2 || cType(fn.parameterTypes[0]) != cType(ea) || cType(fn.parameterTypes[1]) != cType(eb)) {
+                unsupported("zip with a lambda of another type");
+            }
+            std::string f = blockVar(tempCounter);
+            code += "ds_fn* " + f + " = ds_callable(" + arg(2) + "); ";
+            value = "((" + cType(item) + " (*)(ds_fn*, " + cType(ea) + ", " + cType(eb) + "))" + f + "->code)(" + f + ", " + x + ", " + y + ")";
+        } else {
+            if (!item.elementType) unsupported("this zip");
+            const SemanticType c = *item.elementType;
+            std::string pair = blockVar(tempCounter);
+            value = "({ ds_list* " + pair + " = ds_list_new(" + elem(c) + ", 2); " + push(pair, c, own(convert({x, false}, ea, c), c)) +
+                    push(pair, c, own(convert({y, false}, eb, c), c)) + pair + "; })";
+        }
+        code += "for (int64_t " + i + " = 0; " + i + " < ds_n; " + i + "++) " + push(out, item, value) + "ds_release(" + A + "); ds_release(" + B +
+                "); " + out + "; })";
+        return {code, true};
+    }
+    // Fields by name
+    if (n == "dessa::get_field" || n == "dessa::set_field" || n == "dessa::fields_of") {
+        const SemanticType obj = simpleType(SemanticTypeKind::Obj);
+        auto asObj = [&](size_t i) {
+            const SemanticType* t = analyser.typeOf(e->args[i].value.get());
+            if (!t) unsupported("this call");
+            return use(convert({arg(i), false}, *t, obj), obj);
+        };
+        if (n == "dessa::fields_of") return {"ds_dyn_fields(" + asObj(0) + ")", true};
+        std::string object = asObj(0);
+        if (n == "dessa::get_field") return {"ds_dyn_get_str(" + object + ", " + arg(1) + ")", true};
+        return {"ds_dyn_set_str(" + object + ", " + arg(1) + ", (ds_head*)ds_retain(" + asObj(2) + "))", false};
+    }
     // Anything else: the library's C++ code, through its bridge
     std::string fn = glueFunction(n);
     if (fn.empty()) unsupported("the builtin '" + symbol.name + "'");
@@ -1236,7 +1385,12 @@ CCodegen::CV CCodegen::builtinMethod(const CallExpr* e, const MemberExpr* m, con
     };
     // The receiver as a place, for methods that change it
     auto slot = [&]() -> std::string {
-        if (receiverOverride) unsupported("?. with a method that changes the value");
+        if (receiverOverride) {
+            // list?.push(1): the variable itself (not nil here: ?. checked it)
+            const Expr* in = ungroup(object);
+            if ((in->kind == ExprKind::Identifier || in->kind == ExprKind::Member) && !hasSideEffects(in)) return lvalue(object);
+            unsupported("?. with a method that changes the value");
+        }
         const Expr* in = ungroup(object);
         if (in->kind == ExprKind::Identifier || in->kind == ExprKind::Member || in->kind == ExprKind::Index) return lvalue(object);
         std::string t = temp();
@@ -1498,7 +1652,12 @@ std::string CCodegen::sortComparator(const SemanticType& element, const Semantic
 // ============================================================
 
 CCodegen::CV CCodegen::member(const MemberExpr* e) {
-    if (analyser.isDynamicMember(e)) unsupported("Obj");
+    if (analyser.isDynamicMember(e)) {
+        const SemanticType& ot = analyser.typeOf(e->object.get()) ? *analyser.typeOf(e->object.get()) : kUnknown;
+        const SemanticType obj = simpleType(SemanticTypeKind::Obj);
+        std::string o = use(convert(expr(e->object.get()), ot, obj), obj);
+        return {"ds_dyn_get(" + o + ", \"" + e->name.lexeme + "\")", true};
+    }
     if (analyser.isAliasRef(e)) {
         const Symbol* target = analyser.symbolOf(e);
         if (!target) unsupported("this name");
@@ -1684,7 +1843,6 @@ CCodegen::CV CCodegen::lambda(const LambdaExpr* e) {
     const SemanticType fn = (expected && withoutNil(*expected).is(SemanticTypeKind::Function)) ? withoutNil(*expected) : type;
     SemanticType ret = fn.returnType ? *fn.returnType : simpleType(SemanticTypeKind::Emp);
     if (type.returnType && !type.returnType->isUnknown() && ret.isUnknown()) ret = *type.returnType;
-    if (analyser.objParamsOf(e)) unsupported("Obj");
 
     const int id = lambdaCounter++;
     LambdaInfo info;
@@ -1708,12 +1866,30 @@ CCodegen::CV CCodegen::lambda(const LambdaExpr* e) {
     volatileLocals = e->body && e->body->kind != StmtKind::Expression && hasTry(e->body.get());
     Scope scope;
     scope.lambda = &info;
+    if (!info.selfName.empty()) scope.locals.push_back({info.selfName, "ds_self", fn, false});
     scopes.push_back(scope);
 
     std::string sig = "static " + cType(ret) + " " + fnName + "(ds_fn* ds_self";
     std::vector<std::string> copies;
+    const auto* narrowed = analyser.objParamsOf(e);
     for (size_t i = 0; i < e->params.size(); ++i) {
         const SemanticType& p = i < fn.parameterTypes.size() ? fn.parameterTypes[i] : (i < type.parameterTypes.size() ? type.parameterTypes[i] : kUnknown);
+        const SemanticType* typed = nullptr;
+        if (narrowed) for (const auto& [index, t] : *narrowed) if (index == i) typed = &t;
+        if (typed) {
+            // an Obj comes in; the lambda's own type is checked here
+            const std::string raw = mangle(e->params[i].name) + "_in";
+            const std::string what = "parameter '" + e->params[i].name + "' (" + typed->toString() + ")";
+            sig += ", ds_head* " + raw;
+            std::string check = dynIs(raw, *typed);
+            if (check.empty()) unsupported("a lambda parameter of type " + typed->toString());
+            copies.push_back("if (!(" + check + ")) ds_dyn_bad_store(" + raw + ", \"" + what + "\");");
+            const bool counted = isCounted(*typed);
+            std::string cname = declareLocal(e->params[i].name, *typed, counted);
+            CV v = convert({raw, false}, simpleType(SemanticTypeKind::Obj), *typed);
+            copies.push_back(cType(*typed) + (volatileLocals ? " volatile " : " ") + cname + " = " + own(v, *typed) + ";");
+            continue;
+        }
         const bool copy = volatileLocals || (e->body && assignsName(e->body.get(), e->params[i].name));
         sig += ", " + cType(p) + " " + mangle(e->params[i].name) + (copy ? "_in" : "");
         if (copy) {
@@ -1798,7 +1974,17 @@ CCodegen::CV CCodegen::lambda(const LambdaExpr* e) {
 }
 
 CCodegen::CV CCodegen::newObject(const NewExpr* e) {
-    if (e->isAnonymous) unsupported("anonymous objects (Obj)");
+    if (e->isAnonymous) {
+        const SemanticType obj = simpleType(SemanticTypeKind::Obj);
+        std::string o = blockVar(tempCounter);
+        std::string code = "({ ds_head* " + o + " = ds_anon_new(); ";
+        for (const auto& f : e->args) {
+            const SemanticType* declared = analyser.anonFieldType(f.value.get());
+            CV v = declared ? convert(exprAs(f.value.get(), *declared), *declared, obj) : exprAs(f.value.get(), obj);
+            code += "ds_anon_put(" + o + ", \"" + f.name.value_or("") + "\", " + own(v, obj) + "); ";
+        }
+        return {code + o + "; })", true};
+    }
     const SemanticType& type = analyser.typeOf(e) ? *analyser.typeOf(e) : kUnknown;
     const ClassInfo* info = classOf(type);
     if (!info) unsupported("new " + type.toString());
@@ -1870,7 +2056,16 @@ CCodegen::CV CCodegen::convertExpr(const ConvertExpr* e) {
     const SemanticType& from = analyser.typeOf(e->value.get()) ? *analyser.typeOf(e->value.get()) : kUnknown;
     const std::string& to = e->type.lexeme;
     const SemanticType f = withoutNil(from);
-    if (f.is(SemanticTypeKind::Obj) || f.kind == SemanticTypeKind::Union) unsupported("converting " + from.toString());
+    if (isDynamic(from)) {
+        std::string x = use(expr(e->value.get()), from);
+        if (to == "Str") return {"ds_object_str(" + x + ")", true};
+        if (to == "Int") return {"ds_dyn_to_int(" + x + ")", false};
+        if (to == "Dbl") return {"ds_dyn_to_dbl(" + x + ", \"Dbl\")", false};
+        if (to == "Flt") return {"((ds_flt)ds_dyn_to_dbl(" + x + ", \"Flt\"))", false};
+        if (to == "Bul") return {"ds_dyn_to_bul(" + x + ")", false};
+        if (to == "Chr") return {"ds_dyn_to_chr(" + x + ")", false};
+        unsupported("converting " + from.toString() + " to " + to);
+    }
     CV v = expr(e->value.get());
     std::string x = use(v, from);
     if (isOptValue(from)) x = "DS_UNWRAP(" + x + ")";
@@ -1900,12 +2095,54 @@ CCodegen::CV CCodegen::convertExpr(const ConvertExpr* e) {
     return v;
 }
 
+// Whether the dynamic value `v` (a ds_head*, evaluated more than once) is a
+// `target`; "" when that can't be told
+std::string CCodegen::dynIs(const std::string& v, const SemanticType& target) {
+    switch (target.kind) {
+        case SemanticTypeKind::Int: return "ds_dyn_is_elem(" + v + ", DS_E_INT)";
+        case SemanticTypeKind::Dbl: return "ds_dyn_is_elem(" + v + ", DS_E_DBL)";
+        case SemanticTypeKind::Flt: return "ds_dyn_is_elem(" + v + ", DS_E_FLT)";
+        case SemanticTypeKind::Bul: return "ds_dyn_is_elem(" + v + ", DS_E_BUL)";
+        case SemanticTypeKind::Chr: return "ds_dyn_is_elem(" + v + ", DS_E_CHR)";
+        case SemanticTypeKind::Str: return "ds_dyn_is_kind(" + v + ", DS_K_STR)";
+        case SemanticTypeKind::List: return "ds_dyn_is_kind(" + v + ", DS_K_LIST)";
+        case SemanticTypeKind::Set: return "ds_dyn_is_kind(" + v + ", DS_K_SET)";
+        case SemanticTypeKind::Map: return "ds_dyn_is_kind(" + v + ", DS_K_MAP)";
+        case SemanticTypeKind::Function: return "ds_dyn_is_kind(" + v + ", DS_K_FN)";
+        case SemanticTypeKind::Nil: return "((" + v + ") == NULL)";
+        case SemanticTypeKind::Obj: return "((" + v + ") != NULL)";
+        case SemanticTypeKind::Union: {
+            std::string any;
+            for (const auto& member : target.unionMembers) {
+                std::string one = dynIs(v, member);
+                if (one.empty()) return "";
+                any += (any.empty() ? "" : " || ") + one;
+            }
+            return "(" + any + ")";
+        }
+        case SemanticTypeKind::UserDefined:
+            if (target.isEnum()) return "ds_dyn_is_enum(" + v + ", " + elem(target) + ")";
+            if (target.isClass()) return "ds_is_class(" + v + ", &" + clsName(target) + ".t)";
+            if (target.isInterface()) {
+                auto it = interfaceIds.find(target.key());
+                if (it == interfaceIds.end()) return "false";
+                return "(ds_interface(" + v + ", " + std::to_string(it->second) + ") != NULL)";
+            }
+            return "";
+        default: return "";
+    }
+}
+
 CCodegen::CV CCodegen::isExpr(const IsExpr* e) {
     const SemanticType* target = analyser.isTargetOf(e);
     if (!target) return {"false", false};
     const SemanticType& vt = analyser.typeOf(e->value.get()) ? *analyser.typeOf(e->value.get()) : kUnknown;
-    if (target->is(SemanticTypeKind::Obj) || vt.is(SemanticTypeKind::Obj)) unsupported("Obj");
     std::string value = use(expr(e->value.get()), vt);
+    if (target->is(SemanticTypeKind::Obj)) {   // x is Obj: anything but nil
+        if (isOptValue(vt)) return {"(" + value + ").has", false};
+        if (isCounted(vt)) return {"((" + value + ") != NULL)", false};
+        return {"((void)(" + value + "), true)", false};
+    }
     if (target->isClass()) {
         if (!isCounted(vt)) return {"((void)(" + value + "), false)", false};
         return {"ds_is_class(" + value + ", &" + clsName(*target) + ".t)", false};
@@ -1915,8 +2152,12 @@ CCodegen::CV CCodegen::isExpr(const IsExpr* e) {
         if (it == interfaceIds.end()) return {"((void)(" + value + "), false)", false};
         return {"(ds_interface(" + value + ", " + std::to_string(it->second) + ") != NULL)", false};
     }
+    if (isDynamic(vt)) {
+        std::string test = dynIs(value, *target);
+        if (test.empty()) unsupported("`is " + target->toString() + "` on " + vt.toString());
+        return {test, false};
+    }
     const SemanticType base = withoutNil(vt);
-    if (base.kind == SemanticTypeKind::Union) unsupported("union types");
     if (isOptValue(vt)) return {base == *target ? "(" + value + ").has" : "((void)(" + value + "), false)", false};
     if (isCounted(vt) && vt.containsNil()) return {base == *target ? "((" + value + ") != NULL)" : "((void)(" + value + "), false)", false};
     return {base == *target ? "((void)(" + value + "), true)" : "((void)(" + value + "), false)", false};

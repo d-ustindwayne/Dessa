@@ -1,11 +1,18 @@
 {
   "name": "dessalang",
-  "version": "0.3.6",
-  "description": "The Dessa programming language for JavaScript: compile Dessa to JavaScript in Node or right in the browser, build .dhtml pages.",
-  "keywords": ["dessa", "language", "compiler", "webassembly", "transpiler", "dhtml"],
+  "version": "0.5.0",
+  "description": "Dessa for Node: compile Dessa programs and .dhtml pages to WebAssembly and run them.",
+  "keywords": [
+    "dessa",
+    "language",
+    "compiler",
+    "webassembly",
+    "wasm",
+    "dhtml"
+  ],
   "license": "Apache-2.0",
   "author": "d-ustindwayne",
-  "homepage": "https://github.com/d-ustindwayne/Dessa#readme",
+  "homepage": "https://dessa.dustindwayn.ee/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/d-ustindwayne/Dessa.git",
@@ -14,18 +21,13 @@
   "bugs": "https://github.com/d-ustindwayne/Dessa/issues",
   "main": "index.js",
   "types": "index.d.ts",
-  "browser": "dessa.js",
-  "unpkg": "dessa.js",
-  "jsdelivr": "dessa.js",
   "bin": {
-    "dessa-web": "bin/dessa-web.js"
+    "dessalang": "bin/dessalang.js"
   },
   "files": [
     "index.js",
     "index.d.ts",
-    "lib/",
     "bin/",
-    "dessa.js",
     "README.md",
     "LICENSE"
   ],
@@ -33,8 +35,7 @@
     "node": ">=20.16"
   },
   "scripts": {
-    "build": "node scripts/copy-build.js",
-    "test": "node test.js",
-    "prepublishOnly": "node scripts/copy-build.js && node test.js"
+    "test": "bun run test.js",
+    "prepublishOnly": "bun run scripts/prepare.js"
   }
 }

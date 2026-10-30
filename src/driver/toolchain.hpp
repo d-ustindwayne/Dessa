@@ -33,6 +33,8 @@ bool isCSource(const std::string& source);
 // (<Dessa>/wasm from `dessa setup wasm`, WASI_SDK_PATH, the usual places),
 // or Emscripten's emcc
 std::string wasmCompiler(const char* argv0);
+// True when that compiler is Emscripten (its programs can't use files)
+bool wasmIsEmscripten(const char* argv0);
 // How to get one (for messages)
 std::string wasmHelp();
 // Generated C (CCodegen, setWasm) to a .wasm file. `page`: a page's script

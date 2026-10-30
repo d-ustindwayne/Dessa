@@ -109,6 +109,7 @@ const std::vector<BuiltinLibrary>& builtinLibraries() {
                 {"PI", "Dbl", "dessa::math::PI"},
                 {"E",  "Dbl", "dessa::math::E"},
             },
+            {}, {}, {}, "math/math.c",
         },
         {
             "os", "os/os.hpp",
@@ -135,6 +136,7 @@ const std::vector<BuiltinLibrary>& builtinLibraries() {
                 {"_fileClose",    {{"handle", "Int"}}, "Emp", "dessa::os::_fileClose"},
             },
             {},
+            {}, {}, {}, "os/os.c",
         },
         {
             "sys", "sys/sys.hpp",
@@ -161,6 +163,7 @@ const std::vector<BuiltinLibrary>& builtinLibraries() {
                 {"_isZone", {{"zone", "Str"}}, "Bul", "dessa::time::_isZone"},
             },
             {},
+            {}, {}, {}, "time/time.c",
         },
         {
             "random", "random/random.hpp",
@@ -197,6 +200,7 @@ const std::vector<BuiltinLibrary>& builtinLibraries() {
                 {"token",          {{"bytes", "Int"}}, "Str", "dessa::dcrypto::token"},
             },
             {},
+            {}, {}, {}, "dcrypto/dcrypto.c",
         },
     };
     return libraries;
@@ -304,6 +308,12 @@ bool loadNativeLibrary(const std::string& folder, const std::string& name, std::
         };
         if (key == "header") {
             lib.header = folder + "/" + value;
+        } else if (key == "c") {
+            lib.cImpl = value;
+        } else if (key == "wasm.cflags") {
+            lib.wasmFlags += " " + value;
+        } else if (key == "wasm.link") {
+            lib.wasmLink += " " + value;
         } else if (forThisOs(key, "source")) {
             lib.cSources.push_back(value);
         } else if (forThisOs(key, "link")) {
@@ -323,7 +333,7 @@ bool loadNativeLibrary(const std::string& folder, const std::string& name, std::
             std::string constName = trim(line.substr(close + 1));
             lib.constants.push_back({constName, trim(line.substr(6, close - 6)), ns + "::" + constName});
         } else {
-            return bad("unknown entry '" + key + "' (expected header, source, link, namespace, func or const)");
+            return bad("unknown entry '" + key + "' (expected header, source, c, link, namespace, func or const)");
         }
     }
     if (lib.header.empty()) {

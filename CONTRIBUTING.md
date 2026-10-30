@@ -10,9 +10,8 @@ How to build Dessa, test a change, and make a release. What Dessa is:
 |---|---|
 | CMake 3.20+ and a C++20 compiler (g++ 13+, MinGW-w64 on Windows, clang on macOS) | building the compiler, and compiling programs |
 | Python 3 | the test suite and the release scripts |
-| Node.js 20.16+ | the JavaScript tests |
+| Node.js 20.16+ | the WebAssembly tests and the npm package |
 | Optional: clang (LLVM MinGW on Windows) | the C backend uses it when present (`DESSA_CC` chooses) |
-| Optional: the Emscripten SDK | building the browser compiler `web/dessa.js` |
 
 ## Building
 
@@ -24,12 +23,7 @@ cmake --build build --target riv    # build/riv, compiled from tools/riv/riv.ds 
 
 Release builds: `cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release`.
 
-The browser compiler:
-
-```
-emcmake cmake -S . -B build-wasm
-cmake --build build-wasm            # writes web/dessa.js
-```
+The WebAssembly compiler (for pages and `--target wasm`, once): `build/dessa setup wasm`.
 
 To use the built compiler in VS Code, set `dessa.compilerPath` to
 `build/dessa.exe` (or `build/dessa`); an older `dessa` on PATH gives
@@ -42,13 +36,11 @@ confusing errors.
 | `python tests/test.py` | every test, native (C first, C++ when needed) |
 | `python tests/test.py --c` | only through C (programs C can't do yet are skipped) |
 | `python tests/test.py --cpp` | only through C++ |
-| `python tests/test.py --js` | the run tests through the JavaScript backend, with Node |
 | `python tests/test.py --wasm` | the run tests through WebAssembly, with Node (needs `dessa setup wasm` or wasi-sdk) |
 | `node tests/web/wasm_page.js` | a page compiled to WebAssembly: page objects, events, errors |
 | `python tests/test.py <filter>` | only tests whose name contains the filter |
 | `python tests/test.py --update` | rewrite the expected `.out` files (check the diff!) |
-| `node tests/web/node_smoke.js` | `web/dessa.js` compiles and runs programs (needs the wasm build) |
-| `cd npm && node scripts/copy-build.js && node test.js` | the npm package |
+| `DESSALANG_DESSA=build/dessa node npm/test.js` | the npm package, with the dessa you built |
 | `python selfhost/check.py` | the Dessa lexer gives the same tokens as the C++ one |
 | `python tests/bench/run_bench.py` | the benchmark (about 4 minutes; writes `tests/bench/RESULTS.md`) |
 
@@ -66,19 +58,20 @@ There are two kinds of tests in `tests/cases`:
 
 A run test whose first line is `// exit: N` expects exit code N instead of 0.
 
-A change is ready when the default, `--c`, `--cpp`, `--js` and `--wasm` runs all pass.
-CI runs the default and `--js` suites on Windows, Linux and macOS, the
-selfhost check, and the browser build, on every push and pull request.
+A change is ready when the default, `--c`, `--cpp` and `--wasm` runs all pass.
+CI runs the default suite on Windows, Linux and macOS, the WebAssembly suite,
+the page test and the npm package on Linux and macOS, and the selfhost check,
+on every push and pull request.
 
 ## Making a change
 
 1. **Talk first about language changes.** New syntax or a change in meaning
    goes in an issue before code: the language is small on purpose.
-2. **Keep the backends in step.** A feature works in C, C++ and JavaScript
-   with the same output, or gives a clear compile error where it can't
-   (libraries with a C++ part don't run in the browser, for example). If the C
-   backend can't do it yet, `CCodegen` returns a reason and the program goes
-   through C++.
+2. **Keep the backends in step.** A feature works through C (natively and as
+   WebAssembly) and C++ with the same output, or gives a clear compile error
+   where it can't (desktop windows don't run in a browser, for example). A
+   library's native part is written in C (`<lib>.c`, or `c` in a package's
+   `.native` file) so it runs in WebAssembly too.
 3. **Add tests**: a run test for behaviour, an error test for each new error.
 4. **Update the docs** in `docs/` (and the extension's README and CHANGELOG
    for editor changes). The docs describe what the user sees, in short, plain
@@ -93,7 +86,6 @@ selfhost check, and the browser build, on every push and pull request.
 - `Int` is 64 bits and checked in every backend. `%` is Euclidean (never
   negative for a positive divisor); `Int / Int` gives a `Dbl`.
 - Text is counted in characters, not bytes.
-- `tools/riv/packages/phl` is frozen while its syntax is being revised.
 
 ### Code style
 
@@ -123,9 +115,8 @@ Releases are made by a maintainer.
    | File | Where |
    |---|---|
    | `src/main.cpp` | `kVersion` |
-   | `src/web/wasm_main.cpp` | the version string |
    | `tools/make_release.py`, `.github/workflows/release.yml` | the examples in the comments |
-   | `npm/package.json`, `npm/test.js` | `version` and the expected version |
+   | `npm/package.json` | `version` (the npm package downloads the release of this version) |
    | `tools/vscode-dessa/package.json` | `version` |
    | `tools/vscode-dessa/CHANGELOG.md` | the `Unreleased` heading becomes the version |
 
@@ -135,7 +126,7 @@ Releases are made by a maintainer.
    `tests/bench/RESULTS.md` and `results.csv`.
 3. Tag and push: `git tag v0.3.7 && git push origin main v0.3.7`.
 4. The Release workflow builds the Windows, Linux and macOS archives,
-   `dessa.js`, the VS Code extension and the WebAssembly compiler downloads
+   the VS Code extension and the WebAssembly compiler downloads
    (`dessa-wasm-<platform>.tar.gz`, made by `tools/make_wasm_tools.py`; `dessa
    setup wasm` takes them from the release of its own version), and makes the
    GitHub release.

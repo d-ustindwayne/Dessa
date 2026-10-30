@@ -209,7 +209,7 @@ static bool cObject(const fs::path& source, std::string& object, std::string& er
     std::error_code ec;
     const bool isC = source.extension() == ".c";
     std::uint64_t key = fnv1a(compiler(), fnv1a(readFile(source)));
-    if (!isC) key = fnv1a(readFile(fs::path(runtime) / "dessa_runtime.hpp"), key);
+    key = fnv1a(readFile(fs::path(runtime) / (isC ? "dessa_rt.h" : "dessa_runtime.hpp")), key);
     // Files it may include from its own folder (ashwee.cpp includes ashwee_gtk.inc)
     if (!isC) for (const auto& entry : fs::directory_iterator(source.parent_path(), ec)) {
         const auto ext = entry.path().extension();
@@ -349,15 +349,18 @@ bool compile(const std::string& cpp, const std::string& outputExe, const char* a
     }
 
     // Extra objects and link flags of the libraries in use (for C: the ones
-    // whose C++ part it reaches through a bridge)
+    // whose native part it calls, in C or through a bridge to the C++)
     std::string extra;
     const std::vector<std::string> glued = isC(cpp) ? glueLibrariesOf(cpp) : std::vector<std::string>{};
+    bool bridged = false;   // a C++ bridge: the C++ compiler links
     for (const auto& name : isC(cpp) ? glued : libraries) {
         const BuiltinLibrary* lib = findBuiltinLibrary(name);
         if (!lib) continue;
         // include/ for the built-in libraries, the package folder for riv packages
         const fs::path base = lib->baseDir.empty() ? fs::path(includeDir(argv0)) : fs::path(lib->baseDir);
         for (const auto& c : lib->cSources) {
+            // with its C implementation, a C program only needs the C sources (sql: sqlite3.c, not sql.cpp)
+            if (isC(cpp) && !lib->cImpl.empty() && fs::path(c).extension() != ".c") continue;
             std::string object;
             if (!cObject(base / c, object, error, runtime, includeDir(argv0))) return false;
             extra += " " + quoteArg(object);
@@ -365,7 +368,12 @@ bool compile(const std::string& cpp, const std::string& outputExe, const char* a
         for (const auto& flag : lib->linkFlags) extra += " " + flag;
         if (isC(cpp)) {
             std::string object;
-            if (!glueObject(*lib, runtime, includeDir(argv0), object, error)) return false;
+            if (!lib->cImpl.empty()) {
+                if (!cObject(base / lib->cImpl, object, error, runtime, includeDir(argv0))) return false;
+            } else {
+                if (!glueObject(*lib, runtime, includeDir(argv0), object, error)) return false;
+                bridged = true;
+            }
             extra += " " + quoteArg(object);
         }
     }
@@ -386,8 +394,8 @@ bool compile(const std::string& cpp, const std::string& outputExe, const char* a
         std::string runtimeObject;
         if (!cRuntime(runtime, runtimeObject, error)) return false;
         // With a C++ bridge the C++ compiler links (it adds the C++ library)
-        command = glued.empty() ? quoteArg(cCompiler()) + " -std=gnu11 " : quoteArg(compiler()) + " -x c -std=gnu11 ";
-        command += std::string(optimize) + " -I" + quoteArg(runtime) + " " + quoteArg(source.string()) + (glued.empty() ? " " : " -x none ") +
+        command = !bridged ? quoteArg(cCompiler()) + " -std=gnu11 " : quoteArg(compiler()) + " -x c -std=gnu11 ";
+        command += std::string(optimize) + " -I" + quoteArg(runtime) + " " + quoteArg(source.string()) + (!bridged ? " " : " -x none ") +
                    quoteArg(runtimeObject) + extra + " -o " + quoteArg(outputExe) + " -lm";
     } else {
         const std::string pch = precompiledRuntime(runtime, includeDir(argv0), optimize);
@@ -583,10 +591,12 @@ std::string wasmLinkFlags(const WasmTool& tool, bool page) {
 }
 
 // A runtime file compiled for WebAssembly once and kept in the cache
-bool wasmObject(const WasmTool& tool, const std::string& runtime, const std::string& file, std::string& object, std::string& error) {
+// A C file compiled for WebAssembly once and kept in the cache: the runtime's,
+// or a library's (`flags`: its include folders and defines)
+bool wasmObject(const WasmTool& tool, const std::string& runtime, const fs::path& source, const std::string& flags, std::string& object,
+                std::string& error) {
     std::error_code ec;
-    const fs::path source = fs::path(runtime) / file;
-    std::uint64_t key = fnv1a(tool.cc + wasmCompileFlags(tool), fnv1a(readFile(source)));
+    std::uint64_t key = fnv1a(tool.cc + wasmCompileFlags(tool) + flags, fnv1a(readFile(source)));
     key = fnv1a(readFile(fs::path(runtime) / "dessa_rt.h"), key);
     key = fnv1a(readFile(fs::path(runtime) / "dessa_web.h"), key);
     fs::path dir = workDir() / "objects";
@@ -597,10 +607,10 @@ bool wasmObject(const WasmTool& tool, const std::string& runtime, const std::str
     fs::path log = dir / ("wasm_" + source.stem().string() + ".log");
     fs::path partial = target;
     partial += ".part.o";
-    std::string command = quoteArg(tool.cc) + wasmCompileFlags(tool) + " -I" + quoteArg(runtime) + " -c " + quoteArg(source.string()) +
+    std::string command = quoteArg(tool.cc) + wasmCompileFlags(tool) + flags + " -I" + quoteArg(runtime) + " -c " + quoteArg(source.string()) +
                           " -o " + quoteArg(partial.string()) + " > " + quoteArg(log.string()) + " 2>&1";
     if (system(command) != 0) {
-        error = "dessa: could not compile the runtime for WebAssembly with " + tool.cc + "; details: " + log.string() + "\n";
+        error = "dessa: could not compile " + source.filename().string() + " for WebAssembly with " + tool.cc + "; details: " + log.string() + "\n";
         return false;
     }
     fs::rename(partial, target, ec);
@@ -611,6 +621,10 @@ bool wasmObject(const WasmTool& tool, const std::string& runtime, const std::str
 
 std::string wasmCompiler(const char* argv0) {
     return findWasm(argv0).cc;
+}
+
+bool wasmIsEmscripten(const char* argv0) {
+    return findWasm(argv0).emcc;
 }
 
 std::string wasmHelp() {
@@ -630,7 +644,32 @@ bool compileWasm(const std::string& c, const std::string& outputWasm, const char
         return false;
     }
     std::string rt, web;
-    if (!wasmObject(tool, runtime, "dessa_rt.c", rt, error) || !wasmObject(tool, runtime, "dessa_web.c", web, error)) return false;
+    if (!wasmObject(tool, runtime, fs::path(runtime) / "dessa_rt.c", "", rt, error) ||
+        !wasmObject(tool, runtime, fs::path(runtime) / "dessa_web.c", "", web, error)) {
+        return false;
+    }
+    // The libraries' C (their native parts, written in C for this)
+    std::string libraries;
+    for (const auto& name : glueLibrariesOf(c)) {
+        const BuiltinLibrary* lib = findBuiltinLibrary(name);
+        if (!lib || lib->cImpl.empty()) {
+            error = "dessa: the library '" + name + "' has no C part, so it can't run in WebAssembly\n";
+            return false;
+        }
+        const fs::path base = lib->baseDir.empty() ? fs::path(includeDir(argv0)) : fs::path(lib->baseDir);
+        const std::string flags = " -I" + quoteArg(includeDir(argv0)) + " -I" + quoteArg(base.string()) + lib->wasmFlags;
+        std::vector<std::string> sources;
+        for (const auto& file : lib->cSources) {
+            if (fs::path(file).extension() == ".c") sources.push_back(file);
+        }
+        sources.push_back(lib->cImpl);
+        for (const auto& file : sources) {
+            std::string object;
+            if (!wasmObject(tool, runtime, base / file, flags, object, error)) return false;
+            libraries += " " + quoteArg(object);
+        }
+        libraries += lib->wasmLink;
+    }
     fs::path dir = workDir();
     std::string id = hex(fnv1a(c));
     fs::path source = dir / ("dessa_" + id + ".c");
@@ -640,7 +679,7 @@ bool compileWasm(const std::string& c, const std::string& outputWasm, const char
         out << c;
     }
     std::string command = quoteArg(tool.cc) + wasmLinkFlags(tool, page) + " -I" + quoteArg(runtime) + " " + quoteArg(source.string()) + " " +
-                          quoteArg(rt) + " " + quoteArg(web) + " -o " + quoteArg(outputWasm) + " -lm > " + quoteArg(log.string()) + " 2>&1";
+                          quoteArg(rt) + " " + quoteArg(web) + libraries + " -o " + quoteArg(outputWasm) + " -lm > " + quoteArg(log.string()) + " 2>&1";
     if (system(command) != 0) {
         error = "dessa: internal compiler error -- the WebAssembly build failed. This is a bug in Dessa, not in your code.\n"
                 "       Please report it with this file: " + log.string() + "\n";
@@ -657,6 +696,12 @@ bool compileWasmCached(const std::string& c, const char* argv0, std::string& was
     std::string runtime = runtimeDir(argv0);
     std::uint64_t key = fnv1a(c, fnv1a(tool.cc + (page ? " page" : "")));
     for (const char* file : {"dessa_rt.c", "dessa_rt.h", "dessa_web.c", "dessa_web.h"}) key = fnv1a(readFile(fs::path(runtime) / file), key);
+    for (const auto& name : glueLibrariesOf(c)) {
+        if (const BuiltinLibrary* lib = findBuiltinLibrary(name); lib && !lib->cImpl.empty()) {
+            const fs::path base = lib->baseDir.empty() ? fs::path(includeDir(argv0)) : fs::path(lib->baseDir);
+            key = fnv1a(readFile(base / lib->cImpl), key);
+        }
+    }
     std::error_code ec;
     fs::path cache = workDir() / "cache";
     fs::create_directories(cache, ec);

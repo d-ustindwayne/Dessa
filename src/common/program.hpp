@@ -36,9 +36,10 @@ struct Module {
     std::vector<StmtPtr> templates;   // generic functions and classes (filled in by the analyser)
     bool isEntry = false;
     bool isPrelude = false;   // include/prelude/errors.ds: Error, IndexError, ...
-    // The Dessa part (.dm) of a library whose native part is JavaScript
-    // (<lib>/<lib>.js, e.g. webutils): the path of that .js file.
-    std::string jsNative;
+    // webutils: the page's objects, which only a page (WebAssembly in a
+    // browser) has; its `{ ... }` functions are done by the page bridge
+    // (runtime/dessa_web.c and dessa_wasm.js)
+    bool browserLibrary = false;
 
     // For every user-module spec in this file's imports, the id of the
     // module it resolved to. Builtin specs ($("math")) are not listed.

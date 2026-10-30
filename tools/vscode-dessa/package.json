@@ -2,7 +2,7 @@
   "name": "dessa",
   "displayName": "Dessa",
   "description": "Dessa language support: highlighting, errors as you type, completion, hover, go to definition and run, for .ds files, .dhtml pages and Dessa scripts inside HTML.",
-  "version": "0.3.6",
+  "version": "0.5.0",
   "publisher": "d-ustindwayne",
   "author": {
     "name": "d-ustindwayne"
@@ -13,7 +13,7 @@
     "color": "#1e1e2e",
     "theme": "dark"
   },
-  "homepage": "https://github.com/d-ustindwayne/Dessa#readme",
+  "homepage": "https://dessa.dustindwayn.ee/",
   "repository": {
     "type": "git",
     "url": "https://github.com/d-ustindwayne/Dessa.git",

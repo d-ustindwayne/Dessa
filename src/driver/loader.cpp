@@ -298,10 +298,8 @@ int ModuleLoader::visit(Program& program, const std::string& path, const std::st
                 int childId = visit(program, target, nullptr, state, module->displayPath, spec.line, spec.column);
                 if (childId >= 0) {
                     module->resolvedImports[&spec] = childId;
-                    // A JavaScript native part (webutils.js): only for --target web
-                    if (fs::is_regular_file(folder / (last + ".js"), ec)) {
-                        program.modules[static_cast<size_t>(childId)]->jsNative = normalise(folder / (last + ".js"));
-                    }
+                    // webutils: the page bridge does its `{ ... }` functions
+                    if (!isPackage && last == "webutils") program.modules[static_cast<size_t>(childId)]->browserLibrary = true;
                 }
                 continue;
             }

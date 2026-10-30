@@ -15,12 +15,10 @@ releasing, see [CONTRIBUTING.md](../CONTRIBUTING.md).
                                                        │      │ (codegen.cpp)
                                                        │      └► wasm clang ─────────────► app.wasm
                                                        │         (pages, --target wasm)    (browser, Node)
-                                                       └─► JavaScript generator ──► app.js
-                                                           (jsgen.cpp)             (Node, browser)
 ```
 
-Everything up to the analyser is shared by all targets, by the editor
-commands, and by the browser compiler. The compiler itself takes about 0.1 s;
+Everything up to the analyser is shared by all targets and by the editor
+commands. The compiler itself takes about 0.1 s;
 the rest of `dessa run` is the C or C++ compiler, which is why its results are
 cached.
 
@@ -34,7 +32,7 @@ cached.
 | `src/parser` | `parser.cpp`, `ast.hpp` | Tokens to an AST (`Stmt` and `Expr` nodes). Decides between `<` as a list and as less-than. Keeps generic declarations as token lists (`Module::templates`) so they can be parsed again for each set of type arguments. |
 | `src/driver` | `loader.cpp` | Reads the entry file and every file it imports, and adds the prelude (`include/prelude/errors.ds`: `Error`, `IndexError`, ...) to every program. |
 | | `toolchain.cpp` | Finds the C and C++ compilers and the `runtime/` folder, compiles, caches, runs. |
-| | `web.cpp` | `.dhtml` and `.html` pages: finds the Dessa scripts, compiles each (to WebAssembly, or JavaScript), `dessa serve` (with Ctrl+R reloading). |
+| | `web.cpp` | `.dhtml` and `.html` pages: finds the Dessa scripts, compiles each to WebAssembly, `dessa serve` (with Ctrl+R reloading). |
 | `src/analyser` | `analyser.cpp` | Modules, declarations, statements; scopes; unused imports. |
 | | `analyser_expr.cpp` | Expressions, calls, members, lambdas, builtin methods (`"x".upper()`). |
 | | `generics.cpp` | Fills in generic classes and functions (`Box:Int`, `first:Int(...)`), infers type arguments. |
@@ -45,8 +43,6 @@ cached.
 | | `cglue.cpp` | The bridge that lets C programs call libraries written in C++. |
 | | `cgen_web.cpp` | For WebAssembly: webutils' page objects and functions through the page bridge. |
 | | `codegen.cpp` | The C++ generator (the fallback). |
-| | `jsgen.cpp` | The JavaScript generator. |
-| `src/web` | `wasm_main.cpp` | The entry point of the browser compiler (`dessa.js`). |
 
 ### Loading modules
 
@@ -76,21 +72,20 @@ know:
 
 ### The three generators
 
-All three must give the same output for the same program. The differences are
+Both must give the same output for the same program. The differences are
 in how values are represented:
 
-| | C, also WebAssembly (`runtime/dessa_rt.c/.h`) | C++ (`runtime/dessa_runtime.hpp`) | JavaScript (`runtime/dessa_runtime.js`) |
-|---|---|---|---|
-| `Int` | `int64_t`, overflow checked | `int64_t`, overflow checked | a number while it fits exactly (up to 2^53 - 1), a BigInt beyond; checked to 64 bits |
-| `Str` | counted UTF-8, shared until changed | UTF-8 `std::string` | JavaScript string (lengths count characters, not UTF-16 units) |
-| lists, maps | counted, copied when changed while shared (value semantics) | the same | arrays and `Map`s, copied where value semantics need it |
-| class instances | counted objects, a pool for small ones | `Ref<T>`: intrusive count, a pool for small objects | JavaScript objects |
-| errors | `setjmp` / `longjmp` | C++ exceptions | JavaScript exceptions |
-| unions, `Obj` | not yet (the program goes to C++) | tagged values | values with their runtime type (whole `Dbl`s are boxed so they don't look like `Int`s) |
+| | C, also WebAssembly (`runtime/dessa_rt.c/.h`) | C++ (`runtime/dessa_runtime.hpp`) |
+|---|---|---|
+| `Int` | `int64_t`, overflow checked | `int64_t`, overflow checked |
+| `Str` | counted UTF-8, shared until changed | UTF-8 `std::string` |
+| lists, maps | counted, copied when changed while shared (value semantics) | the same |
+| class instances | counted objects, a pool for small ones | `Ref<T>`: intrusive count, a pool for small objects |
+| errors | `setjmp` / `longjmp` | C++ exceptions |
+| unions, `Obj` | a counted `ds_head*`: text, lists, maps and objects as they are, numbers in a small box, nil as NULL | tagged values |
 
 **C first, C++ when needed.** `CCodegen::generate` returns the C source, or an
-empty string and a reason (`unions`, `Obj`, ...). The driver then uses the C++
-generator. If the C source fails to compile, `retryAsCpp` builds the program
+empty string and a reason. The driver then uses the C++ generator. If the C source fails to compile, `retryAsCpp` builds the program
 from C++ instead, so a gap in the C backend never stops the user.
 `DESSA_VERBOSE=1` shows when and why this happens. `--cpp` forces C++,
 `--target c` forces C.
@@ -115,17 +110,26 @@ that nobody caught can say `at app.ds:14`.
 |---|---|
 | `runtime/dessa_rt.h`, `dessa_rt.c` | The C runtime. `dessa_rt.c` is compiled once and cached as an object file. |
 | `runtime/dessa_runtime.hpp` | The C++ runtime (header only, precompiled once and cached). |
-| `runtime/dessa_runtime.js` | The JavaScript runtime, pasted in front of every generated program. |
 | `runtime/dessa_web.h`, `dessa_web.c` | WebAssembly: the C side of the page bridge. |
 | `runtime/dessa_wasm.js` | WebAssembly: runs a module in Node (`node dessa_wasm.js app.wasm`) or a page; a small WASI (output, input, clock, random) and the page bridge. |
-| `include/<lib>/` | A core library: `<lib>.dm` (written in Dessa), `<lib>.hpp` (C++ part, registered in `builtins.cpp`), `<lib>.js` (JavaScript part), `<lib>.ds` (declarations, for reading and Ctrl+click). |
+| `include/<lib>/` | A core library: `<lib>.dm` (written in Dessa), `<lib>.hpp` (C++ part, registered in `builtins.cpp`), `<lib>.c` (the same in C, for C programs and WebAssembly), `<lib>.ds` (declarations, for reading and Ctrl+click). |
 | `include/prelude/errors.ds` | The error classes every program gets. The runtimes call into it to turn their own errors (index out of range, overflow) into `IndexError`, `OverflowError`, ... |
-| `tools/riv/packages/<pkg>/` | Packages that ship with Dessa. A native part is described by a `<pkg>.native` file (header, sources, link flags, signatures). |
+| `tools/riv/packages/<pkg>/` | Packages that ship with Dessa. A native part is described by a `<pkg>.native` file (header, sources, its C version, link flags, signatures). |
 
-Libraries with a C++ part (`sql`, `request`, `dcrypto`, the time zones of
-`time`) are reached from C through a small generated C++ file (`cglue.cpp`):
-one `extern "C"` function per library function, converting values in and
-errors out. It is compiled once per library and cached.
+A library's native functions are called from C as `dsx_<lib>_<name>`
+(`cglue.hpp`). When the library has a C version of them (`cImpl`: `math.c`,
+`os.c`, `time.c`, `dcrypto.c`, `sql.c`, `request.c`), that file is compiled
+once and linked in, natively with gcc and for WebAssembly with clang. Otherwise
+(`ashwee`, `torrent`) a small generated C++ file (`cglue.cpp`) does it: one
+`extern "C"` function per library function, converting values in and errors
+out. It is compiled once per library and cached, and such a library can't run
+in WebAssembly. The C file's line 2, `/* dessa-glue: sql time */`, tells the
+toolchain which libraries a program calls.
+
+In WebAssembly, the few things C can't do there go to JavaScript through the
+same bridge as `webutils` (`dessa_wasm.js`): time zones (`Intl`) and HTTP
+requests (a synchronous `XMLHttpRequest` in a page, a short Node process
+running `fetch` in Node).
 
 ## The toolchain and the cache
 
@@ -143,22 +147,20 @@ compilation fails, Dessa writes a log file and prints its path.
 
 ## The browser and npm
 
-- **`dessa.js`** is the compiler (lexer to JavaScript generator) built with
-  Emscripten (`emcmake cmake -S . -B build-wasm`). It compiles
-  `<script type="text/dessa">` in a page, and is what the npm package
-  `dessalang` uses (`npm/`).
 - **`.dhtml` pages** are HTML with Dessa scripts. `dessa build page.dhtml`
-  compiles each script to WebAssembly (embedded as base64 with the bridge, so
-  the page is one file), or to JavaScript when there is no WebAssembly
-  compiler or the script needs something WebAssembly can't do yet;
-  `dessa serve` does it on each request.
+  compiles each script to WebAssembly, embedded as base64 with the loader
+  (`runtime/dessa_wasm.js`), so the page is one file; `dessa serve` does it
+  on each request.
 - **`webutils`** is the library for the page (elements, events, timers):
-  declarations in `include/webutils/webutils.dm`, the JavaScript backend's
-  part in `webutils.js`, and the WebAssembly bridge in `runtime/`.
-- **The WebAssembly compiler** comes from `dessa setup wasm`: wasi-sdk cut
-  down by `tools/make_wasm_tools.py` to clang, the linker and the WASI C
-  library, attached to each release. `toolchain.cpp` also finds a wasi-sdk
-  (`WASI_SDK_PATH`) or Emscripten.
+  declarations in `include/webutils/webutils.dm` and the page bridge in
+  `runtime/dessa_web.c` and `runtime/dessa_wasm.js`.
+- **The WebAssembly compiler** comes from `dessa setup wasm` (the installers
+  run it): wasi-sdk cut down by `tools/make_wasm_tools.py` to clang, the
+  linker and the WASI C library, attached to each release. `toolchain.cpp`
+  also finds a wasi-sdk (`WASI_SDK_PATH`) or Emscripten (no files then).
+- **The npm package** `dessalang` (`npm/`) is Dessa for Node: on first use it
+  downloads the release for the computer's system, runs `dessa setup wasm`,
+  and then drives `dessa` to build and run WebAssembly.
 
 ## riv, the package manager (`tools/riv/`)
 
@@ -202,7 +204,7 @@ is in `selfhost/PLAN.md`.
 |---|---|
 | A new builtin method (`"x".something()`) | `Analyser::builtinMethod` in `analyser_expr.cpp`, then each runtime and generator, then the editor's `METHODS` list in `extension.js` |
 | A new statement or expression | `ast.hpp`, `parser.cpp`, the analyser, all three generators, the selfhost lexer if there is a new token |
-| A new core library function | `include/<lib>/` (Dessa or C++ part), `builtins.cpp` for a C++ part, the JavaScript part if it should run in the browser |
+| A new core library function | `include/<lib>/` (Dessa, or a native part in C++ and C), `builtins.cpp` for a native part |
 | A new error message | the analyser; add a case to `tests/cases/errors/` |
 | A runtime behaviour | all three runtimes; a test in `tests/cases/run/` checks they agree |
 

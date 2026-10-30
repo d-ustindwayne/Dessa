@@ -4,8 +4,9 @@
 #   sh install.sh            (from the Dessa folder)
 #
 # Builds dessa and riv, installs them to ~/.local/share/dessa, links them
-# into ~/.local/bin and lets riv use the bundled packages without downloading them.
-# Options:  --yes (ask nothing)  --prefix DIR  --uninstall
+# into ~/.local/bin, lets riv use the bundled packages without downloading
+# them, and gets the WebAssembly compiler web pages need (dessa setup wasm).
+# Options:  --yes (ask nothing)  --prefix DIR  --no-wasm  --uninstall
 set -e
 
 SOURCE=$(cd "$(dirname "$0")" && pwd)
@@ -13,12 +14,14 @@ PREFIX="${HOME}/.local/share/dessa"
 LINKS="${HOME}/.local/bin"
 YES=0
 UNINSTALL=0
+NOWASM=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --yes|-y) YES=1 ;;
         --prefix) shift; PREFIX="$1" ;;
         --uninstall) UNINSTALL=1 ;;
+        --no-wasm) NOWASM=1 ;;
         *) echo "unknown option: $1"; exit 1 ;;
     esac
     shift
@@ -97,12 +100,7 @@ for folder in runtime include; do
 done
 rm -rf "${PREFIX:?}/packages"
 cp -R "$SOURCE/tools/riv/packages" "$PREFIX/packages"
-rm -rf "$PREFIX/packages/phl"   # left out for now (its syntax is being revised)
 cp "$SOURCE/LICENSE" "$PREFIX/"
-if [ -f "$SOURCE/web/dessa.js" ]; then    # Dessa in the browser
-    rm -rf "${PREFIX:?}/web"
-    cp -R "$SOURCE/web" "$PREFIX/web"
-fi
 ok "dessa, riv, runtime, include, packages"
 
 step "Commands"
@@ -126,6 +124,11 @@ esac
 
 step "Telling riv where the bundled packages are"
 "$PREFIX/bin/riv" bundled "$PREFIX/packages" || warn "riv could not note the packages; run: riv bundled $PREFIX/packages"
+
+if [ "$NOWASM" = 0 ]; then
+    step "The WebAssembly compiler (for web pages, about 50 MB, once)"
+    "$PREFIX/bin/dessa" setup wasm || warn "it couldn't be downloaded now; pages need it, so run later: dessa setup wasm"
+fi
 
 VERSION=$("$PREFIX/bin/dessa" --version)
 say ""

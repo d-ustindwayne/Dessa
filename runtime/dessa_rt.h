@@ -48,7 +48,9 @@ typedef struct ds_head {
 
 typedef struct ds_str ds_str;
 
-enum { DS_K_STR = 1, DS_K_LIST, DS_K_MAP, DS_K_OBJECT, DS_K_FN, DS_K_SET };
+enum { DS_K_STR = 1, DS_K_LIST, DS_K_MAP, DS_K_OBJECT, DS_K_FN, DS_K_SET, DS_K_BOX, DS_K_ANON };
+
+typedef struct ds_field ds_field;
 
 /* What a heap value is. Classes extend this with their methods
  * (struct <Class>_cls { ds_type t; ...methods... }). */
@@ -60,6 +62,8 @@ struct ds_type {
     const ds_type* parent;                   /* classes: the parent class */
     const void* const* interfaces;           /* classes: method tables by interface id */
     int interfaceCount;
+    const ds_field* fields;                  /* classes: the fields, for obj.name on an Obj */
+    int fieldCount;
 };
 
 /* ============================================================
@@ -294,6 +298,7 @@ typedef struct ds_elem {
     ds_str* (*enumName)(ds_int value);   /* DS_E_ENUM */
     int base;                            /* DS_E_RADIX */
     const struct ds_elem* inner;         /* DS_E_REF holding a list: its element (unused by the runtime) */
+    const char* name;                    /* DS_E_ENUM: the enum's name (typeof) */
 } ds_elem;
 
 extern const ds_elem ds_elem_int, ds_elem_dbl, ds_elem_flt, ds_elem_bul, ds_elem_chr, ds_elem_str, ds_elem_ref;
@@ -533,6 +538,81 @@ bool ds_os_delete_file(ds_str* path);
 bool ds_os_make_dir(ds_str* path);
 ds_str* ds_os_cwd(void);
 ds_str* ds_os_get_env(ds_str* name);   /* NULL when not set */
+
+/* ============================================================
+ * Dynamic values: Obj and unions such as Int | Str
+ * ============================================================ */
+
+/* A value whose type is only known when the program runs is a ds_head*.
+ * Text, lists, maps, objects and functions already are heap values; a
+ * number, Bul, Chr or enum value goes in a small box. Nil is NULL. */
+typedef struct ds_box {
+    ds_head h;
+    const ds_elem* et;    /* what it holds: Int, Dbl, an enum, ... */
+    union { ds_int i; ds_dbl d; ds_flt f; ds_bul b; ds_chr c; } v;
+} ds_box;
+ds_head* ds_box_i(const ds_elem* et, ds_int v);    /* owned */
+ds_head* ds_box_d(ds_dbl v);
+ds_head* ds_box_f(ds_flt v);
+ds_head* ds_box_b(ds_bul v);
+ds_head* ds_box_c(ds_chr v);
+ds_head* ds_box_opt_i(const ds_elem* et, ds_opt_int v);   /* NULL when nil */
+ds_head* ds_box_opt_d(ds_opt_dbl v);
+ds_head* ds_box_opt_f(ds_opt_flt v);
+ds_head* ds_box_opt_b(ds_opt_bul v);
+ds_head* ds_box_opt_c(ds_opt_chr v);
+/* After an `is` check (or a cast): the boxed value */
+static inline ds_int ds_unbox_i(ds_head* p) { return ((ds_box*)ds_ref(p))->v.i; }
+static inline ds_dbl ds_unbox_d(ds_head* p) { return ((ds_box*)ds_ref(p))->v.d; }
+static inline ds_flt ds_unbox_f(ds_head* p) { return ((ds_box*)ds_ref(p))->v.f; }
+static inline ds_bul ds_unbox_b(ds_head* p) { return ((ds_box*)ds_ref(p))->v.b; }
+static inline ds_chr ds_unbox_c(ds_head* p) { return ((ds_box*)ds_ref(p))->v.c; }
+ds_opt_int ds_unbox_opt_i(ds_head* p);
+ds_opt_dbl ds_unbox_opt_d(ds_head* p);
+ds_opt_flt ds_unbox_opt_f(ds_head* p);
+ds_opt_bul ds_unbox_opt_b(ds_head* p);
+ds_opt_chr ds_unbox_opt_c(ds_head* p);
+
+/* `value is T` */
+bool ds_dyn_is_elem(ds_head* p, int elemKind);    /* Int, Dbl, Flt, Bul, Chr */
+bool ds_dyn_is_enum(ds_head* p, const ds_elem* et);
+bool ds_dyn_is_kind(ds_head* p, int kind);        /* Str, List, Map, Set, Func */
+/* a == b on two dynamic values (numbers compare by value: 41 == 41.0) */
+bool ds_dyn_eq(ds_head* a, ds_head* b);
+/* typeof(): `known` is the static type's name, used for lists and maps in a
+ * union (NULL for an Obj) */
+ds_str* ds_dyn_typeof(ds_head* p, const char* known);   /* owned */
+/* Int(o), Dbl(o), Bul(o), Chr(o) */
+ds_int ds_dyn_to_int(ds_head* p);
+ds_dbl ds_dyn_to_dbl(ds_head* p, const char* type);
+ds_bul ds_dyn_to_bul(ds_head* p);
+ds_chr ds_dyn_to_chr(ds_head* p);
+
+/* A class field that obj.name on an Obj can read and write */
+struct ds_field {
+    const char* name;
+    size_t offset;
+    const ds_elem* et;     /* what the field holds */
+    int opt;               /* a nullable number: ds_opt_* */
+    int dyn;               /* Obj or a union: any value (checked against `accepts`) */
+    int kind;              /* DS_E_REF: the DS_K_ kind it needs (0: any) */
+    const ds_type* cls;    /* a class field: the class */
+    const char* typeName;  /* for messages: "Int", "Dog | Nil" */
+    bool (*accepts)(ds_head* value);   /* a union field: whether the value fits */
+};
+
+/* new { name = "Ann" } */
+ds_head* ds_anon_new(void);                                          /* owned */
+void ds_anon_put(ds_head* object, const char* name, ds_head* value); /* takes the value's count */
+/* o.name, o.name = value */
+ds_head* ds_dyn_get(ds_head* object, const char* name);              /* owned */
+void ds_dyn_set(ds_head* object, const char* name, ds_head* value);  /* takes the value's count */
+/* getField(o, name), setField(o, name, value), fieldsOf(o) */
+ds_head* ds_dyn_get_str(ds_head* object, ds_str* name);              /* owned */
+void ds_dyn_set_str(ds_head* object, ds_str* name, ds_head* value);  /* takes the value's count */
+ds_list* ds_dyn_fields(ds_head* object);                             /* owned */
+/* a value that doesn't fit where it goes: "Cannot store Str in parameter 'x' (Int)" */
+DS_NORETURN DS_COLD void ds_dyn_bad_store(ds_head* value, const char* what);
 
 /* The program */
 int ds_main(int argc, char** argv, void (*body)(void));

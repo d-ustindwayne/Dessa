@@ -26,27 +26,19 @@ is no project file to set up.
 By default Dessa makes a native program through C. C compiles several times
 faster than C++, so `dessa run` starts sooner; the programs run about as fast.
 
-A few things don't go through C yet: unions other than `T | Nil` (like
-`Int | Str`), `Obj` and anonymous objects, and a lambda that calls itself. A
-program that uses one of them is built through C++ instead, without you
-doing anything (`DESSA_VERBOSE=1` says when). Libraries with a C++ part (`sql`,
-`request`, `torrent`, `dcrypto`, the time zones of `time`) work from C through
-a small bridge that is compiled once, the first time a program uses them.
+The whole language goes through C, and so do the libraries: their native
+parts are written in C too, compiled once the first time a program uses them
+(`ashwee` and `torrent` go through a small C++ bridge instead). If
+the C that Dessa makes ever fails to compile, the program is built through
+C++ instead, without you doing anything (`DESSA_VERBOSE=1` says when).
 
 ```
 dessa build app.ds --cpp                     through C++ instead of C
 dessa build app.ds --target c                C only (an error if the program needs C++)
 ```
 
-`--target js` (or its alias `--target web`) makes JavaScript instead:
-
-```
-dessa run app.ds --target js                 run with Node
-dessa build app.ds --target web -o app.js    one self-contained .js file
-```
-
-`--target wasm` makes WebAssembly, the browser's engine for native-speed code
-(pages use it by default, see [web.md](web.md)):
+`--target wasm` (or `--target web`) makes WebAssembly, the browser's engine
+for native-speed code (pages always use it, see [web.md](web.md)):
 
 ```
 dessa run app.ds --target wasm               run it with Node
@@ -54,21 +46,14 @@ dessa build app.ds --target wasm             app.wasm, and app.js to run it (nod
 dessa setup wasm                             download the compiler WebAssembly needs (once, about 50 MB)
 ```
 
-It goes through the C backend, so a program that needs C++ (see above) can't
-be built for WebAssembly yet, and neither can one using a library with a C++
-part. With Node, a WebAssembly program can read and write the files of the
+It goes through the C backend, and every library works there except
+`ashwee` (desktop windows) and SQL Server through `sql`. With Node, a WebAssembly program can read and write the files of the
 folder it runs in (when its compiler is the one from `dessa setup wasm` or
 wasi-sdk; Emscripten builds only have the terminal).
 
 All of them give the same output for the same program. Libraries with a C++
 part (`sql`, `request`, `ashwee`) only work natively. `webutils` only works in
-a page: WebAssembly or JavaScript.
-
-In JavaScript, an `Int` is exact to 64 bits like everywhere else. It is a
-plain JavaScript number while its value fits exactly (up to 2^53 - 1), which is
-much faster, and a BigInt beyond that, by itself. Where Dessa needs to tell a
-whole `Dbl` from an `Int` at run time (in an `Obj`, a union, `typeof`), the
-`Dbl` is kept in a small box.
+a page.
 
 ## Pages
 
@@ -89,7 +74,7 @@ the browser doesn't allow that, says it can be closed).
 ## Seeing the generated code
 
 ```
-dessa emit app.ds                    the C (C++ with --cpp, JavaScript with --target js)
+dessa emit app.ds                    the C (C++ with --cpp)
 dessa emit app.ds -o app.c
 ```
 
@@ -100,7 +85,7 @@ dessa emit app.ds -o app.c
 | `run <file>` | compile and run a program, or serve and open a page |
 | `build <file>` | write a program, a `.js` file, or a compiled page |
 | `check <file>` | report errors and warnings only |
-| `emit <file>` | print the generated C, C++ or JavaScript |
+| `emit <file>` | print the generated C (or C++) |
 | `home` | print the folder Dessa is installed in |
 | `serve [folder]` | a local web server for pages |
 | `setup wasm` | download the compiler for WebAssembly (pages, `--target wasm`) |

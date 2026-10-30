@@ -156,6 +156,7 @@
         const need = (what) => {
             if (!browser) throw new Error(`${what} needs a web browser (it isn't available in Node)`);
         };
+        let httpAnswer = ["", "", ""];   // the last answer of _http
         // webutils' own functions (the calls on no object)
         const webutils = {
             _document: () => (browser ? document : null),
@@ -180,6 +181,73 @@
                 }
                 if (request.status >= 400 || request.status === 0) throw new Error(`Could not download ${url} (HTTP ${request.status})`);
                 return request.responseText;
+            },
+            // $("request") (request.c): one HTTP request, waited for. The answer's three parts
+            // (status, headers, body) are read with _httpPart
+            _http: (method, url, headers, body, timeout) => {
+                const lines = headers.split("\n").filter((l) => l.includes(":"));
+                const sends = body.length > 0 || ["POST", "PUT", "PATCH"].includes(method);
+                const failed = (why) => new Error(`Request to ${url} failed: ${why}`);
+                if (browser) {
+                    // Dessa code runs straight through, so the request is synchronous
+                    const request = new XMLHttpRequest();
+                    request.open(method, url, false);
+                    for (const l of lines) {
+                        const at = l.indexOf(":");
+                        try { request.setRequestHeader(l.slice(0, at).trim(), l.slice(at + 1).trim()); } catch (e) { /* one the browser sets itself */ }
+                    }
+                    try {
+                        request.send(sends ? body : null);
+                    } catch (e) {
+                        throw failed(e && e.message ? e.message : String(e));
+                    }
+                    if (request.status === 0) throw failed("the browser blocked it (another site that doesn't allow it?) or nothing answered");
+                    httpAnswer = [String(request.status), `HTTP/1.1 ${request.status} ${request.statusText}\r\n` + request.getAllResponseHeaders(), request.responseText];
+                    return 0;
+                }
+                // Node: fetch is asynchronous, so a short child process does it and Dessa waits for that
+                const script = `let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", async () => {
+                    const q = JSON.parse(s), h = {};
+                    for (const l of q.lines) { const at = l.indexOf(":"); h[l.slice(0, at).trim()] = l.slice(at + 1).trim(); }
+                    try {
+                        const r = await fetch(q.url, { method: q.method, headers: h, body: q.sends ? q.body : undefined, redirect: "follow",
+                                                       signal: AbortSignal.timeout(q.timeout * 1000) });
+                        const body = await r.text();
+                        let headers = "HTTP/1.1 " + r.status + " " + r.statusText + "\\r\\n";
+                        r.headers.forEach((v, k) => { headers += k + ": " + v + "\\r\\n"; });
+                        process.stdout.write(JSON.stringify({ status: r.status, headers, body }));
+                    } catch (e) {
+                        process.stderr.write(String((e && e.cause && e.cause.message) || (e && e.message) || e));
+                        process.exit(1);
+                    }
+                });`;
+                const seconds = timeout > 0 ? timeout : 30;
+                let out;
+                try {
+                    out = require("child_process").execFileSync(process.execPath, ["-e", script], {
+                        input: JSON.stringify({ method, url, lines, body, sends, timeout: seconds }),
+                        maxBuffer: 1 << 30, timeout: seconds * 1000 + 10000, stdio: ["pipe", "pipe", "pipe"],
+                    });
+                } catch (e) {
+                    throw failed((e.stderr && e.stderr.toString().trim()) || e.message);
+                }
+                const answer = JSON.parse(out.toString());
+                httpAnswer = [String(answer.status), answer.headers, answer.body];
+                return 0;
+            },
+            _httpPart: (part) => httpAnswer[part],
+            // $("time") (include/time/time.c): minutes east of UTC of a zone at an instant, NaN for an unknown zone
+            _tzOffset: (zone, utc) => {
+                if (zone === "local") return -new Date(utc).getTimezoneOffset();
+                try {
+                    const part = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "longOffset" })
+                        .formatToParts(new Date(utc)).find((p) => p.type === "timeZoneName");
+                    const m = part && /^GMT(?:([+-])(\d{1,2})(?::(\d{2}))?)?$/.exec(part.value);   // "GMT+08:00", "GMT"
+                    if (!m) return NaN;
+                    return m[1] ? (m[1] === "-" ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3] || 0)) : 0;
+                } catch (e) {
+                    return NaN;   // Intl doesn't know the zone
+                }
             },
         };
         const callback = (f, kind, arg) => (event) => {
@@ -331,7 +399,8 @@
                 const env = environment({ args });
                 const module = new WebAssembly.Module(fs.readFileSync(file));
                 const imports = env.imports(module);
-                imports.wasi_snapshot_preview1 = wasi.getImportObject().wasi_snapshot_preview1;
+                // getImportObject: Node 20+; wasiImport: older Node and Bun
+                imports.wasi_snapshot_preview1 = typeof wasi.getImportObject === "function" ? wasi.getImportObject().wasi_snapshot_preview1 : wasi.wasiImport;
                 const instance = new WebAssembly.Instance(module, imports);
                 env.attach(instance);
                 return wasi.start(instance);

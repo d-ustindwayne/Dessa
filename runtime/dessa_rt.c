@@ -585,6 +585,7 @@ void ds_item_release(const ds_elem* et, const void* item) {
 
 static ds_str* head_str(ds_head* h) {
     if (!h) return ds_str_cstr("Nil");
+    if (h->type->kind == DS_K_BOX) return ds_item_str(((ds_box*)h)->et, &((ds_box*)h)->v);
     return h->type->str(h);
 }
 
@@ -606,6 +607,7 @@ ds_str* ds_item_repr(const ds_elem* et, const void* item) {
     if (et->kind == DS_E_STR || et->kind == DS_E_REF) {
         ds_head* h = *(ds_head* const*)item;
         if (h && h->type->kind == DS_K_STR) return ds_quote((ds_str*)h, '"');
+        if (h && h->type->kind == DS_K_BOX) return ds_item_repr(((ds_box*)h)->et, &((ds_box*)h)->v);
     }
     return ds_item_str(et, item);
 }
@@ -625,10 +627,15 @@ bool ds_item_eq(const ds_elem* et, const void* a, const void* b) {
     }
 }
 
+static bool box_eq(ds_box* a, ds_box* b);
+static bool anon_eq(ds_head* a, ds_head* b);
+
 /* Lists and maps compare by their items, text by its bytes, objects by identity */
 static bool head_eq(ds_head* a, ds_head* b) {
     if (a == b) return true;
     if (!a || !b || a->type->kind != b->type->kind) return false;
+    if (a->type->kind == DS_K_BOX) return box_eq((ds_box*)a, (ds_box*)b);
+    if (a->type->kind == DS_K_ANON) return anon_eq(a, b);
     switch (a->type->kind) {
         case DS_K_STR: return ds_str_eq((ds_str*)a, (ds_str*)b);
         case DS_K_LIST:
@@ -669,6 +676,17 @@ static uint64_t item_hash(const ds_elem* et, const void* item) {
         default: {
             ds_head* h = *(ds_head* const*)item;
             if (h && h->type->kind == DS_K_STR) return ds_str_hash((ds_str*)h);
+            if (h && h->type->kind == DS_K_BOX) {
+                /* numbers by value, so 41 and 41.0 (equal) are the same key */
+                ds_box* x = (ds_box*)h;
+                switch (x->et->kind) {
+                    case DS_E_INT: case DS_E_RADIX: case DS_E_DBL: case DS_E_FLT: {
+                        ds_dbl d = x->et->kind == DS_E_DBL ? x->v.d : x->et->kind == DS_E_FLT ? (ds_dbl)x->v.f : (ds_dbl)x->v.i;
+                        return item_hash(&ds_elem_dbl, &d);
+                    }
+                    default: return item_hash(x->et, &x->v);
+                }
+            }
             return mix((uint64_t)(uintptr_t)h);
         }
     }
@@ -689,6 +707,13 @@ static int head_cmp(ds_head* a, ds_head* b) {
             if (c) return c;
         }
         return x->len < y->len ? -1 : x->len > y->len ? 1 : 0;
+    }
+    if (a->type->kind == DS_K_BOX && b->type->kind == DS_K_BOX) {
+        ds_box* x = (ds_box*)a;
+        ds_box* y = (ds_box*)b;
+        if (x->et->kind == y->et->kind) return item_cmp(x->et, &x->v, &y->v);
+        ds_dbl p = ds_dyn_to_dbl(a, "Dbl"), q = ds_dyn_to_dbl(b, "Dbl");
+        return p < q ? -1 : p > q ? 1 : 0;
     }
     return a < b ? -1 : 1;
 }
@@ -2133,4 +2158,369 @@ int ds_main(int argc, char** argv, void (*body)(void)) {
     ds_handler = NULL;   /* a page's event listeners run later, each with its own */
     fflush(stdout);
     return 0;
+}
+
+/* ============================================================
+ * Dynamic values: Obj and unions such as Int | Str
+ * ============================================================ */
+
+static void box_drop(ds_head* h) { ds_free(h, sizeof(ds_box)); }
+static ds_str* box_str(ds_head* h) { return ds_item_str(((ds_box*)h)->et, &((ds_box*)h)->v); }
+static const ds_type ds_box_type = {"Box", DS_K_BOX, box_drop, box_str, NULL, NULL, 0, NULL, 0};
+
+static ds_box* box_new(const ds_elem* et) {
+    ds_box* b = (ds_box*)ds_new_object(&ds_box_type, sizeof(ds_box));
+    b->et = et;
+    return b;
+}
+ds_head* ds_box_i(const ds_elem* et, ds_int v) { ds_box* b = box_new(et); b->v.i = v; return &b->h; }
+ds_head* ds_box_d(ds_dbl v) { ds_box* b = box_new(&ds_elem_dbl); b->v.d = v; return &b->h; }
+ds_head* ds_box_f(ds_flt v) { ds_box* b = box_new(&ds_elem_flt); b->v.f = v; return &b->h; }
+ds_head* ds_box_b(ds_bul v) { ds_box* b = box_new(&ds_elem_bul); b->v.b = v; return &b->h; }
+ds_head* ds_box_c(ds_chr v) { ds_box* b = box_new(&ds_elem_chr); b->v.c = v; return &b->h; }
+ds_head* ds_box_opt_i(const ds_elem* et, ds_opt_int v) { return v.has ? ds_box_i(et, v.value) : NULL; }
+ds_head* ds_box_opt_d(ds_opt_dbl v) { return v.has ? ds_box_d(v.value) : NULL; }
+ds_head* ds_box_opt_f(ds_opt_flt v) { return v.has ? ds_box_f(v.value) : NULL; }
+ds_head* ds_box_opt_b(ds_opt_bul v) { return v.has ? ds_box_b(v.value) : NULL; }
+ds_head* ds_box_opt_c(ds_opt_chr v) { return v.has ? ds_box_c(v.value) : NULL; }
+
+ds_opt_int ds_unbox_opt_i(ds_head* p) { ds_opt_int o = {p != NULL, p ? ((ds_box*)p)->v.i : 0}; return o; }
+ds_opt_dbl ds_unbox_opt_d(ds_head* p) { ds_opt_dbl o = {p != NULL, p ? ((ds_box*)p)->v.d : 0}; return o; }
+ds_opt_flt ds_unbox_opt_f(ds_head* p) { ds_opt_flt o = {p != NULL, p ? ((ds_box*)p)->v.f : 0}; return o; }
+ds_opt_bul ds_unbox_opt_b(ds_head* p) { ds_opt_bul o = {p != NULL, p ? ((ds_box*)p)->v.b : false}; return o; }
+ds_opt_chr ds_unbox_opt_c(ds_head* p) { ds_opt_chr o = {p != NULL, p ? ((ds_box*)p)->v.c : 0}; return o; }
+
+static int box_kind(ds_head* p) {
+    if (!p || p->type->kind != DS_K_BOX) return 0;
+    int k = ((ds_box*)p)->et->kind;
+    return k == DS_E_RADIX ? DS_E_INT : k;
+}
+static bool box_numeric(ds_head* p) {
+    int k = box_kind(p);
+    return k == DS_E_INT || k == DS_E_DBL || k == DS_E_FLT;
+}
+static ds_dbl box_number(ds_head* p) {
+    ds_box* b = (ds_box*)p;
+    switch (box_kind(p)) {
+        case DS_E_DBL: return b->v.d;
+        case DS_E_FLT: return (ds_dbl)b->v.f;
+        default: return (ds_dbl)b->v.i;
+    }
+}
+
+bool ds_dyn_is_elem(ds_head* p, int elemKind) { return box_kind(p) == elemKind; }
+bool ds_dyn_is_enum(ds_head* p, const ds_elem* et) { return p && p->type->kind == DS_K_BOX && ((ds_box*)p)->et == et; }
+bool ds_dyn_is_kind(ds_head* p, int kind) { return p && p->type->kind == kind; }
+
+static bool box_eq(ds_box* a, ds_box* b) {
+    if (box_numeric(&a->h) && box_numeric(&b->h)) {
+        if (box_kind(&a->h) == DS_E_INT && box_kind(&b->h) == DS_E_INT) return a->v.i == b->v.i;
+        return box_number(&a->h) == box_number(&b->h);
+    }
+    if (a->et->kind != b->et->kind) return false;
+    if (a->et->kind == DS_E_ENUM && a->et != b->et) return false;
+    return ds_item_eq(a->et, &a->v, &b->v);
+}
+
+bool ds_dyn_eq(ds_head* a, ds_head* b) { return ds_item_eq(&ds_elem_ref, &a, &b); }
+
+ds_str* ds_dyn_typeof(ds_head* p, const char* known) {
+    if (!p) return ds_str_cstr("Nil");
+    switch (p->type->kind) {
+        case DS_K_BOX: {
+            const ds_elem* et = ((ds_box*)p)->et;
+            switch (et->kind) {
+                case DS_E_DBL: return ds_str_cstr("Dbl");
+                case DS_E_FLT: return ds_str_cstr("Flt");
+                case DS_E_BUL: return ds_str_cstr("Bul");
+                case DS_E_CHR: return ds_str_cstr("Chr");
+                case DS_E_ENUM: return ds_str_cstr(et->name ? et->name : "Int");
+                default: return ds_str_cstr("Int");
+            }
+        }
+        case DS_K_STR: return ds_str_cstr("Str");
+        case DS_K_ANON: return ds_str_cstr("Obj");
+        case DS_K_OBJECT: return ds_str_cstr(p->type->name);
+        default: break;
+    }
+    if (known) return ds_str_cstr(known);
+    switch (p->type->kind) {
+        case DS_K_LIST: return ds_str_cstr("List");
+        case DS_K_SET: return ds_str_cstr("Set");
+        case DS_K_MAP: return ds_str_cstr("Map");
+        case DS_K_FN: return ds_str_cstr("Func");
+        default: return ds_str_cstr(p->type->name);
+    }
+}
+
+/* "Cannot convert <type of p> to <to>" as an error */
+DS_NORETURN DS_COLD static void cannot_convert(ds_head* p, const char* to) {
+    ds_sb b;
+    ds_sb_init(&b);
+    ds_sb_cstr(&b, "Cannot convert ");
+    ds_sb_take(&b, ds_dyn_typeof(p, NULL));
+    ds_sb_cstr(&b, " to ");
+    ds_sb_cstr(&b, to);
+    ds_fail_str(ds_sb_done(&b));
+}
+
+ds_int ds_dyn_to_int(ds_head* p) {
+    if (!p) ds_fail("Cannot convert Nil to Int");
+    if (p->type->kind == DS_K_STR) return ds_str_to_int((ds_str*)p);
+    switch (box_kind(p)) {
+        case DS_E_INT: case DS_E_ENUM: return ((ds_box*)p)->v.i;
+        case DS_E_DBL: return (ds_int)((ds_box*)p)->v.d;
+        case DS_E_FLT: return (ds_int)((ds_box*)p)->v.f;
+        case DS_E_BUL: return ((ds_box*)p)->v.b ? 1 : 0;
+        case DS_E_CHR: return (ds_int)((ds_box*)p)->v.c;
+        default: cannot_convert(p, "Int");
+    }
+}
+ds_dbl ds_dyn_to_dbl(ds_head* p, const char* type) {
+    if (!p) ds_fail("Cannot convert Nil to %s", type);
+    if (p->type->kind == DS_K_STR) return ds_str_to_dbl((ds_str*)p, type);
+    if (box_numeric(p)) return box_number(p);
+    if (box_kind(p) == DS_E_BUL) return ((ds_box*)p)->v.b ? 1 : 0;
+    cannot_convert(p, type);
+}
+ds_bul ds_dyn_to_bul(ds_head* p) {
+    if (!p) ds_fail("Cannot convert Nil to Bul");
+    if (p->type->kind == DS_K_STR) return ds_str_to_bul((ds_str*)p);
+    if (box_numeric(p)) return box_number(p) != 0;
+    if (box_kind(p) == DS_E_BUL) return ((ds_box*)p)->v.b;
+    cannot_convert(p, "Bul");
+}
+ds_chr ds_dyn_to_chr(ds_head* p) {
+    if (!p) ds_fail("Cannot convert Nil to Chr");
+    if (p->type->kind == DS_K_STR) return ds_str_to_chr((ds_str*)p);
+    if (box_kind(p) == DS_E_CHR) return ((ds_box*)p)->v.c;
+    if (box_kind(p) == DS_E_INT) return ds_int_to_chr(((ds_box*)p)->v.i);
+    cannot_convert(p, "Chr");
+}
+
+/* new { name = "Ann" }: the fields in a map from name to value */
+typedef struct ds_anon {
+    ds_head h;
+    ds_map* fields;
+} ds_anon;
+
+static void anon_drop(ds_head* h) {
+    ds_release(((ds_anon*)h)->fields);
+    ds_free(h, sizeof(ds_anon));
+}
+static ds_str* anon_str(ds_head* h) {
+    ds_map* m = ((ds_anon*)h)->fields;
+    ds_sb b;
+    ds_sb_init(&b);
+    ds_sb_cstr(&b, "{");
+    for (int64_t i = 0; i < m->len; ++i) {
+        if (i) ds_sb_cstr(&b, ", ");
+        ds_sb_str(&b, DS_MAP_KEY(m, ds_str*, i));
+        ds_sb_cstr(&b, " = ");
+        ds_sb_take(&b, ds_item_repr(&ds_elem_ref, &DS_MAP_VALUE(m, ds_head*, i)));
+    }
+    ds_sb_cstr(&b, "}");
+    return ds_sb_done(&b);
+}
+static const ds_type ds_anon_type = {"Obj", DS_K_ANON, anon_drop, anon_str, NULL, NULL, 0, NULL, 0};
+
+static bool anon_eq(ds_head* a, ds_head* b) { return ds_map_eq(((ds_anon*)a)->fields, ((ds_anon*)b)->fields); }
+
+ds_head* ds_anon_new(void) {
+    ds_anon* o = (ds_anon*)ds_new_object(&ds_anon_type, sizeof(ds_anon));
+    o->fields = ds_map_new(&ds_elem_str, &ds_elem_ref);
+    return &o->h;
+}
+
+void ds_anon_put(ds_head* object, const char* name, ds_head* value) {
+    ds_anon* o = (ds_anon*)object;
+    ds_str* key = ds_str_cstr(name);
+    int64_t at = ds_map_find(o->fields, &key);
+    if (at >= 0) {
+        ds_map* m = ds_map_unique(&o->fields);
+        ds_release(key);
+        ds_store(&DS_MAP_VALUE(m, ds_head*, at), value);
+        return;
+    }
+    ds_map_put(&o->fields, &key, &value);
+}
+
+static const ds_field* find_field(ds_head* object, const char* name) {
+    for (const ds_type* t = object->type; t; t = t->parent) {
+        for (int i = 0; i < t->fieldCount; ++i) {
+            if (strcmp(t->fields[i].name, name) == 0) return &t->fields[i];
+        }
+    }
+    return NULL;
+}
+
+DS_NORETURN DS_COLD static void no_such_field(ds_head* object, const char* name) {
+    ds_sb b;
+    ds_sb_init(&b);
+    ds_str* type = ds_dyn_typeof(object, NULL);
+    if (object->type->kind == DS_K_OBJECT || object->type->kind == DS_K_ANON) {
+        ds_sb_take(&b, type);
+        ds_sb_cstr(&b, " has no field '");
+        ds_sb_cstr(&b, name);
+        ds_sb_cstr(&b, "'");
+    } else {
+        ds_sb_cstr(&b, "There is no field '");
+        ds_sb_cstr(&b, name);
+        ds_sb_cstr(&b, strchr("AEIOU", type->len ? type->data[0] : 'x') ? "' in an " : "' in a ");
+        ds_sb_take(&b, type);
+    }
+    ds_fail_str(ds_sb_done(&b));
+}
+
+ds_head* ds_dyn_get(ds_head* object, const char* name) {
+    if (!object) ds_fail("Nil reference: tried to read '%s' of nil", name);
+    if (object->type->kind == DS_K_ANON) {
+        ds_anon* o = (ds_anon*)object;
+        ds_str* key = ds_str_cstr(name);
+        int64_t at = ds_map_find(o->fields, &key);
+        ds_release(key);
+        if (at < 0) no_such_field(object, name);
+        return (ds_head*)ds_retain(DS_MAP_VALUE(o->fields, ds_head*, at));
+    }
+    const ds_field* f = object->type->kind == DS_K_OBJECT ? find_field(object, name) : NULL;
+    if (!f) no_such_field(object, name);
+    const char* at = (const char*)object + f->offset;
+    if (f->opt && f->et->kind != DS_E_STR && f->et->kind != DS_E_REF) {
+        /* ds_opt_*: a bool, then the value where its type puts it */
+        if (!*(const bool*)at) return NULL;
+        switch (f->et->kind) {
+            case DS_E_DBL: return ds_box_d(((const ds_opt_dbl*)at)->value);
+            case DS_E_FLT: return ds_box_f(((const ds_opt_flt*)at)->value);
+            case DS_E_BUL: return ds_box_b(((const ds_opt_bul*)at)->value);
+            case DS_E_CHR: return ds_box_c(((const ds_opt_chr*)at)->value);
+            default: return ds_box_i(f->et, ((const ds_opt_int*)at)->value);
+        }
+    }
+    switch (f->et->kind) {
+        case DS_E_INT: case DS_E_RADIX: case DS_E_ENUM: return ds_box_i(f->et, *(const ds_int*)at);
+        case DS_E_DBL: return ds_box_d(*(const ds_dbl*)at);
+        case DS_E_FLT: return ds_box_f(*(const ds_flt*)at);
+        case DS_E_BUL: return ds_box_b(*(const ds_bul*)at);
+        case DS_E_CHR: return ds_box_c(*(const ds_chr*)at);
+        default: return (ds_head*)ds_retain(*(ds_head* const*)at);
+    }
+}
+
+DS_NORETURN DS_COLD static void cannot_store(ds_head* value, const ds_field* f) {
+    ds_sb b;
+    ds_sb_init(&b);
+    ds_sb_cstr(&b, "Cannot store ");
+    ds_sb_take(&b, ds_dyn_typeof(value, NULL));
+    ds_release(value);
+    ds_sb_cstr(&b, " in field '");
+    ds_sb_cstr(&b, f->name);
+    ds_sb_cstr(&b, "' (");
+    ds_sb_cstr(&b, f->typeName);
+    ds_sb_cstr(&b, ")");
+    ds_fail_str(ds_sb_done(&b));
+}
+
+void ds_dyn_set(ds_head* object, const char* name, ds_head* value) {
+    if (!object) {
+        ds_release(value);
+        ds_fail("Nil reference: tried to set '%s' of nil", name);
+    }
+    if (object->type->kind == DS_K_ANON) {
+        ds_anon_put(object, name, value);
+        return;
+    }
+    const ds_field* f = object->type->kind == DS_K_OBJECT ? find_field(object, name) : NULL;
+    if (!f) {
+        ds_release(value);
+        no_such_field(object, name);
+    }
+    char* at = (char*)object + f->offset;
+    if (f->dyn) {
+        if (f->accepts && !f->accepts(value)) cannot_store(value, f);
+        ds_store(at, value);
+        return;
+    }
+    if (f->et->kind == DS_E_STR || f->et->kind == DS_E_REF) {
+        bool fits = value == NULL ? f->opt
+                  : f->et->kind == DS_E_STR ? value->type->kind == DS_K_STR
+                  : f->cls ? ds_is_class(value, f->cls)
+                  : f->kind == 0 || value->type->kind == f->kind;
+        if (!fits) cannot_store(value, f);
+        ds_store(at, value);
+        return;
+    }
+    if (!value) {
+        if (!f->opt) cannot_store(value, f);
+        *(bool*)at = false;
+        return;
+    }
+    int k = box_kind(value);
+    int want = f->et->kind == DS_E_RADIX ? DS_E_INT : f->et->kind;
+    bool ok = want == DS_E_ENUM ? ds_dyn_is_enum(value, f->et)
+            : want == DS_E_DBL ? box_numeric(value)
+            : want == DS_E_FLT ? k == DS_E_FLT || k == DS_E_INT
+            : k == want;
+    if (!ok) cannot_store(value, f);
+    ds_box* b = (ds_box*)value;
+    if (f->opt) {
+        *(bool*)at = true;
+        switch (want) {
+            case DS_E_DBL: ((ds_opt_dbl*)at)->value = box_number(value); break;
+            case DS_E_FLT: ((ds_opt_flt*)at)->value = k == DS_E_FLT ? b->v.f : (ds_flt)b->v.i; break;
+            case DS_E_BUL: ((ds_opt_bul*)at)->value = b->v.b; break;
+            case DS_E_CHR: ((ds_opt_chr*)at)->value = b->v.c; break;
+            default: ((ds_opt_int*)at)->value = b->v.i; break;
+        }
+    } else {
+        switch (want) {
+            case DS_E_DBL: *(ds_dbl*)at = box_number(value); break;
+            case DS_E_FLT: *(ds_flt*)at = k == DS_E_FLT ? b->v.f : (ds_flt)b->v.i; break;
+            case DS_E_BUL: *(ds_bul*)at = b->v.b; break;
+            case DS_E_CHR: *(ds_chr*)at = b->v.c; break;
+            default: *(ds_int*)at = b->v.i; break;
+        }
+    }
+    ds_release(value);
+}
+
+/* getField / setField take the name as a Dessa text (its bytes end with a 0) */
+ds_head* ds_dyn_get_str(ds_head* object, ds_str* name) { return ds_dyn_get(object, name->data); }
+void ds_dyn_set_str(ds_head* object, ds_str* name, ds_head* value) { ds_dyn_set(object, name->data, value); }
+
+/* fieldsOf(o): the parent's fields first, then the class's own */
+static void add_fields(ds_list* out, const ds_type* t) {
+    if (!t) return;
+    add_fields(out, t->parent);
+    for (int i = 0; i < t->fieldCount; ++i) push_str(out, ds_str_cstr(t->fields[i].name));
+}
+ds_list* ds_dyn_fields(ds_head* object) {
+    if (!object) ds_fail("fieldsOf: the value is nil");
+    ds_list* out = ds_list_new(&ds_elem_str, 4);
+    if (object->type->kind == DS_K_ANON) {
+        ds_map* m = ((ds_anon*)object)->fields;
+        for (int64_t i = 0; i < m->len; ++i) push_str(out, (ds_str*)ds_retain(DS_MAP_KEY(m, ds_str*, i)));
+        return out;
+    }
+    if (object->type->kind != DS_K_OBJECT) {
+        ds_release(out);
+        ds_str* type = ds_dyn_typeof(object, NULL);
+        ds_sb b;
+        ds_sb_init(&b);
+        ds_sb_cstr(&b, strchr("AEIOU", type->len ? type->data[0] : 'x') ? "fieldsOf: an " : "fieldsOf: a ");
+        ds_sb_take(&b, type);
+        ds_sb_cstr(&b, " has no fields");
+        ds_fail_str(ds_sb_done(&b));
+    }
+    add_fields(out, object->type);
+    return out;
+}
+
+void ds_dyn_bad_store(ds_head* value, const char* what) {
+    ds_sb b;
+    ds_sb_init(&b);
+    ds_sb_cstr(&b, "Cannot store ");
+    ds_sb_take(&b, ds_dyn_typeof(value, NULL));
+    ds_sb_cstr(&b, " in ");
+    ds_sb_cstr(&b, what);
+    ds_fail_str(ds_sb_done(&b));
 }

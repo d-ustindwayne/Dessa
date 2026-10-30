@@ -1,43 +1,46 @@
-// Tests of the npm package (run: npm test, after npm run build)
+// Tests the package against a dessa: the one in DESSALANG_DESSA (in this
+// repository: ../build/dessa after a build, with the WebAssembly compiler from
+// `dessa setup wasm`), or else the release this version downloads.
+//
+//     DESSALANG_DESSA=../build/dessa bun run test.js
 "use strict";
 const assert = require("assert");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { execFileSync } = require("child_process");
 const dessa = require(".");
 
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dessalang-test-"));
+const write = (name, text) => {
+    const file = path.join(dir, name);
+    fs.writeFileSync(file, text);
+    return file;
+};
+
 (async () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dessa-npm-"));
-    fs.mkdirSync(path.join(tmp, "lib"));
-    fs.writeFileSync(path.join(tmp, "lib", "util.ds"), "func[Int] twice(n[Int]) { return n * 2; }\n");
-    fs.writeFileSync(path.join(tmp, "app.ds"), '$("lib.util") { twice }\nprint(twice(21), 7 / 2);\n');
-    fs.writeFileSync(path.join(tmp, "bad.ds"), 'var[Int] x = "no";\n');
-    fs.writeFileSync(path.join(tmp, "page.dhtml"), '<p id="x"></p>\n<script>\n    print("page");\n</script>\n<script type="text/javascript">let y = 1;</script>\n');
-    fs.writeFileSync(path.join(tmp, "broken.dhtml"), '<p></p>\n<script>\n    var[Int] x = "no";\n</script>\n');
+    // A program to WebAssembly, run with Node
+    const app = write("app.ds", '$("math") { Big }\nvar[Int<>] xs = <3, 1, 2>;\nxs.sort();\nprint(xs, new Big("2").pow(100));\n');
+    const wasm = await dessa.build(app);
+    assert(fs.existsSync(wasm), "build made the .wasm");
+    const out = execFileSync("node", [wasm.replace(/\.wasm$/, ".js")]).toString();
+    assert.strictEqual(out.replace(/\r\n/g, "\n"), "<1, 2, 3> 1267650600228229401496703205376\n");
 
-    assert.strictEqual(await dessa.version(), "0.3.6");
-    const result = await dessa.compile('print("hi", <1, 2>);');
-    assert.ok(result.ok && result.js.includes("$.print"));
+    // A page: its script becomes WebAssembly inside the HTML
+    const page = write("page.dhtml", '<!doctype html><html><body><p id="x"></p><script>\n$("webutils") { document }\nprint("hi");\n</script></body></html>');
+    const html = await dessa.buildPage(page);
+    assert(html.includes("DessaWasm.page("), "the page's script is WebAssembly");
+    assert(!html.includes('$("webutils")'), "no Dessa source left in the page");
 
-    const js = await dessa.compileFile(path.join(tmp, "app.ds"));
-    assert.ok(js.length > 1000);
+    // Errors come back as diagnostics
+    const broken = write("broken.ds", "var[Int] x = \"text\";\n");
+    const diagnostics = await dessa.check(broken);
+    assert(diagnostics.some((d) => d.severity === "error"), "check reports the error");
+    await assert.rejects(dessa.build(broken), dessa.DessaError);
 
-    await assert.rejects(dessa.compileFile(path.join(tmp, "bad.ds")), (e) => e instanceof dessa.DessaError && /bad\.ds:1:14/.test(e.message));
-
-    const html = await dessa.buildPage(path.join(tmp, "page.dhtml"));
-    assert.ok(html.includes("<p id=\"x\"></p>") && html.includes("$.print") && html.includes("let y = 1;"));
-
-    const diagnostics = await dessa.check(path.join(tmp, "broken.dhtml"));
-    assert.strictEqual(diagnostics[0].line, 3, "error position inside the page");
-
-    let out = "";
-    const write = process.stdout.write.bind(process.stdout);
-    process.stdout.write = (t) => { out += t; return true; };
-    try {
-        await dessa.runFile(path.join(tmp, "app.ds"));
-    } finally {
-        process.stdout.write = write;
-    }
-    assert.strictEqual(out, "42 3.5\n");
-    console.log("all npm package tests passed");
-})().catch((e) => { console.error(e); process.exit(1); });
+    fs.rmSync(dir, { recursive: true, force: true });
+    console.log("npm package: all tests passed");
+})().catch((e) => {
+    console.error(e);
+    process.exitCode = 1;
+});

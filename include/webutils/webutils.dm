@@ -1,7 +1,6 @@
 /***
- * $("webutils") -- the web page, from Dessa. Only for programs that run in a
- * browser: <script type="text/dessa"> with web/dessa.js, or
- * `dessa build app.ds --target web`.
+ * $("webutils") -- the web page, from Dessa. Only for the scripts of a page
+ * (a .dhtml file), which run as WebAssembly in the browser.
  *
  *     $("webutils") { document, alert, log }
  *
@@ -17,7 +16,8 @@
  * setting a field (el.textContent = "Hi") changes the page right away,
  * exactly like in JavaScript. The browser's names are kept.
  *
- * The functions marked `{ ... }` are implemented in webutils.js.
+ * The functions marked `{ ... }` are done by the page bridge
+ * (runtime/dessa_web.c and runtime/dessa_wasm.js).
  */
 
 // ============================================================

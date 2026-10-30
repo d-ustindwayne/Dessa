@@ -1,6 +1,6 @@
-# Push a tag like v0.3.6 to build prebuilt Dessa for Windows, Linux and macOS
+# Push a tag like v0.5.0 to build prebuilt Dessa for Windows, Linux and macOS
 # and attach them to a GitHub release:
-#     git tag v0.3.6 && git push origin v0.3.6
+#     git tag v0.5.0 && git push origin v0.5.0
 name: Release
 
 on:
@@ -66,22 +66,6 @@ jobs:
           name: dessa-${{ matrix.name }}
           path: dist/*
 
-  web:
-    name: web (dessa.js)
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: mymindstorm/setup-emsdk@v14
-      - name: Build web/dessa.js
-        run: |
-          emcmake cmake -S . -B build-wasm -DCMAKE_BUILD_TYPE=Release
-          cmake --build build-wasm -j 4
-          node tests/web/node_smoke.js
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dessa-web
-          path: web/dessa.js
-
   vscode:
     # The VS Code extension as a .vsix, published to the Marketplace when the
     # repository has a VSCE_PAT secret
@@ -127,7 +111,7 @@ jobs:
           path: wasm-tools/dessa-wasm-*.tar.gz
 
   release:
-    needs: [build, web, vscode, wasm-tools]
+    needs: [build, vscode, wasm-tools]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
@@ -141,8 +125,9 @@ jobs:
           generate_release_notes: true
 
   npm:
-    # Publishes the npm package "dessalang" (the version in npm/package.json) when the repository has an NPM_TOKEN secret
-    needs: web
+    # Publishes the npm package "dessalang" (the version in npm/package.json) when the repository has an NPM_TOKEN secret.
+    # It downloads this release's files when it's used, so it goes after the release.
+    needs: release
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
@@ -151,10 +136,7 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-      - uses: actions/download-artifact@v4
-        with:
-          name: dessa-web
-          path: web
+      - uses: oven-sh/setup-bun@v2
       - name: Publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

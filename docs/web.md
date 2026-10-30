@@ -1,6 +1,7 @@
 # Dessa on the web
 
-Dessa programs can run in a web page. There are three ways to do it.
+Dessa runs in web pages as WebAssembly, the browser's engine for
+native-speed code. There are two ways to use it.
 
 ## 1. .dhtml pages (recommended)
 
@@ -32,11 +33,10 @@ dessa serve .               a server for the whole folder; .dhtml pages are comp
 ```
 
 The scripts are compiled to **WebAssembly**, the browser's engine for
-native-speed code: no JavaScript is made from your Dessa. They run about as
-fast as a native Dessa program, faster than the same program written in
-JavaScript (see the benchmark in `tests/bench/RESULTS.md`). `webutils` is
-the same either way: `document`, elements, events and timers are the
-browser's own, called straight from Dessa.
+native-speed code: no JavaScript is made from your Dessa. They run faster
+than the same program written in JavaScript (see the benchmark in
+`tests/bench/RESULTS.md`). With `webutils`, `document`, elements, events and
+timers are the browser's own, called straight from Dessa.
 
 WebAssembly needs a compiler for it, downloaded once:
 
@@ -44,49 +44,22 @@ WebAssembly needs a compiler for it, downloaded once:
 dessa setup wasm            about 50 MB, into Dessa's folder
 ```
 
-Without it (or with `--target js`), the scripts are compiled to JavaScript
-instead, and `dessa` says so. A script that uses something WebAssembly can't
-do yet (unions other than `T | Nil`, `Obj`, a library with a C++ part) is
-compiled to JavaScript on its own, with a note.
+The installers get it for you. If it's missing, `dessa` says so and how to
+get it.
 
 The built `page.html` is one file with everything inside (the WebAssembly too).
 It runs anywhere, even opened straight from the disk, and doesn't need Dessa.
 Error messages point at the line and column in the `.dhtml` file. Imports
 (`$("utils")`) are relative to the page.
 
-## 2. The browser compiler (dessa.js)
+## 2. WebAssembly files
 
-`dessa.js` is the Dessa compiler built for WebAssembly, with a loader. Like
-Babel's standalone build, it compiles `.ds` files in the browser:
-
-```html
-<script src="dessa.js"></script>                          <!-- or https://unpkg.com/dessalang -->
-<script type="text/dessa" src="app.ds"></script>
-<script type="text/dessa">
-    $("webutils") { document }
-    document.body.textContent = "Hello from Dessa!";
-</script>
-```
-
-`type="text/ds"` works too. The scripts run in page order, and each one is its
-own program. `print()` writes to the browser console, and also into an element
-with `id="dessa-output"` if the page has one. Compile errors show up in the
-same places.
-
-The page has to be served over HTTP, because browsers block loading files
-from `file://` pages: use `dessa serve .`, then open
-`http://localhost:8080/`. The example in `web/example/` works this way.
-
-`dessa.js` compiles to JavaScript (a browser can't run a C compiler); build
-the page with `dessa build` for WebAssembly.
-
-## 3. WebAssembly and JavaScript files
+A program (not a page) compiled to WebAssembly runs with Node, and in any
+other WebAssembly engine:
 
 ```
 dessa build app.ds --target wasm              app.wasm, and app.js to run it: node app.js
-dessa run app.ds --target wasm                run the WebAssembly with Node
-dessa build app.ds --target web -o app.js     one self-contained .js file (the runtime is inside)
-dessa run app.ds --target js                  run with Node
+dessa run app.ds --target wasm                run it with Node
 ```
 
 ## webutils
@@ -127,38 +100,35 @@ error, with its line.
 
 ## Libraries in the browser
 
-`math`, `random`, `sys`, `time`, `webutils`, and the packages written in
-Dessa (`json`, `numbers`, `codes`, `colors`, `textfx`) work in WebAssembly and
-in JavaScript. `dcrypto` and the time zones of `time` have a C++ part, so a
-script that uses them is compiled to JavaScript. The file functions of `os` work in Node only. Packages with C++ code
-(`sql`, `request`, `ashwee`) can't run in a browser, and the compiler says so.
+Every library works in WebAssembly: `math` (with `Big`), `random`, `sys`,
+`time` (time zones come from the browser), `dcrypto`, `webutils`, and the
+packages `json`, `sql` (SQLite, in memory or in a file in Node), `request`,
+`numbers`, `codes`, `colors` and `textfx`. A few things depend on where the
+WebAssembly runs:
+
+- The file functions of `os` and SQLite database files work in Node; a page
+  has no files (an in-memory database, `openSqlite(":memory:")`, works).
+- `request` in a page is an ordinary browser request, so another site
+  answers only if it allows pages from elsewhere (CORS).
+- SQL Server (ODBC) and `ashwee` (desktop windows) work only natively, and
+  the compiler says so.
 
 ## npm
 
-The `dessalang` package on npm has the browser compiler and a Node API:
+The `dessalang` package on npm is Dessa for Node: it compiles programs and
+pages to WebAssembly and runs them, without a C compiler.
 
 ```
 npm install dessalang
+npx dessalang build page.dhtml
+npx dessalang run app.ds
 ```
 
 ```js
 const dessa = require("dessalang");
-const { js, diagnostics } = await dessa.compile('print("hi");');
-await dessa.runFile("app.ds");
+await dessa.build("app.ds");                 // app.wasm and app.js
 const html = await dessa.buildPage("page.dhtml");
 ```
 
-It also has a command, `dessa-web` (`run`, `build`, `check`, `serve`), for
-machines without the native compiler. See `npm/README.md`.
-
-## Building dessa.js
-
-With the [Emscripten SDK](https://emscripten.org):
-
-```
-emcmake cmake -S . -B build-wasm
-cmake --build build-wasm            # writes web/dessa.js (about 1.2 MB, one file)
-node tests/web/node_smoke.js        # quick check
-```
-
-Releases include a ready-made `dessa.js`.
+The first time, it downloads Dessa for your system and the WebAssembly
+compiler (once). See `npm/README.md`.

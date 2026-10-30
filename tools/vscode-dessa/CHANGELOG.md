@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0
+
+- The extension's home page is now https://dessa.dustindwayn.ee/ (Dessa 0.5.0: everything compiles to C and WebAssembly; the JavaScript backend is gone)
+
 ## 0.3.6
 
 - No changes to the extension (Dessa 0.3.6: WebAssembly programs in Node can use files)

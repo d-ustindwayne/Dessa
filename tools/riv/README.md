@@ -38,7 +38,7 @@ A package with C++ code also has a `<name>.native` file (see `include/README.md`
 
 | Package | What it is |
 |---|---|
-| `json`, `phl` | data formats (Dessa only; `phl` is being revised) |
+| `json` | a data format (Dessa only) |
 | `request` | HTTP through curl |
 | `sql` | SQLite (bundled, ~9 MB of C) + SQL Server / ODBC |
 | `ashwee` | desktop GUI (Windows, Linux, macOS), with `examples/todo.ds` |

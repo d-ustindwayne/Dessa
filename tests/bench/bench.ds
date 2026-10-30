@@ -2,7 +2,7 @@
 // and bench.js. Prints "task<TAB>result<TAB>milliseconds" per task.
 //
 //     dessa build bench.ds -o bench && ./bench          (native)
-//     dessa build bench.ds --target js -o bench_ds.js && node bench_ds.js
+//     dessa build bench.ds --target wasm -o bench_dsw.wasm && node bench_dsw.js
 //     add "quick" for smaller sizes
 
 $("time") { millis }

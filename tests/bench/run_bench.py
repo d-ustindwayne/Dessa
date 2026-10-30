@@ -84,8 +84,6 @@ def main():
          [str(build / f"bench_ds{exe}")], version([str(EXE), "--version"]) + " (native, through C: the default)"),
         ("Dessa (C++)", [[str(EXE), "build", str(HERE / "bench.ds"), "--release", "--cpp", "-o", str(build / f"bench_dscpp{exe}")]],
          [str(build / f"bench_dscpp{exe}")], version([str(EXE), "--version"]) + " (native, through C++: --cpp)"),
-        ("Dessa (JS)", [[str(EXE), "build", str(HERE / "bench.ds"), "--target", "js", "-o", str(build / "bench_ds.js")]],
-         ["node", str(build / "bench_ds.js")], version([str(EXE), "--version"]) + " compiled to JavaScript, Node"),
         ("Dessa (wasm)", [[str(EXE), "build", str(HERE / "bench.ds"), "--target", "wasm", "-o", str(build / "bench_dsw.wasm")]],
          ["node", str(build / "bench_dsw.js")], version([str(EXE), "--version"]) + " compiled to WebAssembly, Node"),
     ]
@@ -193,12 +191,9 @@ def write_results(results, totals, languages, quick, problems, runs=1):
     lines.append("- C++ is compiled with g++ -O2; Dessa with `dessa build --release` (-O2), through C (gcc)")
     lines.append("  by default and through C++ with --cpp. Dessa checks every Int operation for overflow and")
     lines.append("  every list index, which the C++ version doesn't.")
-    lines.append("- Dessa compiled to JavaScript keeps Int exact to 64 bits: an Int is a plain number while it")
-    lines.append("  fits exactly (up to 2^53 - 1) and a BigInt beyond, and every Int operation is checked.")
-    lines.append("  bench.js only uses JavaScript's own numbers.")
     lines.append("- Dessa compiled to WebAssembly (`--target wasm`, what pages use) runs in Node's WebAssembly")
     lines.append("  engine, the same one Chrome and Edge use for pages, with the same checks as native Dessa.")
-    lines.append("- The columns run with Node (JavaScript, Dessa (JS), Dessa (wasm)) vary more from day to day")
+    lines.append("- The columns run with Node (JavaScript, Dessa (wasm)) vary more from day to day")
     lines.append("  on a laptop than the native ones; compare them within one run.")
     lines.append("- Java's times include the JIT warming up; Python runs in the standard interpreter.")
     if problems:

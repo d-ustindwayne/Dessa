@@ -2,3 +2,6 @@
 header request.hpp
 
 func[Str<>] _send(method[Str], url[Str], headers[Str], body[Str], timeout[Int])
+
+// The native part in C, for C programs and WebAssembly
+c request.c

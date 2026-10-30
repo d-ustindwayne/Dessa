@@ -37,12 +37,12 @@ std::string cText(const std::string& s) {
 
 } // namespace
 
-// A class of a library with a JavaScript part (webutils) whose methods are
+// A class of the browser library (webutils) whose methods are
 // all `{ ... }` is a page object; a function of it with a `{ ... }` body is
 // done by the bridge
 void CCodegen::collectExtern() {
     for (const auto& module : program.modules) {
-        if (module->jsNative.empty()) continue;
+        if (!module->browserLibrary) continue;
         for (const auto& s : module->ast) {
             if (!s) continue;
             if (s->kind == StmtKind::FuncDecl) {

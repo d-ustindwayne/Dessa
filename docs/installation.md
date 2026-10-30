@@ -17,16 +17,15 @@ There are two ways to install:
 Either way you end up with `dessa` (the compiler) and `riv` (the package
 manager) on your PATH.
 
-For web pages as WebAssembly (faster than JavaScript), get the WebAssembly
-compiler once, after installing:
+Web pages run as WebAssembly, which has its own compiler. The installers
+download it (about 50 MB, once); to get it yourself:
 
 ```
 dessa setup wasm
 ```
 
 It downloads about 50 MB into Dessa's folder (`~/.dessa/wasm` if that folder
-can't be written). Without it, pages are compiled to JavaScript. See
-[web.md](web.md).
+can't be written). See [web.md](web.md).
 
 ## Windows
 
@@ -119,29 +118,42 @@ build/dessa run sample/sample.ds
 
 On Windows with MinGW add `-G "MinGW Makefiles"` to the first command.
 
-## The browser build and npm
+## Node only: npm
 
-`dessa.js`, the compiler built for WebAssembly, comes with the releases and
-with the npm package (`npm install dessalang`). To build it yourself you need the
-[Emscripten SDK](https://emscripten.org):
+Without installing anything else, the npm package compiles Dessa programs and
+pages to WebAssembly and runs them with Node:
 
 ```
-emcmake cmake -S . -B build-wasm
-cmake --build build-wasm            # writes web/dessa.js
+npm install dessalang
+npx dessalang run app.ds
 ```
 
-See [web.md](web.md).
+See [web.md](web.md#npm).
 
 ## VS Code
 
-The installer can install the extension for you. To do it by hand, copy (or
-link) `tools/vscode-dessa` to your VS Code extensions folder as
-`dessa-0.1.0`:
+The Dessa extension gets its information from the compiler itself, so what it
+shows always matches what `dessa` does: highlighting (also in `.dhtml` pages),
+errors as you type, completion from the real types, hover, go to definition,
+parameter hints, quick fixes and a Run button. The extension's README lists
+everything.
+
+The installer can install the extension for you. Otherwise download the
+`.vsix` from a GitHub release and use "Install from VSIX..." in VS Code's
+Extensions view. To use the copy in this repository instead, copy (or link)
+`tools/vscode-dessa` to your extensions folder as `dessa-0.1.0` and restart
+VS Code:
 
 - Windows: `%USERPROFILE%\.vscode\extensions\`
 - Linux, macOS: `~/.vscode/extensions/`
 
-Then restart VS Code. See [editor.md](editor.md).
+| Setting | Default | Meaning |
+|---|---|---|
+| `dessa.compilerPath` | `dessa` | the `dessa` executable (set it if `dessa` isn't on PATH) |
+| `dessa.checkOnType` | `true` | check for errors while typing (otherwise on open and save) |
+| `dessa.unusedImports` | `dim` | imports the file never uses: `dim` (faded), `warning`, or `off` |
+| `dessa.packageFolders` | `[]` | extra folders with packages (like `DESSA_PACKAGES`) |
+| `dessa.autoBrackets` | `true` | typing helpers: `$` becomes `$()`, `var` gets `[]`, and so on |
 
 ## Uninstalling
 

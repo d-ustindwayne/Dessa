@@ -1,12 +1,27 @@
-# dessalang: Dessa for JavaScript
+# dessalang: Dessa for Node
 
-The [Dessa](https://github.com/d-ustindwayne/Dessa) programming language for
-JavaScript. This package holds the real Dessa compiler built for WebAssembly.
-It compiles Dessa to JavaScript in Node or in the browser, without a C++
-compiler.
+The [Dessa](https://dessa.dustindwayn.ee/) programming language from Node.
+This package compiles Dessa programs and web pages to WebAssembly and runs
+them. It drives the real Dessa compiler, and no C compiler is needed.
 
 ```
 npm install dessalang
+```
+
+The first time it's used, it downloads Dessa for your system and the
+WebAssembly compiler (about 60 MB, once) into `~/.dessa/npm/<version>`.
+Windows x64, Linux x64 and macOS on Apple silicon are supported.
+
+## From the command line
+
+```
+npx dessalang run app.ds                 run it as WebAssembly in Node
+npx dessalang build app.ds               app.wasm, and app.js to run it: node app.js
+npx dessalang build page.dhtml           page.html: one file, its scripts compiled to WebAssembly
+npx dessalang run page.dhtml             serve the page and open it in the browser
+npx dessalang check app.ds               errors only
+npx dessalang serve . --port 8080        a web server; .dhtml pages compiled on each request
+npx dessalang setup                      download everything now (otherwise on first use)
 ```
 
 ## In Node
@@ -14,57 +29,42 @@ npm install dessalang
 ```js
 const dessa = require("dessalang");
 
-// Source to JavaScript
-const { ok, js, diagnostics } = await dessa.compile('print("Hello", 2 ^ 10);');
-
-// A file and everything it imports (also packages in riv_modules)
-const code = await dessa.compileFile("app.ds");
-
-// Run it here (print goes to stdout)
-await dessa.runFile("app.ds");
-
-// A .dhtml page with its Dessa scripts compiled: plain HTML that runs anywhere
+await dessa.build("app.ds");                  // app.wasm and app.js
+const code = await dessa.run("app.ds");       // runs it here; resolves to the exit code
 const html = await dessa.buildPage("page.dhtml");
+const problems = await dessa.check("app.ds"); // [{ file, line, column, severity, message }]
 ```
 
-Errors throw a `DessaError` whose `diagnostics` hold the file, line, column
-and message of each problem.
+A failed build rejects with a `DessaError` holding the compiler's message.
 
-## From the command line
+## Pages
 
-```
-npx -p dessalang dessa-web run app.ds       # or install it: npm install -g dessalang, then dessa-web ...
-npx -p dessalang dessa-web build app.ds -o app.js          # one self-contained .js file
-npx -p dessalang dessa-web build page.dhtml                # page.html
-npx -p dessalang dessa-web check page.dhtml
-npx -p dessalang dessa-web serve . --port 8080             # .dhtml pages compiled on each request
-```
-
-## In the browser
+A `.dhtml` file is an HTML page whose plain `<script>` holds Dessa:
 
 ```html
-<script src="https://unpkg.com/dessalang"></script>
-<script type="text/dessa">
-    $("webutils") { document }
-    document.body.textContent = "Hello from Dessa";
-</script>
-<script type="text/dessa" src="app.ds"></script>
+<!doctype html>
+<html>
+<body>
+    <button id="hello">Say hello</button>
+    <script>
+        $("webutils") { document, Element, Event, alert }
+        var[Element | Nil] button = document.getElementById("hello");
+        if (button != nil) button.addEventListener("click", (e[Event]) := alert("Hello from Dessa!"));
+    </script>
+</body>
+</html>
 ```
 
-The scripts are compiled in the page, in order. `print()` goes to the console
-and to an element with `id="dessa-output"` if there is one.
+`npx dessalang build page.dhtml` turns it into `page.html`, one file with the
+WebAssembly inside that runs in any browser.
 
-## .dhtml pages
+## Settings
 
-A `.dhtml` file is HTML where a plain `<script>` holds Dessa code, so no
-`type` is needed. `dessa-web build page.dhtml` turns it into `page.html`, and
-the result doesn't need this package to run.
+| Variable | Meaning |
+|---|---|
+| `DESSALANG_DESSA` | a `dessa` you already have, used instead of downloading one |
+| `DESSALANG_HOME` | where to keep the download (default `~/.dessa/npm/<version>`) |
 
-## Libraries
-
-These run in JavaScript: `math`, `time`, `sys`, `webutils` (the page: DOM,
-events, `alert`, `prompt`, timers, `fetchText`), and the packages written in
-Dessa: `json`, `phl`, `numbers`, `codes`, `colors`, `textfx`. Libraries with a
-C++ part (`sql`, `request`, `ashwee`) need the native Dessa compiler.
+Documentation: https://dessa.dustindwayn.ee/docs/
 
 License: Apache 2.0.

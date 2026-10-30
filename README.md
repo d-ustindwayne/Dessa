@@ -1,9 +1,10 @@
 # Dessa
 
-Dessa is a statically typed programming language that compiles to C (for
-fast native programs; C++ for the few things C can't do yet), to WebAssembly
-(web pages faster than JavaScript) or to JavaScript. The goal is C++ speed
-without C++'s learning curve.
+Dessa is a statically typed programming language that compiles to C, for
+fast native programs, and to WebAssembly, for web pages faster than
+JavaScript. The goal is C++ speed without C++'s learning curve.
+
+Website and documentation: https://dessa.dustindwayn.ee/
 
 ```dessa
 class Item {
@@ -27,8 +28,8 @@ print($"{cart.length()} items, total {total.toFixed(2)}");
 - Classes, interfaces, enums, lambdas, default and named arguments
 - Errors you can catch, including runtime errors such as overflow and bad indexes
 - Unicode text that counts characters, not bytes
-- Identical output everywhere: native (through C, or C++), WebAssembly and JavaScript
-- Web pages written in Dessa (`.dhtml`), compiled to WebAssembly, and a browser compiler (`dessa.js`)
+- Identical output everywhere: native (through C) and WebAssembly
+- Web pages written in Dessa (`.dhtml`), compiled to WebAssembly, with every library
 - `riv`, a package manager, and libraries for files, time zones, JSON, SQL, HTTP, desktop windows and more
 - VS Code support driven by the compiler: errors, completion, hover, go to definition
 
@@ -38,7 +39,7 @@ print($"{cart.length()} items, total {total.toFixed(2)}");
 |---|---|
 | Windows | `powershell -ExecutionPolicy Bypass -File install.ps1` |
 | Linux, macOS | `sh install.sh` |
-| JavaScript only | `npm install dessalang` |
+| Node only (WebAssembly) | `npm install dessalang` |
 
 The installer checks for a C++ compiler, installs `dessa` and `riv`, and puts
 them on your PATH. Details for every system: [docs/installation.md](docs/installation.md).
@@ -65,8 +66,7 @@ riv run
 | [docs/compiler.md](docs/compiler.md) | The `dessa` command, targets, settings |
 | [docs/riv.md](docs/riv.md) | Packages: using, making and publishing them |
 | [docs/libraries.md](docs/libraries.md) | The libraries and what they contain |
-| [docs/web.md](docs/web.md) | `.dhtml` pages, `dessa.js`, `webutils`, npm |
-| [docs/editor.md](docs/editor.md) | VS Code support |
+| [docs/web.md](docs/web.md) | `.dhtml` pages, WebAssembly, `webutils`, npm |
 | [docs/overview.md](docs/overview.md) | Dessa in brief: goals, state, numbers, where help is needed |
 | [docs/architecture.md](docs/architecture.md) | How the compiler, runtimes, riv and the editor work |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Building, testing and releasing Dessa |
@@ -75,13 +75,14 @@ riv run
 
 | Folder | What is in it |
 |---|---|
-| `src/` | the compiler: lexer, parser, analyser, C++ and JavaScript generators |
-| `runtime/` | the support code every program uses (C++ and JavaScript) |
+| `src/` | the compiler: lexer, parser, analyser, C and C++ generators |
+| `runtime/` | the support code every program uses (C, C++, and the WebAssembly loader) |
 | `include/` | the core libraries (`math`, `os`, `sys`, `time`, `random`, `dsds`, `dcrypto`, `webutils`) |
 | `tools/riv/` | riv and the bundled packages |
 | `tools/vscode-dessa/` | the VS Code extension |
-| `web/` | the browser compiler's loader and an example page |
-| `npm/` | the npm package |
+| `web/` | an example page written in Dessa |
+| `npm/` | the npm package: Dessa to WebAssembly from Node |
+| `website/` | the website, https://dessa.dustindwayn.ee/ (Angular) |
 | `tests/` | the test suite |
 | `selfhost/` | the compiler being rewritten in Dessa (the lexer is done; see `selfhost/PLAN.md`) |
 
@@ -91,7 +92,7 @@ riv run
 cmake -S . -B build
 cmake --build build
 python tests/test.py               the test suite (native)
-python tests/test.py --js          the same tests through the JavaScript backend
+python tests/test.py --wasm        the same tests through WebAssembly
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the rest.

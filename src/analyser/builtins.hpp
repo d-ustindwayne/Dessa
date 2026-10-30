@@ -39,6 +39,11 @@ struct BuiltinLibrary {
     std::vector<std::string> linkFlags = {};   // e.g. "-lodbc32"
     std::vector<std::string> cSources = {};    // C files compiled once and linked in, relative to include/ (or baseDir)
     std::string baseDir = {};                  // a riv package's folder; "" for the libraries in include/
+    // Its native functions written in C (dsx_<lib>_<name>, see cglue.hpp), relative
+    // like cSources: then C programs and WebAssembly use it instead of the C++ part
+    std::string cImpl = {};
+    std::string wasmFlags = {};                // compiling its C for WebAssembly (wasm.cflags)
+    std::string wasmLink = {};                 // linking it into WebAssembly (wasm.link)
 };
 
 // Functions available everywhere without an import: print, input, ...

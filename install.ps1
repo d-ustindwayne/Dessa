@@ -6,8 +6,9 @@
 
   It checks for a C++ compiler and CMake (and offers to install them with
   winget), builds dessa and riv, copies everything to an install folder,
-  puts dessa and riv on your PATH and lets riv use the bundled packages
-  (sql, request, json, ashwee, ...) without downloading them.
+  puts dessa and riv on your PATH, lets riv use the bundled packages
+  (sql, request, json, ashwee, ...) without downloading them, and gets the
+  WebAssembly compiler that web pages need (dessa setup wasm, about 50 MB).
 
   Options:
       -Yes          accept every default, ask nothing
@@ -15,6 +16,7 @@
       -NoPath       don't change PATH
       -NoFileTypes  don't register the .ds / .dhtml file icons
       -NoVSCode     don't install the VS Code extension
+      -NoWasm       don't download the WebAssembly compiler now (later: dessa setup wasm)
       -Uninstall    remove Dessa (the folder, the PATH entry, the file types)
 #>
 param(
@@ -23,6 +25,7 @@ param(
     [switch]$NoPath,
     [switch]$NoFileTypes,
     [switch]$NoVSCode,
+    [switch]$NoWasm,
     [switch]$Uninstall
 )
 
@@ -270,15 +273,6 @@ foreach ($folder in @("runtime", "include")) {
 $packages = Join-Path $Prefix "packages"
 if (Test-Path $packages) { Remove-Item $packages -Recurse -Force }
 Copy-Item (Join-Path $Source "tools\riv\packages") $packages -Recurse
-# phl is left out for now (its syntax is being revised)
-$phl = Join-Path $packages "phl"
-if (Test-Path $phl) { Remove-Item $phl -Recurse -Force }
-if (Test-Path (Join-Path $Source "web\dessa.js")) {
-    # Dessa in the browser: web\dessa.js and an example page
-    $webTarget = Join-Path $Prefix "web"
-    if (Test-Path $webTarget) { Remove-Item $webTarget -Recurse -Force }
-    Copy-Item (Join-Path $Source "web") $webTarget -Recurse
-}
 $icons = Join-Path $Prefix "icons"
 New-Item -ItemType Directory -Force -Path $icons | Out-Null
 PngToIco (Join-Path $Source "tools\vscode-dessa\icons\dessa-128x128.png") (Join-Path $icons "dessa.ico")
@@ -314,7 +308,17 @@ Step "Telling riv where the bundled packages are"
 if ($LASTEXITCODE -ne 0) { Warn "riv could not note the packages; run: riv bundled `"$packages`"" }
 
 # ------------------------------------------------------------
-# 7. Extras: file icons, VS Code
+# 7. The WebAssembly compiler (web pages run as WebAssembly)
+# ------------------------------------------------------------
+
+if (-not $NoWasm) {
+    Step "The WebAssembly compiler (for web pages, about 50 MB, once)"
+    & (Join-Path $Bin "dessa.exe") setup wasm
+    if ($LASTEXITCODE -ne 0) { Warn "it couldn't be downloaded now; pages need it, so run later: dessa setup wasm" }
+}
+
+# ------------------------------------------------------------
+# 8. Extras: file icons, VS Code
 # ------------------------------------------------------------
 
 if (-not $NoFileTypes) {
