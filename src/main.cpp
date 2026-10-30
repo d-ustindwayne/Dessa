@@ -1076,8 +1076,22 @@ int cmdHover(const std::string& path, bool fromStdin, const std::string& at, con
 
 } // namespace
 
+#ifdef __EMSCRIPTEN__
+// The website's playground runs main() once per command and then flushes
+// what it printed (src/web/README.md)
+extern "C" __attribute__((used, visibility("default"))) void dessa_flush() {
+    std::cout.flush();
+    std::cerr.flush();
+}
+#endif
+
 int main(int argc, char* argv[]) {
     g_argv0 = argv[0];
+    // every command starts from the defaults (the playground calls main() again and again)
+    g_target = "native";
+    g_cpp = false;
+    g_release = false;
+    g_port = 8080;
     std::vector<std::string> args(argv + 1, argv + argc);
     if (args.empty() || args[0] == "-h" || args[0] == "--help" || args[0] == "help") {
         printUsage();

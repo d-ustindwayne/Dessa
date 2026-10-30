@@ -23,6 +23,7 @@ import { benchTotals } from './benchmarks';
         </p>
         <div class="actions">
           <a mat-flat-button routerLink="/download">Download {{ version }}</a>
+          <a mat-stroked-button routerLink="/playground">Try it in the playground</a>
           <a mat-stroked-button routerLink="/docs/language">Read the language guide</a>
           <a mat-button [href]="repo" rel="noopener">Source on GitHub</a>
         </div>

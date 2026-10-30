@@ -130,20 +130,20 @@
           "include": "#escapes"
         },
         {
-          "name": "meta.interpolation.dessa",
+          "name": "meta.template.expression.dessa",
           "begin": "\\{",
           "beginCaptures": {
             "0": {
-              "name": "punctuation.section.interpolation.begin.dessa"
+              "name": "punctuation.definition.template-expression.begin.dessa"
             }
           },
           "end": "\\}",
           "endCaptures": {
             "0": {
-              "name": "punctuation.section.interpolation.end.dessa"
+              "name": "punctuation.definition.template-expression.end.dessa"
             }
           },
-          "contentName": "source.dessa",
+          "contentName": "meta.embedded.line.dessa",
           "patterns": [
             {
               "include": "#code"
@@ -464,7 +464,7 @@
           "match": "\\bnew\\b"
         },
         {
-          "name": "invalid.deprecated.reserved.dessa",
+          "name": "keyword.other.reserved.dessa",
           "match": "\\bwith\\b"
         }
       ]
@@ -631,20 +631,20 @@
           "include": "#escapes"
         },
         {
-          "name": "meta.interpolation.dessa",
+          "name": "meta.template.expression.dessa",
           "begin": "\\{",
           "beginCaptures": {
             "0": {
-              "name": "punctuation.section.interpolation.begin.dessa"
+              "name": "punctuation.definition.template-expression.begin.dessa"
             }
           },
           "end": "\\}",
           "endCaptures": {
             "0": {
-              "name": "punctuation.section.interpolation.end.dessa"
+              "name": "punctuation.definition.template-expression.end.dessa"
             }
           },
-          "contentName": "source.dessa",
+          "contentName": "meta.embedded.line.dessa",
           "patterns": [
             {
               "include": "#code"

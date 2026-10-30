@@ -113,6 +113,31 @@ WebAssembly runs:
 - SQL Server (ODBC) and `ashwee` (desktop windows) work only natively, and
   the compiler says so.
 
+## The playground
+
+https://dessa.dustindwayn.ee/playground/ runs Dessa in the browser with
+nothing installed: a file list, an editor with errors, completions and hover
+from the compiler, and a terminal. It uses the real tools, built for
+WebAssembly: the `dessa` command itself (`src/main.cpp`, built with
+Emscripten) checks the code and emits its C, and clang (LLVM compiled to
+WebAssembly, downloaded once, about 27 MB) compiles that C into a program,
+which then runs in the page.
+
+In its terminal, `dessa run`, `build`, `check`, `emit`, `tokens`, `ast`,
+`complete` and `hover` are the real commands. `ls`, `cat`, `mkdir`, `rm`,
+`mv` and `cd` work on the playground's files, which are kept in the browser.
+There is no system shell.
+
+What it can't do: programs can't open the playground's files (`os` file
+functions, SQLite database files; an in-memory database works), `.dhtml`
+pages can't be run there (`dessa check` works on them), `riv`, `dessa setup`
+and `dessa serve` aren't there, and `ashwee` and SQL Server are native only.
+`request` is an ordinary browser request, so other sites answer only if they
+allow it (CORS). The first visit reloads the page once, so that `input()` can
+wait for the terminal.
+
+The build is described in `website/README.md`.
+
 ## npm
 
 The `dessalang` package on npm is Dessa for Node: it compiles programs and

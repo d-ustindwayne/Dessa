@@ -5,8 +5,9 @@
     "ng": "ng",
     "content": "bun scripts/content.ts",
     "coverage": "bun scripts/coverage.ts",
-    "start": "bun scripts/content.ts && ng serve",
-    "build": "bun scripts/content.ts && ng build && bun scripts/postbuild.ts"
+    "start": "bun scripts/content.ts && bun scripts/playground.ts && ng serve",
+    "build": "bun scripts/content.ts && bun scripts/playground.ts && ng build && bun scripts/postbuild.ts",
+    "playground": "bun scripts/playground.ts"
   },
   "private": true,
   "packageManager": "bun@1.3.13",
@@ -21,6 +22,18 @@
     "@angular/platform-server": "^22.2.0",
     "@angular/router": "^22.2.0",
     "@angular/ssr": "^22.2.5",
+    "@codemirror/autocomplete": "^6.20.4",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/lint": "^6.9.7",
+    "@codemirror/search": "^6.7.2",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
+    "@lezer/highlight": "^1.2.5",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "codemirror": "6",
+    "coi-serviceworker": "^0.1.7",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },
@@ -29,6 +42,7 @@
     "@angular/cli": "^22.2.5",
     "@angular/compiler-cli": "^22.2.0",
     "@types/node": "^22.12.0",
+    "@yowasp/clang": "22.0.0-git20542-10",
     "marked": "^18.1.2",
     "prettier": "^3.8.1",
     "typescript": "~6.0.2"

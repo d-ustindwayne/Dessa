@@ -4,7 +4,7 @@ Dessa is a statically typed programming language that compiles to C, for
 fast native programs, and to WebAssembly, for web pages faster than
 JavaScript. The goal is C++ speed without C++'s learning curve.
 
-Website and documentation: https://dessa.dustindwayn.ee/
+Website and documentation: https://dessa.dustindwayn.ee/ (try it without installing: https://dessa.dustindwayn.ee/playground/)
 
 ```dessa
 class Item {

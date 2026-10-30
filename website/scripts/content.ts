@@ -1,7 +1,7 @@
 // Turns the repository's docs, benchmark results, test coverage and example
 // programs into src/generated/content.ts, and writes public/sitemap.xml and
 // public/robots.txt. Runs before every build (bun run build).
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { Marked, type Tokens } from 'marked';
 
@@ -34,6 +34,11 @@ export function highlightDessa(code: string): string {
     out += escapeHtml(code.slice(last, m.index));
     last = m.index! + m[0].length;
     const text = escapeHtml(m[0]);
+    // $"... {expr} ...": the text as a string, each {expr} as code
+    if (m[2] && m[0].startsWith('$')) {
+      out += highlightTemplate(m[0]);
+      continue;
+    }
     let kind = '';
     if (m[1]) kind = 'c';
     else if (m[2]) kind = 's';
@@ -44,6 +49,33 @@ export function highlightDessa(code: string): string {
     out += kind ? `<span class="hl-${kind}">${text}</span>` : text;
   }
   return out + escapeHtml(code.slice(last));
+}
+
+function highlightTemplate(text: string): string {
+  let out = '';
+  let piece = '';
+  const flush = () => {
+    if (piece) out += `<span class="hl-s">${escapeHtml(piece)}</span>`;
+    piece = '';
+  };
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '{') {
+      // the expression up to the matching }
+      let depth = 1, j = i + 1;
+      while (j < text.length && depth > 0) {
+        if (text[j] === '{') depth++;
+        else if (text[j] === '}') depth--;
+        if (depth > 0) j++;
+      }
+      flush();
+      out += `<span class="hl-p">{</span>${highlightDessa(text.slice(i + 1, j))}${j < text.length ? '<span class="hl-p">}</span>' : ''}`;
+      i = j;
+    } else {
+      piece += text[i];
+    }
+  }
+  flush();
+  return out;
 }
 
 const highlight = (code: string, lang: string) =>
@@ -225,9 +257,12 @@ function loadExamples() {
   return { list, page: escapeHtml(page.trimEnd()) };
 }
 
+function readmeSampleSource(): string {
+  return /```dessa\n([\s\S]*?)```/.exec(read('README.md'))?.[1] ?? '';
+}
+
 function readmeSample(): string {
-  const code = /```dessa\n([\s\S]*?)```/.exec(read('README.md'))?.[1] ?? '';
-  return highlightDessa(code.trimEnd());
+  return highlightDessa(readmeSampleSource().trimEnd());
 }
 
 function readmeFeatures(): string[] {
@@ -270,8 +305,24 @@ emit('bench.ts', 'BENCH', content.bench);
 emit('coverage.ts', 'COVERAGE', content.coverage);
 emit('examples.ts', 'EXAMPLES', content.examples);
 
+// The playground's starter workspace: the README's sample as main.ds, the
+// examples (the test suite's programs, so their output is checked), and
+// playground/input.ds for input()
+const starters: Record<string, string> = {
+  '/main.ds': '// Press Run (Ctrl+\\) or type: dessa run main.ds\n\n' + readmeSampleSource(),
+};
+for (const [name] of EXAMPLES) starters[`/examples/${name}.ds`] = read(`tests/cases/run/${name}.ds`);
+// the modules an example imports ($("lib.generic_coll") in generics.ds), next to it as in the tests
+for (const name of readdirSync(join(root, 'tests/cases/run/lib'))) {
+  if (name.endsWith('.ds') && Object.values(starters).some((s) => s.includes(`$("lib.${name.slice(0, -3)}")`))) {
+    starters[`/examples/lib/${name}`] = read(`tests/cases/run/lib/${name}`);
+  }
+}
+starters['/examples/input.ds'] = readFileSync(join(web, 'playground', 'input.ds'), 'utf8').replace(/\r\n/g, '\n');
+emit('playground.ts', 'PLAYGROUND', { version, starters });
+
 const today = new Date().toLocaleDateString('en-CA');
-const pages = ['/', '/download/', '/benchmarks/', '/features/', '/examples/', '/docs/', ...docs.map((d) => `/docs/${d.slug}/`)];
+const pages = ['/', '/download/', '/benchmarks/', '/features/', '/examples/', '/playground/', '/docs/', ...docs.map((d) => `/docs/${d.slug}/`)];
 writeFileSync(
   join(web, 'public', 'sitemap.xml'),
   '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +

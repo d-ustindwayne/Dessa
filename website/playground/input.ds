@@ -1,0 +1,6 @@
+// input() waits for a line typed in the terminal
+var[Str] name = input("Your name: ");
+var[Str] count = input("How many times? ");
+for (var[Int] i = 0; i < Int(count); i++) {
+    print($"{i + 1}. Hello, {name}!");
+}

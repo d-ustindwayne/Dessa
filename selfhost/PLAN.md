@@ -27,14 +27,14 @@ finished and trusted before the next one starts.
 | 2 | Parser | `src/parser` (1,300) | | same `dessa ast` output |
 | 3 | Module loader | `src/driver/loader.cpp` | | same files and import errors |
 | 4 | Analyser | `src/analyser` (4,100) | | same errors and warnings on `tests/cases/errors` |
-| 5 | JavaScript generator | `src/codegen/jsgen.cpp` (1,600) | | the `--js` tests pass |
+| 5 | C generator | `src/codegen/cgen*.cpp` (4,000) | | the `--c` tests pass |
 | 6 | C++ generator | `src/codegen/codegen.cpp` (1,600) | | the native tests pass |
 | 7 | Driver | `src/main.cpp`, `src/driver` | | `run`, `build`, `check`, editor commands |
 | 8 | Bootstrap | | | see below |
 
-The JavaScript generator comes before the C++ one: it is simpler, and with it
-the Dessa compiler can already run in a browser (compiled to JavaScript by the
-C++ compiler), with no WebAssembly build.
+The C generator comes before the C++ one: it is what every program goes
+through now (natively and as WebAssembly), and with it the Dessa compiler can
+already compile itself to WebAssembly.
 
 ## Stage 2: the parser
 
@@ -77,5 +77,5 @@ Things the rewrite will want, to add to Dessa as they come up:
 
 ```
 dessa run selfhost/main.ds tokens tests/cases/run/hello.ds
-dessa build selfhost/main.ds --target js -o lexer.js && node lexer.js tokens file.ds
+dessa build selfhost/main.ds --target wasm -o lexer.wasm && node lexer.js tokens file.ds
 ```

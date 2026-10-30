@@ -14,6 +14,12 @@ on:
       - "README.md"
       - "npm/package.json"
       - "web/example/counter.dhtml"
+      # the playground: the compiler, the runtime and the libraries' C
+      - "src/**"
+      - "runtime/**"
+      - "include/**"
+      - "tools/riv/packages/**"
+      - "CMakeLists.txt"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -35,6 +41,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+      - uses: mymindstorm/setup-emsdk@v14
+      - name: The playground's compiler (dessa built for WebAssembly)
+        working-directory: .
+        run: |
+          emcmake cmake -S . -B build-playground -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-playground -j 4
+      # The runtime and libraries compiled for the playground (SQLite takes minutes)
+      - uses: actions/cache@v4
+        with:
+          path: website/public/playground/objects
+          key: playground-objects-${{ hashFiles('runtime/dessa_rt.*', 'runtime/dessa_web.*', 'include/**/*.c', 'tools/riv/packages/**/*.c', 'tools/riv/packages/**/*.h', 'tools/riv/packages/**/*.native', 'website/bun.lock') }}
       - run: bun install --frozen-lockfile
       - run: bun run build
       - uses: actions/upload-pages-artifact@v3

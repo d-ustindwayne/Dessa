@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- The code inside `$"... {expr} ..."` is coloured as code in every theme (it took the string's colour, or grey, before)
+- `with` (a reserved word) is coloured as a keyword, not greyed out as deprecated
+
 ## 0.5.0
 
 - The extension's home page is now https://dessa.dustindwayn.ee/ (Dessa 0.5.0: everything compiles to C and WebAssembly; the JavaScript backend is gone)

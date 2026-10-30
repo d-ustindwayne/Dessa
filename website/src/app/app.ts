@@ -62,6 +62,7 @@ export class App {
   readonly version = SITE_INFO.version;
   readonly links = [
     { path: '/docs', label: 'Docs' },
+    { path: '/playground', label: 'Playground' },
     { path: '/download', label: 'Download' },
     { path: '/benchmarks', label: 'Benchmarks' },
     { path: '/features', label: 'Features' },

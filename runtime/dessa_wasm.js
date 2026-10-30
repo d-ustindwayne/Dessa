@@ -188,8 +188,9 @@
                 const lines = headers.split("\n").filter((l) => l.includes(":"));
                 const sends = body.length > 0 || ["POST", "PUT", "PATCH"].includes(method);
                 const failed = (why) => new Error(`Request to ${url} failed: ${why}`);
-                if (browser) {
-                    // Dessa code runs straight through, so the request is synchronous
+                if (typeof XMLHttpRequest !== "undefined") {
+                    // a page, or a Web Worker (the website's playground): Dessa code
+                    // runs straight through, so the request is synchronous
                     const request = new XMLHttpRequest();
                     request.open(method, url, false);
                     for (const l of lines) {
@@ -375,6 +376,10 @@
         },
         // Waits until the page's scripts so far have run
         ready: () => queue,
+        // A program's bytes, run here with these options ({args, write(fd, text),
+        // read() -> text or null, terminal}); returns the exit code. The
+        // website's playground runs programs this way in a Web Worker.
+        run: (bytes, options) => start(bytes, options || {}),
         // A program in Node: output to the terminal, input from it; returns the exit code
         main: (file, args) => {
             const fs = require("fs");

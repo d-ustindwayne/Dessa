@@ -1,0 +1,105 @@
+<div class="pg">
+  <header class="pg-head">
+    <div class="pg-title">
+      <h1>Playground</h1>
+      <span class="pg-version">Dessa {{ version }} &middot; pre-1.0</span>
+    </div>
+    <div class="pg-status" aria-live="polite">
+      @if (notice()) {
+        <span class="pg-notice">{{ notice() }}</span>
+      }
+      <span class="pg-chip" [class.ok]="tools.compiler() === 'ready'" [class.bad]="tools.compiler() === 'failed'">
+        {{ tools.compiler() === 'ready' ? 'Compiler ready' : tools.compiler() === 'failed' ? 'Compiler failed to load' : 'Compiler loading' }}
+      </span>
+      <span class="pg-chip" [class.ok]="tools.clang().state === 'ready'" [class.bad]="tools.clang().state === 'failed'">{{ clangText() }}</span>
+    </div>
+  </header>
+
+  <div class="pg-body" [style.--side.px]="sidebar() ? sidebarWidth() : 0" [style.--term.px]="terminalOpen() ? terminalHeight() : 34">
+    @if (sidebar()) {
+      <aside class="pg-side" aria-label="Files">
+        <div class="pg-side-head">
+          <span>Files</span>
+          <span class="pg-side-actions">
+            <button type="button" (click)="newFile()" title="New file">+ File</button>
+            <button type="button" (click)="newFolder()" title="New folder">+ Folder</button>
+          </span>
+        </div>
+        <ul class="pg-tree" role="tree">
+          @for (row of rows(); track row.path) {
+            <li role="treeitem" [attr.aria-expanded]="row.folder ? isOpenFolder(row.path) : null"
+                [class.selected]="selected() === row.path" [class.active]="ws.active() === row.path"
+                [style.padding-left.px]="8 + row.depth * 14" (click)="toggle(row)" (dblclick)="renameSelected()">
+              <span class="pg-icon" aria-hidden="true">{{ row.folder ? (isOpenFolder(row.path) ? '▾' : '▸') : '' }}</span>
+              <span class="pg-name" [class.folder]="row.folder">{{ row.name }}</span>
+            </li>
+          } @empty {
+            <li class="pg-empty">No files. Make one with + File, or Reset.</li>
+          }
+        </ul>
+        <div class="pg-side-foot">
+          <button type="button" (click)="renameSelected()" [disabled]="selected() === '/'">Rename</button>
+          <button type="button" (click)="deleteSelected()" [disabled]="selected() === '/'">Delete</button>
+        </div>
+      </aside>
+      <div class="pg-split-v" (pointerdown)="drag($event, 'sidebar')" role="separator" aria-orientation="vertical" aria-label="Resize the file list"></div>
+    }
+
+    <section class="pg-main">
+      <div class="pg-bar">
+        <button type="button" class="pg-toggle" (click)="sidebar.set(!sidebar())" [attr.aria-pressed]="sidebar()" title="Show or hide the files">☰</button>
+        <div class="pg-tabs" role="tablist">
+          @for (path of ws.open(); track path) {
+            <div class="pg-tab" role="tab" [class.on]="ws.active() === path" [attr.aria-selected]="ws.active() === path" (click)="open(path)" [title]="path">
+              <span>{{ nameOf(path) }}</span>
+              <button type="button" (click)="close(path, $event)" [attr.aria-label]="'Close ' + nameOf(path)">×</button>
+            </div>
+          }
+        </div>
+        <div class="pg-actions">
+          <select (change)="openExample($any($event.target).value); $any($event.target).value = ''" aria-label="Open an example">
+            <option value="">Examples</option>
+            @for (e of examples; track e) {
+              <option [value]="e">{{ nameOf(e) }}</option>
+            }
+          </select>
+          @if (tools.running()) {
+            <button type="button" class="pg-run stop" (click)="stop()" title="Stop the program (Ctrl+C in the terminal)">■ Stop</button>
+          } @else {
+            <button type="button" class="pg-run" (click)="run()" [disabled]="!ready()" title="Run the open file (Ctrl+\ or Ctrl+Alt+.)">▶ Run</button>
+          }
+          <button type="button" (click)="save()" title="Save (Ctrl+S); changes are also saved as you type">Save</button>
+          <button type="button" (click)="copy()" title="Copy the open file">{{ copied() ? 'Copied' : 'Copy' }}</button>
+          <button type="button" (click)="reset()" title="Put back the starter files">Reset</button>
+        </div>
+      </div>
+
+      <div class="pg-editor-wrap">
+        <div class="pg-editor" #editor></div>
+        @if (!ready()) {
+          <div class="pg-loading">Loading the editor...</div>
+        } @else if (!ws.active()) {
+          <div class="pg-loading">No file open. Pick one in the file list, or open an example.</div>
+        } @else if (!ws.isText(ws.active()!)) {
+          <div class="pg-loading">{{ nameOf(ws.active()!) }} is a WebAssembly program, not text. <code>dessa run</code> the .ds file to run it here.</div>
+        }
+      </div>
+
+      <div class="pg-split-h" (pointerdown)="drag($event, 'terminal')" role="separator" aria-orientation="horizontal" aria-label="Resize the terminal"></div>
+      <div class="pg-term">
+        <div class="pg-term-head">
+          <button type="button" class="pg-toggle" (click)="terminalOpen.set(!terminalOpen())" [attr.aria-expanded]="terminalOpen()">
+            {{ terminalOpen() ? '▾' : '▸' }} Terminal
+          </button>
+          <span class="pg-term-actions">
+            @if (!tools.canInput && ready()) {
+              <span class="pg-muted" title="This browser didn't allow the page to share memory with the program">input() not available</span>
+            }
+            <button type="button" (click)="clearTerminal()">Clear output</button>
+          </span>
+        </div>
+        <div class="pg-term-body" #terminal [hidden]="!terminalOpen()"></div>
+      </div>
+    </section>
+  </div>
+</div>

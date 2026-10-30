@@ -9,6 +9,8 @@
   --hl-string: light-dark(#9a3412, #f0a37a);
   --hl-number: light-dark(#1c5f8a, #8cc4ea);
   --hl-comment: light-dark(#6f7468, #8d9488);
+  --hl-function: light-dark(#1c614d, #8fd3c0);
+  --hl-operator: light-dark(#4a5249, #c0c8bd);
   --series-1: light-dark(#14743c, #3f9e68);
   --series-other: light-dark(#a8a7a2, #5f5e5a);
   --status-pass: light-dark(#0b7a2e, #5fcf80);
@@ -53,6 +55,23 @@ pre.code {
 .hl-s { color: var(--hl-string); }
 .hl-n { color: var(--hl-number); }
 .hl-c { color: var(--hl-comment); font-style: italic; }
+.hl-p { color: var(--hl-keyword); }
+
+/* The playground's editor and hover (CodeMirror) */
+.cm-editor { height: 100%; font-size: 0.9rem; background: var(--mat-sys-surface); color: var(--mat-sys-on-surface); }
+.cm-editor.cm-focused { outline: none; }
+.cm-scroller { font-family: ui-monospace, "Cascadia Code", Consolas, "Liberation Mono", monospace; line-height: 1.55; font-variant-ligatures: none; }
+.cm-gutters { background: var(--code-bg); color: var(--text-muted); border-right: 1px solid var(--line); }
+.cm-activeLine { background: light-dark(#f4f2e8, #1b1f1b) !important; }
+.cm-activeLineGutter { background: light-dark(#e9e6d6, #232823) !important; }
+.cm-cursor { border-left-color: var(--mat-sys-primary); }
+.cm-selectionBackground, .cm-focused .cm-selectionBackground { background: light-dark(#cdebd5, #2b3a2f) !important; }
+.cm-tooltip { background: var(--mat-sys-surface-container-high) !important; color: var(--mat-sys-on-surface) !important; border: 1px solid var(--line) !important; border-radius: 6px; }
+.cm-tooltip-autocomplete > ul > li[aria-selected] { background: var(--mat-sys-secondary-container); color: var(--mat-sys-on-surface); }
+.cm-completionDetail { color: var(--text-muted); margin-left: 8px; font-style: normal; }
+.pg-hover { padding: 6px 10px; max-width: 520px; font-size: 0.85rem; }
+.pg-hover code { background: none; padding: 0; color: var(--mat-sys-on-surface); }
+.pg-hover p { margin: 6px 0 0; color: var(--text-muted); }
 
 .table-wrap { overflow-x: auto; margin: 12px 0 18px; }
 table { border-collapse: collapse; width: 100%; font-size: 0.925rem; }
