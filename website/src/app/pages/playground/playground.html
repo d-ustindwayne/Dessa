@@ -15,39 +15,53 @@
     </div>
   </header>
 
-  <div class="pg-body" [style.--side.px]="sidebar() ? sidebarWidth() : 0" [style.--term.px]="terminalOpen() ? terminalHeight() : 34">
-    @if (sidebar()) {
-      <aside class="pg-side" aria-label="Files">
-        <div class="pg-side-head">
-          <span>Files</span>
-          <span class="pg-side-actions">
-            <button type="button" (click)="newFile()" title="New file">+ File</button>
-            <button type="button" (click)="newFolder()" title="New folder">+ Folder</button>
-          </span>
-        </div>
-        <ul class="pg-tree" role="tree">
-          @for (row of rows(); track row.path) {
+  <div class="pg-body" [style.--side.px]="sidebarWidth()" [style.--term.px]="terminalOpen() ? terminalHeight() : 34">
+    <aside class="pg-side" [class.open]="sidebar()" aria-label="Files">
+      <div class="pg-side-head">
+        <span>Files</span>
+        <span class="pg-side-actions">
+          <button type="button" (click)="newFile()" title="New file">+ File</button>
+          <button type="button" (click)="newFolder()" title="New folder">+ Folder</button>
+          <button type="button" class="pg-side-close" (click)="sidebar.set(false)" aria-label="Close the file list">×</button>
+        </span>
+      </div>
+      <ul class="pg-tree" role="tree" tabindex="0" (keydown)="treeKey($event)">
+        @for (row of rows(); track row.path) {
+          @if (row.input || isRenaming(row.path)) {
+            <li class="pg-edit" [style.padding-left.px]="8 + row.depth * 14">
+              <span class="pg-icon" aria-hidden="true">{{ row.folder ? '▸' : '' }}</span>
+              <input #nameBox class="pg-name-box" [class.bad]="editing()?.error" [value]="row.input ? '' : row.name" spellcheck="false" autocomplete="off"
+                     [attr.aria-label]="editing()?.kind === 'rename' ? 'New name' : editing()?.kind === 'folder' ? 'Folder name' : 'File name'"
+                     (input)="editTyped(nameBoxValue($event))" (keydown)="editKey($event, nameBoxValue($event))" (blur)="finishEditing(nameBoxValue($event))">
+              @if (editing()?.error) {
+                <div class="pg-edit-error" role="alert">{{ editing()?.error }}</div>
+              }
+            </li>
+          } @else {
             <li role="treeitem" [attr.aria-expanded]="row.folder ? isOpenFolder(row.path) : null"
                 [class.selected]="selected() === row.path" [class.active]="ws.active() === row.path"
                 [style.padding-left.px]="8 + row.depth * 14" (click)="toggle(row)" (dblclick)="renameSelected()">
               <span class="pg-icon" aria-hidden="true">{{ row.folder ? (isOpenFolder(row.path) ? '▾' : '▸') : '' }}</span>
               <span class="pg-name" [class.folder]="row.folder">{{ row.name }}</span>
             </li>
-          } @empty {
-            <li class="pg-empty">No files. Make one with + File, or Reset.</li>
           }
-        </ul>
-        <div class="pg-side-foot">
-          <button type="button" (click)="renameSelected()" [disabled]="selected() === '/'">Rename</button>
-          <button type="button" (click)="deleteSelected()" [disabled]="selected() === '/'">Delete</button>
-        </div>
-      </aside>
-      <div class="pg-split-v" (pointerdown)="drag($event, 'sidebar')" role="separator" aria-orientation="vertical" aria-label="Resize the file list"></div>
+        } @empty {
+          <li class="pg-empty">No files. Make one with + File, or Reset.</li>
+        }
+      </ul>
+      <div class="pg-side-foot">
+        <button type="button" (click)="renameSelected()" [disabled]="selected() === '/'" title="Rename (F2)">Rename</button>
+        <button type="button" (click)="deleteSelected()" [disabled]="selected() === '/'" title="Delete (Delete)">Delete</button>
+      </div>
+    </aside>
+    <div class="pg-split-v" (pointerdown)="drag($event, 'sidebar')" role="separator" aria-orientation="vertical" aria-label="Resize the file list"></div>
+    @if (sidebar()) {
+      <div class="pg-scrim" (click)="sidebar.set(false)" aria-hidden="true"></div>
     }
 
     <section class="pg-main">
       <div class="pg-bar">
-        <button type="button" class="pg-toggle" (click)="sidebar.set(!sidebar())" [attr.aria-pressed]="sidebar()" title="Show or hide the files">☰</button>
+        <button type="button" class="pg-toggle pg-files-button" (click)="sidebar.set(!sidebar())" [attr.aria-pressed]="sidebar()" title="Show the files">☰</button>
         <div class="pg-tabs" role="tablist">
           @for (path of ws.open(); track path) {
             <div class="pg-tab" role="tab" [class.on]="ws.active() === path" [attr.aria-selected]="ws.active() === path" (click)="open(path)" [title]="path">
@@ -71,6 +85,7 @@
           <button type="button" (click)="save()" title="Save (Ctrl+S); changes are also saved as you type">Save</button>
           <button type="button" (click)="copy()" title="Copy the open file">{{ copied() ? 'Copied' : 'Copy' }}</button>
           <button type="button" (click)="reset()" title="Put back the starter files">Reset</button>
+          <button type="button" (click)="showShortcuts()" title="The editor's keyboard shortcuts">Shortcuts</button>
         </div>
       </div>
 
@@ -102,4 +117,33 @@
       </div>
     </section>
   </div>
+
+  <dialog #confirmDialog class="pg-dialog" aria-labelledby="pg-confirm-text" (click)="backdropClick($event, confirmDialog)" (close)="asking.set(null)">
+    <p id="pg-confirm-text">{{ asking()?.text }}</p>
+    <div class="pg-dialog-actions">
+      <button type="button" (click)="answer(false)">Cancel</button>
+      <button type="button" class="pg-danger" (click)="answer(true)" autofocus>{{ asking()?.ok }}</button>
+    </div>
+  </dialog>
+
+  <dialog #keysDialog class="pg-dialog pg-keys" aria-labelledby="pg-keys-title" (click)="backdropClick($event, keysDialog)">
+    <div class="pg-dialog-head">
+      <h2 id="pg-keys-title">Keyboard shortcuts</h2>
+      <button type="button" (click)="keysDialog.close()" aria-label="Close">×</button>
+    </div>
+    <div class="pg-keys-body">
+      @for (g of shortcuts(); track g.group) {
+        <section>
+          <h3>{{ g.group }}</h3>
+          <table>
+            <tbody>
+              @for (k of g.keys; track k.what) {
+                <tr><td>{{ k.what }}</td><td><kbd>{{ k.keys }}</kbd></td></tr>
+              }
+            </tbody>
+          </table>
+        </section>
+      }
+    </div>
+  </dialog>
 </div>

@@ -38,12 +38,15 @@ if(EMSCRIPTEN)
     # packages written in Dessa are embedded under /dessa.
     add_executable(dessa_playground src/main.cpp src/driver/toolchain.cpp src/driver/web.cpp ${DESSA_FRONTEND})
     target_include_directories(dessa_playground PRIVATE ${DESSA_INCLUDES})
+    # the parser recovers from syntax errors with exceptions: without them a
+    # syntax error aborts the whole compiler
+    target_compile_options(dessa_playground PRIVATE -fexceptions)
     set_target_properties(dessa_playground PROPERTIES OUTPUT_NAME "dessa" SUFFIX ".mjs"
                           RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/website/public/playground/compiler)
     set(S ${CMAKE_SOURCE_DIR})
     set(P ${S}/tools/riv/packages)
     target_link_options(dessa_playground PRIVATE
-        -O2
+        -O2 -fexceptions
         -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=DessaCompiler
         -sINVOKE_RUN=0 -sEXIT_RUNTIME=0
         -sEXPORTED_FUNCTIONS=_main,_dessa_flush

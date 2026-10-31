@@ -14,7 +14,61 @@ interface Row {
   name: string;
   depth: number;
   folder: boolean;
+  /** the name box of a new file or folder */
+  input?: boolean;
 }
+
+/** The name box in the file list: a new file or folder in the folder `path`, or renaming `path` */
+interface Editing {
+  kind: 'file' | 'folder' | 'rename';
+  path: string;
+  error: string;
+}
+
+/** The editor's keys, for the Shortcuts dialog. Mod is Ctrl (Cmd on a Mac); the third column is the Mac's when it differs. */
+const SHORTCUTS: { group: string; keys: [string, string, string?][] }[] = [
+  { group: 'Run and save', keys: [
+    ['Run the open file', 'Mod+\\  or  Mod+Alt+.'],
+    ['Save', 'Mod+S'],
+    ['Stop the program (in the terminal)', 'Ctrl+C'],
+    ['Clear the terminal (in the terminal)', 'Ctrl+L'],
+  ] },
+  { group: 'Lines', keys: [
+    ['Duplicate the line down / up', 'Shift+Alt+Down / Up'],
+    ['Move the line down / up', 'Alt+Down / Up'],
+    ['Delete the line', 'Mod+Shift+K'],
+    ['New line below', 'Mod+Enter'],
+    ['Comment the line', 'Mod+/'],
+    ['Block comment', 'Shift+Alt+A', 'Ctrl+Shift+A'],
+    ['Indent / outdent', 'Tab / Shift+Tab'],
+    ['Indent / outdent the line', 'Mod+] / Mod+['],
+    ['Undo / redo', 'Mod+Z / Mod+Y', 'Mod+Z / Mod+Shift+Z'],
+  ] },
+  { group: 'Selection', keys: [
+    ['Select the next match of the word', 'Mod+D'],
+    ['Select every match', 'Mod+Shift+L'],
+    ['Add a cursor below / above', 'Mod+Alt+Down / Up'],
+    ['Select a column', 'Alt+Drag'],
+    ['Select the line', 'Mod+L'],
+    ['Select everything', 'Mod+A'],
+    ['Jump to the matching bracket', 'Mod+Shift+\\'],
+  ] },
+  { group: 'Find', keys: [
+    ['Find and replace', 'Mod+F  or  Mod+H'],
+    ['Next / previous match', 'F3 / Shift+F3'],
+    ['Go to line', 'Mod+G'],
+  ] },
+  { group: 'Code', keys: [
+    ['Suggestions', 'Ctrl+Space'],
+    ['Next error', 'F8'],
+    ['Fold / unfold', 'Ctrl+Shift+[ / ]', 'Mod+Alt+[ / ]'],
+    ['Fold all / unfold all', 'Ctrl+Alt+[ / ]'],
+  ] },
+  { group: 'Files (in the file list)', keys: [
+    ['Rename', 'F2'],
+    ['Delete', 'Delete'],
+  ] },
+];
 
 @Component({
   selector: 'app-playground',
@@ -29,7 +83,21 @@ export class Playground implements OnDestroy {
   readonly examples = Object.keys(PLAYGROUND.starters).filter((p) => p.startsWith('/examples/'));
 
   readonly ready = signal(false);
-  readonly sidebar = signal(true);
+  /** phones only: the file list is an overlay, shown when asked for */
+  readonly sidebar = signal(false);
+  readonly editing = signal<Editing | null>(null);
+  /** what the confirm dialog asks, and what its button does */
+  readonly asking = signal<{ text: string; ok: string; action: () => void } | null>(null);
+  readonly mac = signal(false);
+  readonly shortcuts = computed(() =>
+    SHORTCUTS.map((g) => ({
+      group: g.group,
+      keys: g.keys.map(([what, keys, macKeys]) => ({
+        what,
+        keys: this.mac() ? (macKeys ?? keys).replace(/Mod\+/g, 'Cmd+').replace(/Alt\+/g, 'Option+') : keys.replace(/Mod\+/g, 'Ctrl+'),
+      })),
+    })),
+  );
   readonly terminalOpen = signal(true);
   readonly sidebarWidth = signal(220);
   readonly terminalHeight = signal(260);
@@ -40,6 +108,9 @@ export class Playground implements OnDestroy {
 
   private readonly editorHost = viewChild<ElementRef<HTMLElement>>('editor');
   private readonly terminalHost = viewChild<ElementRef<HTMLElement>>('terminal');
+  private readonly nameBox = viewChild<ElementRef<HTMLInputElement>>('nameBox');
+  private readonly confirmDialog = viewChild<ElementRef<HTMLDialogElement>>('confirmDialog');
+  private readonly keysDialog = viewChild<ElementRef<HTMLDialogElement>>('keysDialog');
 
   private view: EditorView | null = null;
   private states = new Map<string, EditorState>();
@@ -54,8 +125,12 @@ export class Playground implements OnDestroy {
     const files = Object.keys(this.ws.files());
     const folders = this.ws.allFolders();
     const open = this.expanded();
+    const editing = this.editing();
     const rows: Row[] = [];
     const walk = (dir: string, depth: number) => {
+      if (editing && editing.kind !== 'rename' && editing.path === dir) {
+        rows.push({ path: '\0new', name: '', depth, folder: editing.kind === 'folder', input: true });
+      }
       const prefix = dir === '/' ? '/' : dir + '/';
       const direct = (p: string) => p !== dir && p.startsWith(prefix) && !p.slice(prefix.length).includes('/');
       for (const f of folders.filter(direct).sort()) {
@@ -95,8 +170,7 @@ export class Playground implements OnDestroy {
       script.src = '/playground/coi-serviceworker.js';
       document.head.append(script);
     }
-    // on a phone the file list is an overlay: closed until asked for
-    if (this.narrow()) this.sidebar.set(false);
+    this.mac.set(/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent));
     await this.ws.load();
     const [{ EditorState }, view, commands, language, search, autocomplete, lint, xterm, fit, dessa] = await Promise.all([
       import('@codemirror/state'),
@@ -117,6 +191,8 @@ export class Playground implements OnDestroy {
       check: async () => (await this.tools.diagnostics(path.slice(1), this.filesNow())),
       complete: async (line: number, column: number) => (await this.tools.command(['complete', path.slice(1), '--at', `${line}:${column}`], this.filesNow())).out,
       hover: async (line: number, column: number) => (await this.tools.command(['hover', path.slice(1), '--at', `${line}:${column}`], this.filesNow())).out,
+      symbols: async (file = path.slice(1)) => (await this.tools.command(['symbols', file], this.filesNow())).out,
+      modules: () => this.modulesFor(path),
     });
     const base = [
       view.lineNumbers(),
@@ -134,7 +210,12 @@ export class Playground implements OnDestroy {
       view.highlightActiveLine(),
       search.highlightSelectionMatches(),
       lint.lintGutter(),
+      dessa.editorTheme,
       view.keymap.of([
+        // as in VS Code
+        { key: 'Mod-g', run: search.gotoLine, preventDefault: true },
+        { key: 'Mod-l', run: commands.selectLine, preventDefault: true },
+        { key: 'Mod-h', run: search.openSearchPanel, preventDefault: true },
         ...autocomplete.closeBracketsKeymap,
         ...commands.defaultKeymap,
         ...search.searchKeymap,
@@ -230,8 +311,20 @@ export class Playground implements OnDestroy {
     return this.ws.files();
   }
 
+  /** The Dessa files `path` can import, as import specs (lib.util) -> workspace path */
+  private modulesFor(path: string): Record<string, string> {
+    const dir = parentOf(path);
+    const prefix = dir === '/' ? '/' : dir + '/';
+    const out: Record<string, string> = {};
+    for (const f of Object.keys(this.ws.files()).sort()) {
+      if (f === path || !f.startsWith(prefix) || !/\.(ds|dm|dx|dz|dsx|dxx|dzx|dds|dss)$/.test(f)) continue;
+      out[f.slice(prefix.length).replace(/\.[^.]+$/, '').replace(/\//g, '.')] = f.slice(1);
+    }
+    return out;
+  }
+
   // ---- editor tabs ----
-  private showActive(): void {
+  private showActive(focus = true): void {
     const path = this.ws.active();
     if (!this.view || !this.makeState) return;
     if (!path || !this.ws.isText(path)) {
@@ -241,19 +334,20 @@ export class Playground implements OnDestroy {
     let state = this.states.get(path);
     if (!state || state.doc.toString() !== this.ws.text(path)) state = this.makeState(path);
     this.view.setState(state);
-    this.view.focus();
+    if (focus) this.view.focus();
   }
 
   private narrow(): boolean {
     return matchMedia('(max-width: 760px)').matches;
   }
 
-  open(path: string): void {
+  /** `focus`: the editor takes the keys (a file clicked in the list keeps them there: F2, Delete) */
+  open(path: string, focus = true): void {
     if (this.narrow()) this.sidebar.set(false);
     this.rememberState();
     this.ws.openFile(path);
     this.selected.set(path);
-    this.showActive();
+    this.showActive(focus);
   }
 
   close(path: string, event?: Event): void {
@@ -283,7 +377,7 @@ export class Playground implements OnDestroy {
   toggle(row: Row): void {
     this.selected.set(row.path);
     if (!row.folder) {
-      this.open(row.path);
+      this.open(row.path, this.narrow());
       return;
     }
     this.expanded.update((s) => {
@@ -300,48 +394,148 @@ export class Playground implements OnDestroy {
     return this.ws.isFolder(s) ? s : parentOf(s);
   }
 
+  // A name box in the list, as in VS Code: Enter makes the file or folder
+  // (or renames), Escape or leaving an empty box doesn't
   newFile(): void {
-    const name = prompt('New file name (e.g. hello.ds):', 'untitled.ds');
-    if (!name) return;
-    const path = resolvePath(this.targetFolder(), name.trim());
-    if (this.ws.exists(path)) return this.say(`${name} already exists`);
-    this.ws.write(path, path.endsWith('.ds') ? 'print("Hello from Dessa");\n' : '');
-    this.expanded.update((s) => new Set([...s, parentOf(path)]));
-    this.open(path);
+    this.startEditing('file', this.targetFolder());
   }
 
   newFolder(): void {
-    const name = prompt('New folder name:');
-    if (!name) return;
-    const path = resolvePath(this.targetFolder(), name.trim());
-    if (this.ws.exists(path)) return this.say(`${name} already exists`);
-    this.ws.makeFolder(path);
-    this.expanded.update((s) => new Set([...s, parentOf(path), path]));
-    this.selected.set(path);
+    this.startEditing('folder', this.targetFolder());
   }
 
   renameSelected(): void {
-    const from = this.selected();
-    if (from === '/' || !this.ws.exists(from)) return;
-    const name = prompt('Rename to:', nameOf(from));
-    if (!name || name === nameOf(from)) return;
-    const to = resolvePath(parentOf(from), name.trim());
-    if (this.ws.exists(to)) return this.say(`${name} already exists`);
-    this.rememberState();
-    this.states.clear();
-    this.ws.rename(from, to);
-    this.selected.set(to);
-    this.showActive();
+    const path = this.selected();
+    if (path === '/' || !this.ws.exists(path)) return;
+    this.startEditing('rename', path);
+  }
+
+  private startEditing(kind: Editing['kind'], path: string): void {
+    if (kind !== 'rename') this.expanded.update((s) => new Set([...s, path]));
+    this.editing.set({ kind, path, error: '' });
+    setTimeout(() => {
+      const box = this.nameBox()?.nativeElement;
+      if (!box) return;
+      box.focus();
+      // the name without its extension is selected, as in VS Code
+      const dot = box.value.lastIndexOf('.');
+      box.setSelectionRange(0, dot > 0 ? dot : box.value.length);
+    });
+  }
+
+  /** What's wrong with the name typed, or '' */
+  private nameProblem(e: Editing, name: string): string {
+    if (/[\\:*?"<>|]/.test(name)) return 'A name can\'t have \\ : * ? " < > or | in it';
+    const target = resolvePath(e.kind === 'rename' ? parentOf(e.path) : e.path, name);
+    if (target === '/') return 'Give it a name';
+    if (target !== e.path && this.ws.exists(target)) return `${name} already exists here`;
+    return '';
+  }
+
+  editTyped(name: string): void {
+    const e = this.editing();
+    if (e) this.editing.set({ ...e, error: name.trim() ? this.nameProblem(e, name.trim()) : '' });
+  }
+
+  editKey(event: KeyboardEvent, name: string): void {
+    const tree = (event.target as HTMLElement).closest<HTMLElement>('.pg-tree');
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.editing.set(null);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      this.finishEditing(name, true);
+    } else return;
+    // the list keeps the keys once the box is gone (a new file's editor takes them)
+    if (!this.editing() && !tree?.ownerDocument.activeElement?.closest('.cm-editor')) tree?.focus();
+  }
+
+  /** Enter keeps a box whose name has a problem open; leaving it gives up. */
+  finishEditing(name: string, enter = false): void {
+    const e = this.editing();
+    if (!e) return;
+    name = name.trim();
+    const problem = name ? this.nameProblem(e, name) : '';
+    if (problem && enter) {
+      this.editing.set({ ...e, error: problem });
+      return;
+    }
+    this.editing.set(null);
+    if (!name || problem) return;
+    if (e.kind === 'rename') {
+      const to = resolvePath(parentOf(e.path), name);
+      if (to === e.path) return;
+      this.rememberState();
+      this.states.clear();
+      this.ws.rename(e.path, to);
+      this.selected.set(to);
+      this.showActive();
+    } else if (e.kind === 'file') {
+      const path = resolvePath(e.path, name);
+      this.ws.write(path, path.endsWith('.ds') ? 'print("Hello from Dessa");\n' : '');
+      this.expanded.update((s) => new Set([...s, parentOf(path)]));
+      this.open(path);
+    } else {
+      const path = resolvePath(e.path, name);
+      this.ws.makeFolder(path);
+      this.expanded.update((s) => new Set([...s, parentOf(path), path]));
+      this.selected.set(path);
+    }
+  }
+
+  nameBoxValue(event: Event): string {
+    return (event.target as HTMLInputElement).value;
+  }
+
+  isRenaming(path: string): boolean {
+    const e = this.editing();
+    return e?.kind === 'rename' && e.path === path;
+  }
+
+  /** F2 renames, Delete deletes, as in VS Code's explorer */
+  treeKey(event: KeyboardEvent): void {
+    if (this.editing()) return;
+    if (event.key === 'F2') {
+      event.preventDefault();
+      this.renameSelected();
+    } else if (event.key === 'Delete') {
+      event.preventDefault();
+      this.deleteSelected();
+    }
   }
 
   deleteSelected(): void {
     const path = this.selected();
     if (path === '/' || !this.ws.exists(path)) return;
-    if (!confirm(`Delete ${path}${this.ws.isFolder(path) ? ' and everything in it' : ''}?`)) return;
-    this.states.delete(path);
-    this.ws.remove(path);
-    this.selected.set(parentOf(path));
-    this.showActive();
+    this.ask(`Delete ${path.slice(1)}${this.ws.isFolder(path) ? ' and everything in it' : ''}?`, 'Delete', () => {
+      this.states.delete(path);
+      this.ws.remove(path);
+      this.selected.set(parentOf(path));
+      this.showActive();
+    });
+  }
+
+  // ---- dialogs ----
+  private ask(text: string, ok: string, action: () => void): void {
+    this.asking.set({ text, ok, action });
+    this.confirmDialog()?.nativeElement.showModal();
+  }
+
+  answer(yes: boolean): void {
+    const asked = this.asking();
+    this.confirmDialog()?.nativeElement.close();
+    if (yes) asked?.action();
+  }
+
+  showShortcuts(): void {
+    this.keysDialog()?.nativeElement.showModal();
+  }
+
+  /** A click on the dialog's backdrop (the <dialog> itself, outside its box) closes it. */
+  backdropClick(event: MouseEvent, dialog: HTMLDialogElement): void {
+    if (event.target !== dialog) return;
+    const box = dialog.getBoundingClientRect();
+    if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) dialog.close();
   }
 
   // ---- actions ----
@@ -377,11 +571,12 @@ export class Playground implements OnDestroy {
   }
 
   reset(): void {
-    if (!confirm('Put back the starter files? Your own files and changes in this playground are deleted.')) return;
-    this.states.clear();
-    this.ws.reset();
-    this.selected.set('/main.ds');
-    this.showActive();
+    this.ask('Put back the starter files? Your own files and changes in this playground are deleted.', 'Reset', () => {
+      this.states.clear();
+      this.ws.reset();
+      this.selected.set('/main.ds');
+      this.showActive();
+    });
   }
 
   clearTerminal(): void {

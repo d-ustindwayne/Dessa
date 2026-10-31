@@ -57,14 +57,12 @@ pre.code {
 .hl-c { color: var(--hl-comment); font-style: italic; }
 .hl-p { color: var(--hl-keyword); }
 
-/* The playground's editor and hover (CodeMirror) */
-.cm-editor { height: 100%; font-size: 0.9rem; background: var(--mat-sys-surface); color: var(--mat-sys-on-surface); }
+/* The playground's editor and hover (CodeMirror; colours CodeMirror's own
+   theme sets are in dessa-language.ts editorTheme) */
 .cm-editor.cm-focused { outline: none; }
 .cm-scroller { font-family: ui-monospace, "Cascadia Code", Consolas, "Liberation Mono", monospace; line-height: 1.55; font-variant-ligatures: none; }
-.cm-gutters { background: var(--code-bg); color: var(--text-muted); border-right: 1px solid var(--line); }
 .cm-activeLine { background: light-dark(#f4f2e8, #1b1f1b) !important; }
 .cm-activeLineGutter { background: light-dark(#e9e6d6, #232823) !important; }
-.cm-cursor { border-left-color: var(--mat-sys-primary); }
 .cm-selectionBackground, .cm-focused .cm-selectionBackground { background: light-dark(#cdebd5, #2b3a2f) !important; }
 .cm-tooltip { background: var(--mat-sys-surface-container-high) !important; color: var(--mat-sys-on-surface) !important; border: 1px solid var(--line) !important; border-radius: 6px; }
 .cm-tooltip-autocomplete > ul > li[aria-selected] { background: var(--mat-sys-secondary-container); color: var(--mat-sys-on-surface); }
