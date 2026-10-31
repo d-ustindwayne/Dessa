@@ -2,6 +2,7 @@ import { Component, ElementRef, OnDestroy, PLATFORM_ID, afterNextRender, compute
 import { isPlatformBrowser } from '@angular/common';
 import type { EditorState } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
+import type { Declaration } from './dessa-language';
 import type { Terminal } from '@xterm/xterm';
 import { Seo } from '../../seo';
 import { PLAYGROUND } from '../../../generated/playground';
@@ -63,6 +64,10 @@ const SHORTCUTS: { group: string; keys: [string, string, string?][] }[] = [
     ['Next error', 'F8'],
     ['Fold / unfold', 'Ctrl+Shift+[ / ]', 'Mod+Alt+[ / ]'],
     ['Fold all / unfold all', 'Ctrl+Alt+[ / ]'],
+    ['Go to where a name is declared', 'Mod+Click  or  F12'],
+  ] },
+  { group: 'Files', keys: [
+    ['Close the open file', 'Alt+W'],
   ] },
   { group: 'Files (in the file list)', keys: [
     ['Rename', 'F2'],
@@ -115,6 +120,7 @@ export class Playground implements OnDestroy {
   private view: EditorView | null = null;
   private states = new Map<string, EditorState>();
   private makeState: ((path: string) => EditorState) | null = null;
+  private scrollTo: ((pos: number) => import('@codemirror/state').StateEffect<unknown>) | null = null;
   private term: Terminal | null = null;
   private fit: { fit(): void } | null = null;
   shell: Shell | null = null;
@@ -193,6 +199,7 @@ export class Playground implements OnDestroy {
       hover: async (line: number, column: number) => (await this.tools.command(['hover', path.slice(1), '--at', `${line}:${column}`], this.filesNow())).out,
       symbols: async (file = path.slice(1)) => (await this.tools.command(['symbols', file], this.filesNow())).out,
       modules: () => this.modulesFor(path),
+      goTo: (declaration: Declaration) => this.goTo(path, declaration),
     });
     const base = [
       view.lineNumbers(),
@@ -240,6 +247,7 @@ export class Playground implements OnDestroy {
         ],
       });
     this.view = new view.EditorView({ parent: this.editorHost()!.nativeElement });
+    this.scrollTo = (pos: number) => view.EditorView.scrollIntoView(pos, { y: 'center' });
     this.showActive();
 
     // ---- the terminal ----
@@ -272,6 +280,11 @@ export class Playground implements OnDestroy {
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
         void this.save();
+      } else if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyW') {
+        // Ctrl+W is the browser's own (it closes the page's tab)
+        e.preventDefault();
+        const active = this.ws.active();
+        if (active) this.close(active);
       }
     };
     window.addEventListener('keydown', keys);
@@ -356,6 +369,36 @@ export class Playground implements OnDestroy {
     this.states.delete(path);
     this.ws.closeFile(path);
     this.showActive();
+  }
+
+  /** Ctrl+click or F12 in `from`: open the file the name is declared in, at its declaration */
+  private goTo(from: string, d: Declaration): void {
+    // the compiler names files from the workspace folder it runs in (/work)
+    const path = d.file ? resolvePath('/', d.file.replace(/^\/work(?=\/)/, '')) : from;
+    if (!this.ws.isText(path)) return this.say(`${d.name || 'That'} is part of Dessa itself`);
+    if (path !== this.ws.active()) {
+      this.expanded.update((s) => new Set([...s, parentOf(path)]));
+      this.open(path);
+    }
+    const view = this.view;
+    if (!view) return;
+    const doc = view.state.doc;
+    let anchor = 0, head = 0;
+    if (d.line > 0 && d.line <= doc.lines) {
+      anchor = head = doc.line(d.line).from;
+      // the name on that line or just after (a declaration can start with a comment)
+      const word = d.name && new RegExp(`\\b${d.name.replace(/\W/g, '')}\\b`);
+      for (let i = d.line; word && i <= Math.min(doc.lines, d.line + 3); i++) {
+        const m = word.exec(doc.line(i).text);
+        if (m) {
+          anchor = doc.line(i).from + m.index;
+          head = anchor + d.name.length;
+          break;
+        }
+      }
+    }
+    view.dispatch({ selection: { anchor, head }, effects: this.scrollTo?.(anchor) });
+    view.focus();
   }
 
   private rememberState(): void {

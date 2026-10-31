@@ -4,8 +4,8 @@
 import { autocompletion, Completion, CompletionContext, CompletionResult, startCompletion } from '@codemirror/autocomplete';
 import { HighlightStyle, StreamLanguage, StringStream, syntaxHighlighting } from '@codemirror/language';
 import { Diagnostic as LintDiagnostic, linter } from '@codemirror/lint';
-import { EditorState, Extension } from '@codemirror/state';
-import { EditorView, hoverTooltip } from '@codemirror/view';
+import { EditorState, Extension, StateEffect, StateField } from '@codemirror/state';
+import { Decoration, DecorationSet, EditorView, PluginValue, ViewPlugin, hoverTooltip, keymap } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import { DessaTyping, inStringOrComment, inTypeBrackets, typeBracketsOf } from './dessa-typing';
 import { Diagnostic } from './toolchain';
@@ -158,6 +158,7 @@ export const editorTheme = EditorView.theme({
   '.cm-panel button[name=close]': { color: 'var(--mat-sys-on-surface)' },
   '.cm-searchMatch': { backgroundColor: 'light-dark(#f5e69c, #4d4620)', outline: 'none' },
   '.cm-searchMatch.cm-searchMatch-selected': { backgroundColor: 'light-dark(#e9c94a, #7a6a1e)' },
+  '.cm-pg-link': { textDecoration: 'underline', cursor: 'pointer', color: 'var(--mat-sys-primary)' },
   '.cm-selectionMatch': { backgroundColor: 'light-dark(#dfeee3, #26342a)' },
   '.cm-matchingBracket, &.cm-focused .cm-matchingBracket': { backgroundColor: 'light-dark(#cdebd5, #2f4a37)', outline: '1px solid var(--line)' },
 });
@@ -172,10 +173,19 @@ export interface CompilerHooks {
   symbols: (file?: string) => Promise<string>;
   /** the other Dessa files an import can name: import spec (lib.util) -> workspace path */
   modules: () => Record<string, string>;
+  /** open a declaration (Ctrl+click, F12) */
+  goTo: (declaration: Declaration) => void;
 }
 
-const position = (view: EditorView, pos: number) => {
-  const line = view.state.doc.lineAt(pos);
+/** Where a name is declared: `file` as the compiler names it ('' for the open file), `line` 1-based (0: the file's top) */
+export interface Declaration {
+  file: string;
+  line: number;
+  name: string;
+}
+
+const position = (view: EditorView | EditorState, pos: number) => {
+  const line = ('state' in view ? view.state : view).doc.lineAt(pos);
   return { line: line.number, column: pos - line.from + 1 };
 };
 
@@ -215,6 +225,8 @@ interface Symbol {
   name: string;
   kind: string;
   type?: string;
+  line?: number;
+  file?: string;
   params?: { name: string; type: string; default?: string }[];
   doc?: string;
 }
@@ -232,8 +244,9 @@ const TYPE_KINDS = new Set(['class', 'interface', 'enum']);
 
 interface Symbols {
   globals?: Symbol[];
+  types?: { name: string; kind: string; line: number; file?: string }[];
   libraries?: { name: string; members: Symbol[] }[];
-  imports?: { spec: string; file?: string }[];
+  imports?: { spec: string; file?: string; line: number; column: number; length: number }[];
 }
 
 /**
@@ -259,8 +272,7 @@ function symbolCache(hooks: CompilerHooks) {
 }
 
 /** Completions from `dessa complete --at L:C`: names that fit at the cursor, with their types. */
-function completions(hooks: CompilerHooks, typing: DessaTyping): Extension {
-  const symbols = symbolCache(hooks);
+function completions(hooks: CompilerHooks, typing: DessaTyping, symbols: ReturnType<typeof symbolCache>): Extension {
   const option = (s: Symbol, i = 0): Completion => ({ label: s.name, type: KIND[s.kind] ?? 'variable', detail: describe(s), info: s.doc, boost: -i / 1000 });
 
   // var[|], func[|], name[|] in parameters, class Box:|: the types
@@ -417,7 +429,144 @@ function hovers(hooks: CompilerHooks): Extension {
   });
 }
 
+interface Link {
+  from: number;
+  to: number;
+  declaration: Declaration;
+}
+
+/**
+ * The declaration of the name (or import) at `pos`: the compiler's hover
+ * answer, then its list of types, then (code that doesn't parse yet) a
+ * search of the open file, as the VS Code extension does.
+ */
+async function declarationAt(hooks: CompilerHooks, symbols: ReturnType<typeof symbolCache>, state: EditorState, pos: number): Promise<Link | null> {
+  const data = await symbols(state);
+  const line = state.doc.lineAt(pos);
+  for (const i of data?.imports ?? []) {
+    const from = line.from + i.column - 1;
+    if (i.file && i.line === line.number && pos >= from && pos <= from + i.length) return { from, to: from + i.length, declaration: { file: i.file, line: 0, name: '' } };
+  }
+  const word = state.wordAt(pos);
+  if (!word || inStringOrComment(state, word.from)) return null;
+  const name = state.sliceDoc(word.from, word.to);
+  const link = (declaration: Declaration): Link => ({ from: word.from, to: word.to, declaration });
+  // variables, functions, fields, methods, constructors (new Window)
+  try {
+    const { line: l, column } = position(state, pos);
+    const answer = JSON.parse(await hooks.hover(l, column)) as { found?: boolean; symbol?: Symbol };
+    if (answer.found && answer.symbol?.line && answer.symbol.kind !== 'builtin') return link({ file: answer.symbol.file ?? '', line: answer.symbol.line, name: answer.symbol.name });
+  } catch {
+    // the compiler stopped: the list and the search below
+  }
+  // a type name (var[Window] w)
+  const type = data?.types?.find((t) => t.name === name);
+  if (type && type.line > 0) return link({ file: type.file ?? '', line: type.line, name });
+  if (/\??\.\s*$/.test(state.sliceDoc(line.from, word.from))) return null;   // a member the compiler couldn't find
+  const patterns = [
+    new RegExp(`\\b(?:class|interface|enum)\\s*(?:\\[[^\\]]*\\])?\\s*${name}\\b`),
+    new RegExp(`\\bfunc\\s*\\[[^\\]]*(?:\\[\\d+\\])?[^\\]]*\\]\\s*${name}\\s*\\(`),
+    new RegExp(`\\b(?:var|const)\\s*\\[(?:[^\\[\\]]|\\[\\d+\\])*\\]\\s*${name}\\b`),
+  ];
+  for (let i = 1; i <= state.doc.lines; i++) {
+    if (patterns.some((p) => p.test(state.doc.line(i).text))) return link({ file: '', line: i, name });
+  }
+  return null;
+}
+
+const setLink = StateEffect.define<{ from: number; to: number } | null>();
+const linkMark = Decoration.mark({ class: 'cm-pg-link' });
+const links = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(marks, tr) {
+    if (tr.docChanged) marks = Decoration.none;
+    for (const e of tr.effects) if (e.is(setLink)) marks = e.value ? Decoration.set([linkMark.range(e.value.from, e.value.to)]) : Decoration.none;
+    return marks;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+
+/**
+ * Go to definition, as in VS Code: holding Ctrl (Cmd on a Mac) over a name
+ * underlines it when it has a declaration, and clicking it goes there; F12
+ * does the same at the cursor.
+ */
+function definitions(hooks: CompilerHooks, symbols: ReturnType<typeof symbolCache>): Extension {
+  const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+  const modHeld = (e: MouseEvent | KeyboardEvent) => (mac ? e.metaKey : e.ctrlKey);
+
+  class Links implements PluginValue {
+    mouse: { x: number; y: number } | null = null;
+    link: Link | null = null;
+    asked = 0;
+    // Ctrl pressed or let go with the mouse still: underline or not
+    private readonly keys = (e: KeyboardEvent) => {
+      if (e.key !== 'Control' && e.key !== 'Meta') return;
+      if (modHeld(e)) void this.probe();
+      else this.show(null);
+    };
+
+    constructor(readonly view: EditorView) {
+      document.addEventListener('keydown', this.keys);
+      document.addEventListener('keyup', this.keys);
+    }
+
+    destroy(): void {
+      document.removeEventListener('keydown', this.keys);
+      document.removeEventListener('keyup', this.keys);
+    }
+
+    show(link: Link | null): void {
+      if (!link) this.asked++;
+      if (!link && !this.link) return;
+      this.link = link;
+      this.view.dispatch({ effects: setLink.of(link && { from: link.from, to: link.to }) });
+    }
+
+    async probe(): Promise<void> {
+      const pos = this.mouse && this.view.posAtCoords(this.mouse);
+      if (pos == null) return this.show(null);
+      if (this.link && pos >= this.link.from && pos <= this.link.to) return;
+      const asked = ++this.asked;
+      const found = await declarationAt(hooks, symbols, this.view.state, pos);
+      if (asked === this.asked) this.show(found);
+    }
+  }
+
+  const plugin = ViewPlugin.fromClass(Links, {
+    eventHandlers: {
+      mousemove(e) {
+        this.mouse = { x: e.clientX, y: e.clientY };
+        if (modHeld(e)) void this.probe();
+        else this.show(null);
+      },
+      mouseleave() {
+        this.mouse = null;
+        this.show(null);
+      },
+      mousedown(e) {
+        if (!modHeld(e) || e.button !== 0 || !this.link) return false;
+        const pos = this.view.posAtCoords({ x: e.clientX, y: e.clientY });
+        if (pos == null || pos < this.link.from || pos > this.link.to) return false;
+        e.preventDefault();
+        const { declaration } = this.link;
+        this.show(null);
+        hooks.goTo(declaration);
+        return true;
+      },
+    },
+  });
+
+  const atCursor = (view: EditorView) => {
+    void declarationAt(hooks, symbols, view.state, view.state.selection.main.head).then((found) => found && hooks.goTo(found.declaration));
+    return true;
+  };
+  return [links, plugin, keymap.of([{ key: 'F12', run: atCursor, preventDefault: true }])];
+}
+
 export function dessaSupport(hooks: CompilerHooks): Extension[] {
   const typing = new DessaTyping();
-  return [dessaLanguage, dessaHighlight, errors(hooks), completions(hooks, typing), hovers(hooks), typing.extension()];
+  const symbols = symbolCache(hooks);
+  return [dessaLanguage, dessaHighlight, errors(hooks), completions(hooks, typing, symbols), hovers(hooks), definitions(hooks, symbols), typing.extension()];
 }
+

@@ -61,9 +61,11 @@ pre.code {
    theme sets are in dessa-language.ts editorTheme) */
 .cm-editor.cm-focused { outline: none; }
 .cm-scroller { font-family: ui-monospace, "Cascadia Code", Consolas, "Liberation Mono", monospace; line-height: 1.55; font-variant-ligatures: none; }
-.cm-activeLine { background: light-dark(#f4f2e8, #1b1f1b) !important; }
+/* see-through, or a selection on the cursor's line is hidden under it */
+.cm-activeLine { background: light-dark(rgb(120 110 40 / 7%), rgb(255 255 255 / 3%)) !important; }
 .cm-activeLineGutter { background: light-dark(#e9e6d6, #232823) !important; }
-.cm-selectionBackground, .cm-focused .cm-selectionBackground { background: light-dark(#cdebd5, #2b3a2f) !important; }
+.cm-selectionBackground { background: light-dark(#d9e6dc, #2f3a32) !important; }
+.cm-focused .cm-selectionBackground { background: light-dark(#b3dbbf, #36603f) !important; }
 .cm-tooltip { background: var(--mat-sys-surface-container-high) !important; color: var(--mat-sys-on-surface) !important; border: 1px solid var(--line) !important; border-radius: 6px; }
 .cm-tooltip-autocomplete > ul > li[aria-selected] { background: var(--mat-sys-secondary-container); color: var(--mat-sys-on-surface); }
 .cm-completionDetail { color: var(--text-muted); margin-left: 8px; font-style: normal; }
