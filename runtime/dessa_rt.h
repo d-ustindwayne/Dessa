@@ -31,7 +31,12 @@
 typedef int64_t ds_int;
 typedef double ds_dbl;
 typedef float ds_flt;
-typedef bool ds_bul;
+/* Bul: bit 0 is the value; bit 1 says it was written yes/no (printed so).
+ * Test it with DS_T(b), never with `if (b)`: `no` is 2. */
+typedef uint8_t ds_bul;
+#define DS_NO ((ds_bul)2)
+#define DS_YES ((ds_bul)3)
+#define DS_T(b) ((b) & 1)
 typedef uint32_t ds_chr;
 
 #define DS_FOREVER ((int64_t)1 << 60)
@@ -64,6 +69,8 @@ struct ds_type {
     int interfaceCount;
     const ds_field* fields;                  /* classes: the fields, for obj.name on an Obj */
     int fieldCount;
+    uint64_t (*hash)(ds_head* self);         /* classes with _hash: map keys by value */
+    bool (*eq)(ds_head* self, ds_head* other); /* classes with _eq: map keys, includes, indexOf */
 };
 
 /* ============================================================

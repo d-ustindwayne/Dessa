@@ -1,0 +1,27 @@
+// The http package's routing, without the network (server.handle)
+$("http") { Server, Request, Response, text, html, json, redirect, parseQuery }
+
+var[Server] server = new Server(8080);
+server.get("/", (req[Request]) := html("<h1>Hello</h1>"));
+server.get("/hello/:name", (req[Request]) := text($"Hello, {req.params<"name">}!"));
+server.get("/add", (req[Request]) := text(Str(Int(req.query<"a">) + Int(req.query<"b">))));
+server.post("/echo", (req[Request]) := json(req.body, 201));
+server.get("/files/*", (req[Request]) := text(req.params<"*">));
+server.get("/boom", (req[Request]) := text(Str(<1, 2><5>)));
+server.get("/old", (req[Request]) := redirect("/"));
+
+func[Emp] show(method[Str], target[Str], body[Str] = "") {
+    var[Response] r = server.handle(new Request(method, target, body));
+    print(method, target, "->", r.status, r.headers<"Content-Type">, r.body);
+}
+show("GET", "/");
+show("GET", "/hello/Ann%20Lee");
+show("get", "/add?a=2&b=40");
+show("POST", "/echo", "{\"x\": 1}");
+show("GET", "/files/a/b/c.txt");
+show("GET", "/nope");
+show("DELETE", "/");
+show("GET", "/boom");
+var[Response] moved = server.handle(new Request("GET", "/old"));
+print(moved.status, moved.headers<"Location">);
+print(parseQuery("q=caf%C3%A9+au+lait&empty=&x"));

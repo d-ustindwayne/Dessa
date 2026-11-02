@@ -393,6 +393,7 @@ void CCodegen::markSymbol(const Symbol& symbol, std::vector<const Stmt*>& work) 
 
 void CCodegen::visitExpr(const Expr* e, std::vector<const Stmt*>& work) {
     if (!e) return;
+    if (e->lowered) return visitExpr(e->lowered.get(), work);
     if (const SemanticType* t = analyser.typeOf(e)) markType(*t, work);
     if (const Symbol* s = analyser.symbolOf(e)) markSymbol(*s, work);
     if (const Symbol* s = analyser.memberOf(e)) markSymbol(*s, work);
@@ -1030,11 +1031,31 @@ void CCodegen::emitClassCode(const ClassInfo& info) {
         fieldCount = rowCount;
     }
 
+    // _hash and _eq: map keys by value, includes/indexOf with _eq
+    std::string hashFn = "NULL", eqFn = "NULL";
+    if (const ClassInfo* owner = methodOwner(info, "_hash")) {
+        const Symbol& m = owner->methods.at("_hash");
+        if (m.parameters.empty() && m.returnType.isInteger()) {
+            hashFn = "dsh_" + base;
+            code << "static uint64_t " << hashFn << "(ds_head* h) { return (uint64_t)" << methodName(*owner, "_hash") << "(h); }\n";
+        }
+    }
+    if (const ClassInfo* owner = methodOwner(info, "_eq")) {
+        const Symbol& m = owner->methods.at("_eq");
+        if (m.parameters.size() == 1 && m.parameters[0].type.isClass() && !m.parameters[0].type.containsNil() &&
+            m.returnType.is(SemanticTypeKind::Bul)) {
+            eqFn = "dsq_" + base;
+            const SemanticType& other = m.parameters[0].type;
+            code << "static bool " << eqFn << "(ds_head* a, ds_head* b) { return ds_is_class(b, &" << clsName(other) << ".t) && "
+                 << methodName(*owner, "_eq") << "(a, (" << cType(other) << ")b); }\n";
+        }
+    }
+
     // The class description: its type, then the method table
     code << "const " << s << "_cls " << clsName(t) << " = {\n";
     code << "    {" << cString(info.type().toString()) << ", DS_K_OBJECT, dsd_" << base << ", dss_" << base << ", "
          << (info.parent ? "&" + clsName(*info.parent) + ".t" : std::string("NULL")) << ", " << ifaces << ", " << count << ", "
-         << fieldTable << ", " << fieldCount << "}";
+         << fieldTable << ", " << fieldCount << ", " << hashFn << ", " << eqFn << "}";
     for (const auto& method : allMethods(info)) {
         const ClassInfo* owner = methodOwner(info, method);
         const ClassInfo* top = nullptr;
@@ -1074,6 +1095,7 @@ bool CCodegen::hasTry(const Stmt* s) const {
 }
 
 bool CCodegen::assignsNameExpr(const Expr* e, const std::string& name) const {
+    e = actual(e);
     if (!e) return false;
     auto isName = [&](const Expr* t) {
         return t && t->kind == ExprKind::Identifier && static_cast<const IdentifierExpr*>(t)->name.lexeme == name;
@@ -1617,7 +1639,7 @@ void CCodegen::varDecl(const VarDeclStmt* decl) {
 
 void CCodegen::ifStmt(const IfStmt* s) {
     beginTemps();
-    std::string condition = use(exprAs(s->condition.get(), SemanticType::simple(SemanticTypeKind::Bul)), SemanticType::simple(SemanticTypeKind::Bul));
+    std::string condition = "DS_T(" + use(exprAs(s->condition.get(), SemanticType::simple(SemanticTypeKind::Bul)), SemanticType::simple(SemanticTypeKind::Bul)) + ")";
     auto ts = endTemps();
     if (!ts.empty()) {
         line("{");
@@ -1655,7 +1677,7 @@ void CCodegen::whileStmt(const Expr* condition, const Stmt* body) {
     std::vector<std::pair<std::string, std::string>> ts;
     if (condition) {
         beginTemps();
-        c = use(exprAs(condition, bul), bul);
+        c = "DS_T(" + use(exprAs(condition, bul), bul) + ")";
         ts = endTemps();
     }
     Scope loop;
@@ -1693,7 +1715,7 @@ void CCodegen::forStmt(const ForStmt* s) {
     std::vector<std::pair<std::string, std::string>> condTemps, incTemps;
     if (s->condition) {
         beginTemps();
-        c = use(exprAs(s->condition.get(), bul), bul);
+        c = "DS_T(" + use(exprAs(s->condition.get(), bul), bul) + ")";
         condTemps = endTemps();
     }
     if (s->increment) {

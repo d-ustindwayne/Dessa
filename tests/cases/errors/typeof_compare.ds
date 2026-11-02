@@ -1,0 +1,9 @@
+// typeof(x) compared with a type name that is known before the program runs
+var[Int] age = 14;
+var[Int | Str] id = 3;
+var[Obj] any = 1;
+print(typeof(age) != "Int");                        // warning: Always false: the value is always Int
+print(typeof(age) == "Str");                        // warning: Always false: typeof gives Int here, never "Str"
+print(typeof(id) == "Str");
+print(typeof(id) == "Dbl");                         // warning: typeof gives Int or Str here, never "Dbl"
+print(typeof(any) == "Dbl");

@@ -1,0 +1,6 @@
+name = argparse
+version = 1.0.0
+entry = argparse.dm
+description = Command-line arguments: flags, options, positionals and --help
+
+[dependencies]

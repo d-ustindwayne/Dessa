@@ -57,6 +57,8 @@ struct Symbol {
     // Imported: which import brought it in (Analyser::importRecords), so
     // unused imports can be found
     int importId = -1;
+    // Module: the imported path ("os", "a.b"), shown by editors
+    std::string modulePath;
     // Module: which Analyser::aliasTables holds its names
     int aliasTable = -1;
     // Function / Method: what it says it may throw (func[Int !! NumberError])

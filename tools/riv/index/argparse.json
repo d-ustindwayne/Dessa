@@ -1,0 +1,13 @@
+{
+  "name": "argparse",
+  "description": "Command-line arguments: flags, options, positionals and --help",
+  "versions": {
+    "1.0.0": {
+      "infohash": "08bbce9dc454536825757978fec2909ef297476b",
+      "torrent": "ZDg6YW5ub3VuY2U0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2UxMzphbm5vdW5jZS1saXN0bGw0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2VlbDMzOnVkcDovL29wZW4uc3RlYWx0aC5zaTo4MC9hbm5vdW5jZWVsNDE6dWRwOi8vdHJhY2tlci50b3JyZW50LmV1Lm9yZzo0NTEvYW5ub3VuY2VlbDM3OnVkcDovL2V4b2R1cy5kZXN5bmMuY29tOjY5NjkvYW5ub3VuY2VlZTEwOmNyZWF0ZWQgYnkxMTpyaXYgKERlc3NhKTQ6aW5mb2Q1OmZpbGVzbGQ2Omxlbmd0aGkxMDc4NmU0OnBhdGhsMTE6YXJncGFyc2UuZG1lZWQ2Omxlbmd0aGkxNDVlNDpwYXRobDc6cml2LnBrZ2VlZTQ6bmFtZTg6YXJncGFyc2UxMjpwaWVjZSBsZW5ndGhpMTYzODRlNjpwaWVjZXMyMDoabyerZtjAEKJRtCVv7Q/owvGoE2U4OnVybC1saXN0bDc4Omh0dHBzOi8vcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbS9kLXVzdGluZHdheW5lL0Rlc3NhL21haW4vdG9vbHMvcml2L3BhY2thZ2VzL2Vl",
+      "manifest": "name = argparse\nversion = 1.0.0\nentry = argparse.dm\ndescription = Command-line arguments: flags, options, positionals and --help\n\n[dependencies]\n",
+      "files": 2,
+      "bytes": 10931
+    }
+  }
+}

@@ -36,9 +36,12 @@ print(a % b);
 print(7 / 2, 7.0 / 2, -7 / 2, 2 ^ 0.5);
 
 // Logical
-var[Bul] yes = true;
-var[Bul] no = false;
-print(yes || no, yes && no, !no);
+var[Bul] on = true;
+var[Bul] off = false;
+print(on || off, on && off, !off);
+// yes / no are the same values, printed the way they were written
+var[Bul] agreed = yes;
+print(agreed, !agreed, agreed && no, agreed == true);
 
 // Comparison
 var[Int] num3 = 3;

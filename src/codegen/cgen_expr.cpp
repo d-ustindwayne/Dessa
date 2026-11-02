@@ -33,6 +33,7 @@ bool isThisExpr(const Expr* e) {
 }
 
 bool hasSideEffects(const Expr* e) {
+    e = actual(e);
     if (!e) return false;
     switch (e->kind) {
         case ExprKind::Call:
@@ -203,7 +204,7 @@ CCodegen::CV CCodegen::exprAs(const Expr* e, const SemanticType& target) {
     if (inner->kind == ExprKind::Ternary) {
         const auto* t = static_cast<const TernaryExpr*>(inner);
         const SemanticType bul = simpleType(SemanticTypeKind::Bul);
-        std::string c = use(exprAs(t->condition.get(), bul), bul);
+        std::string c = "DS_T(" + use(exprAs(t->condition.get(), bul), bul) + ")";
         CV a = exprAs(t->thenBranch.get(), target);
         CV b = exprAs(t->elseBranch.get(), target);
         if (isCounted(target) && (a.owned || b.owned)) {
@@ -222,6 +223,7 @@ CCodegen::CV CCodegen::exprAs(const Expr* e, const SemanticType& target) {
 
 CCodegen::CV CCodegen::expr(const Expr* e) {
     if (!e) return {"", false};
+    if (e->lowered) return expr(e->lowered.get());
     const SemanticType& type = analyser.typeOf(e) ? *analyser.typeOf(e) : kUnknown;
     switch (e->kind) {
         case ExprKind::Literal: return literalExpr(static_cast<const LiteralExpr*>(e));
@@ -232,7 +234,7 @@ CCodegen::CV CCodegen::expr(const Expr* e) {
             const SemanticType& ot = analyser.typeOf(u->operand.get()) ? *analyser.typeOf(u->operand.get()) : kUnknown;
             std::string operand = use(expr(u->operand.get()), ot);
             if (u->op.type == TokenType::MINUS && ot.isInteger()) return {"ds_neg(" + operand + ")", false};
-            if (u->op.type == TokenType::NOT) return {"(!" + operand + ")", false};
+            if (u->op.type == TokenType::NOT) return {"((ds_bul)((" + operand + ") ^ 1))", false};   // !yes is no
             if (u->op.type == TokenType::BITWISE_NOT) return {"(~" + operand + ")", false};
             if (u->op.type == TokenType::MINUS) return {"(-" + operand + ")", false};
             return {"(" + u->op.lexeme + operand + ")", false};
@@ -321,8 +323,8 @@ CCodegen::CV CCodegen::literalExpr(const LiteralExpr* e) {
             return {"((ds_chr)" + std::to_string(cp) + ")", false};
         }
         case TokenType::STRING: return {literal(text), false};
-        case TokenType::TRUE: return {"true", false};
-        case TokenType::FALSE: return {"false", false};
+        case TokenType::TRUE: return {e->token.lexeme == "yes" ? "DS_YES" : "((ds_bul)1)", false};
+        case TokenType::FALSE: return {e->token.lexeme == "no" ? "DS_NO" : "((ds_bul)0)", false};
         case TokenType::NIL: return {"NULL", false};
         default: unsupported("this literal");
     }
@@ -440,7 +442,11 @@ CCodegen::CV CCodegen::binary(const BinaryExpr* e) {
             const SemanticType bul = simpleType(SemanticTypeKind::Bul);
             std::string a = use(exprAs(l, bul), bul);
             std::string b = use(exprAs(r, bul), bul);
-            return {"(" + a + (e->op.type == TokenType::AND_AND ? " && " : " || ") + b + ")", false};
+            // the operand that decided it (yes && no is no; yes || false is yes), b only when needed
+            std::string t = blockVar(tempCounter);
+            return {"({ ds_bul " + t + " = " + a + "; " + (e->op.type == TokenType::AND_AND ? "DS_T(" + t + ") ? (ds_bul)(" + b + ") : " + t
+                                                                                             : "DS_T(" + t + ") ? " + t + " : (ds_bul)(" + b + ")") + "; })",
+                    false};
         }
         case TokenType::QUESTION_QUESTION: {
             std::string v = blockVar(tempCounter);
@@ -590,6 +596,7 @@ CCodegen::CV CCodegen::equality(const Expr* l, const Expr* r, bool negate) {
         if (lb.is(SemanticTypeKind::List) || lb.is(SemanticTypeKind::Set)) return "ds_list_eq(" + x + ", " + y + ")";
         if (lb.is(SemanticTypeKind::Map)) return "ds_map_eq(" + x + ", " + y + ")";
         if (isCounted(lb)) return "((void*)(" + x + ") == (void*)(" + y + "))";
+        if (lb.is(SemanticTypeKind::Bul)) return "(DS_T(" + x + ") == DS_T(" + y + "))";   // yes == true
         return "(" + x + " == " + y + ")";
     };
     const bool lo = isOptValue(lt), ro = isOptValue(rt);
@@ -598,9 +605,9 @@ CCodegen::CV CCodegen::equality(const Expr* l, const Expr* r, bool negate) {
     std::string x = blockVar(tempCounter), y = blockVar(tempCounter);
     std::string decl = "({ " + cType(lt) + " " + x + " = " + a + "; " + cType(rt) + " " + y + " = " + b + "; ";
     std::string body;
-    if (lo && ro) body = "(" + x + ".has == " + y + ".has && (!" + x + ".has || " + x + ".value == " + y + ".value))";
-    else if (lo) body = "(" + x + ".has && " + x + ".value == " + y + ")";
-    else if (ro) body = "(" + y + ".has && " + x + " == " + y + ".value)";
+    if (lo && ro) body = "(" + x + ".has == " + y + ".has && (!" + x + ".has || " + test(x + ".value", y + ".value") + "))";
+    else if (lo) body = "(" + x + ".has && " + test(x + ".value", y) + ")";
+    else if (ro) body = "(" + y + ".has && " + test(x, y + ".value") + ")";
     else if (ln && rn) {
         body = isCounted(lb) && (lb.is(SemanticTypeKind::Str) || lb.is(SemanticTypeKind::List) || lb.is(SemanticTypeKind::Map))
              ? "(" + x + " == " + y + " || (" + x + " && " + y + " && " + test(x, y) + "))"
@@ -616,6 +623,7 @@ CCodegen::CV CCodegen::equality(const Expr* l, const Expr* r, bool negate) {
 // The place an assignment writes to (an lvalue)
 std::string CCodegen::lvalue(const Expr* target, SemanticType* type) {
     const Expr* t = ungroup(target);
+    if (t->lowered) unsupported("changing the result of a _get call in place");
     const SemanticType* tt = analyser.typeOf(t);
     switch (t->kind) {
         case ExprKind::Identifier: {
@@ -1437,6 +1445,7 @@ CCodegen::CV CCodegen::builtinMethod(const CallExpr* e, const MemberExpr* m, con
         if (name == "toStr") return {"ds_chr_str(" + r + ")", true};
     } else if (isNumber(rt) || rt.is(SemanticTypeKind::Bul)) {
         std::string r = receiver();
+        if (rt.is(SemanticTypeKind::Bul) && name != "toStr") r = "DS_T(" + r + ")";
         if (name == "toStr") return {toText({r, false}, rt), true};
         if (name == "toInt") return {"((ds_int)" + r + ")", false};
         if (name == "toDbl") return {"((ds_dbl)" + r + ")", false};
@@ -1484,7 +1493,7 @@ CCodegen::CV CCodegen::builtinMethod(const CallExpr* e, const MemberExpr* m, con
             if (name == "filter") {
                 std::string keep = isCounted(et) ? "ds_retain(" + item + "); " : "";
                 return {head + "ds_list* " + out + " = ds_set_new(" + elem(et) + "); for (int64_t " + i + " = 0; " + i + " < " + src + "->len; " + i +
-                            "++) { if (" + callIt + ") { " + keep + "if (" + out + "->len == " + out + "->cap) ds_list_grow(" + out + "); ((" + T +
+                            "++) { if (DS_T(" + callIt + ")) { " + keep + "if (" + out + "->len == " + out + "->cap) ds_list_grow(" + out + "); ((" + T +
                             "*)" + out + "->data)[" + out + "->len++] = " + item + "; } } ds_release(" + src + "); " + out + "; })", true};
             }
             const SemanticType resultElement = withoutNil(result).elementType ? *withoutNil(result).elementType : ret;
@@ -1565,7 +1574,7 @@ CCodegen::CV CCodegen::builtinMethod(const CallExpr* e, const MemberExpr* m, con
             if (name == "filter") {
                 std::string keep = isCounted(et) ? "ds_retain(" + item + "); " : "";
                 return {head + "ds_list* " + out + " = ds_list_new(" + E + ", 0); for (int64_t " + i + " = 0; " + i + " < " + src + "->len; " + i +
-                            "++) { if (" + callIt + ") { " + keep + "if (" + out + "->len == " + out + "->cap) ds_list_grow(" + out + "); ((" + T +
+                            "++) { if (DS_T(" + callIt + ")) { " + keep + "if (" + out + "->len == " + out + "->cap) ds_list_grow(" + out + "); ((" + T +
                             "*)" + out + "->data)[" + out + "->len++] = " + item + "; } } ds_release(" + src + "); " + out + "; })", true};
             }
             // map: a list of whatever the lambda gives
@@ -2071,6 +2080,7 @@ CCodegen::CV CCodegen::convertExpr(const ConvertExpr* e) {
     if (isOptValue(from)) x = "DS_UNWRAP(" + x + ")";
     if (to == "Str") return {toText({x, false}, from.containsNil() && !isOptValue(from) ? from : f), true};
     const bool text = f.is(SemanticTypeKind::Str);
+    if (f.is(SemanticTypeKind::Bul) && to != "Bul") x = "DS_T(" + x + ")";
     if (to == "Int") {
         if (text) return {"ds_str_to_int(" + x + ")", false};
         return {"((ds_int)(" + x + "))", false};
@@ -2085,7 +2095,8 @@ CCodegen::CV CCodegen::convertExpr(const ConvertExpr* e) {
     }
     if (to == "Bul") {
         if (text) return {"ds_str_to_bul(" + x + ")", false};
-        return {"((" + x + ") != 0)", false};
+        if (f.is(SemanticTypeKind::Bul)) return {x, false};
+        return {"((ds_bul)((" + x + ") != 0))", false};
     }
     if (to == "Chr") {
         if (text) return {"ds_str_to_chr(" + x + ")", false};

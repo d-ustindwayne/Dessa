@@ -144,9 +144,20 @@ struct Expr {
     ExprKind kind;
     int line = 0;   // position of the token that starts the expression,
     int column = 0; // filled in by the parser for diagnostics
+    // Set by the analyser when the expression really is a method call:
+    // obj<i> on a class with _get becomes obj._get(i), -obj becomes
+    // obj._neg(), ... The parts are moved into it, so code that walks
+    // the tree follows `lowered` (see actual()) instead of the children.
+    mutable std::unique_ptr<Expr> lowered;
     explicit Expr(ExprKind kind) : kind(kind) {}
     virtual ~Expr() = default;
 };
+
+// What an expression is after the analyser's rewrites (itself if none)
+inline const Expr* actual(const Expr* e) {
+    while (e && e->lowered) e = e->lowered.get();
+    return e;
+}
 
 // 21, 9.23, 9.23f, 'A', "Hello World", true, false, 0b1001, 0o32, 0xf8, nil
 // Keeps the raw Token. The analyser decides which declared types a literal

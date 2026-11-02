@@ -1,0 +1,17 @@
+// Special methods: their shapes, and using them on classes that don't have them
+class Bad {
+    func[Int] _get() { return 1; }                  // error: '_get' must take one parameter
+    func[Emp] _set(i[Int]) {}                       // error: '_set' must take two parameters
+    func[Int] _length() { return 1; }
+    func[Bul] _iter() { return true; }              // error: '_iter' must return what for (x in v) walks through
+    func[Int] _hash() { return 1; }                 // error: '_hash' needs _eq as well
+}
+class ReadOnly {
+    func[Int] _get(i[Int]) { return i; }
+}
+var[ReadOnly] r = new ReadOnly();
+print(r<2>);
+r<1> = 5;                                           // error: can't be changed through <...>
+class Plain {}
+var[Plain] p = new Plain();
+print(-p);                                          // error: Unary '-' requires a numeric operand

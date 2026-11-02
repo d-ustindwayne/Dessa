@@ -473,7 +473,7 @@
       "patterns": [
         {
           "name": "constant.language.boolean.dessa",
-          "match": "\\b(true|false)\\b"
+          "match": "\\b(true|false|yes|no)\\b"
         },
         {
           "name": "constant.language.null.dessa",

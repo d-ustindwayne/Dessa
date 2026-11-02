@@ -1,0 +1,12 @@
+// Native part of $("http"): the sockets of a small web server. The API is in http.dm
+header http.hpp
+link.windows -lws2_32
+
+func[Int] _listen(port[Int])
+func[Int] _accept(server[Int])
+func[Str] _read(conn[Int])
+func[Emp] _write(conn[Int], data[Str])
+func[Emp] _close(handle[Int])
+
+// The native part in C, for C programs (in WebAssembly a server can't run)
+c http.c

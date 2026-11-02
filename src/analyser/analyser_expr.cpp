@@ -48,7 +48,9 @@ std::string calleeName(const Expr* callee) {
 
 SemanticType Analyser::analyseExpression(const Expr* expression, bool allowTypeName) {
     if (!expression) return SemanticType::unknown();
-    SemanticType type = analyseExpressionInner(expression, allowTypeName);
+    // already rewritten into a method call (an earlier pass over the same code)
+    SemanticType type = expression->lowered ? analyseExpression(expression->lowered.get(), allowTypeName)
+                                            : analyseExpressionInner(expression, allowTypeName);
     exprTypes[expression] = type;
     return type;
 }
@@ -391,13 +393,18 @@ std::vector<Symbol> Analyser::membersOf(const SemanticType& type) const {
 SemanticType Analyser::analyseUnary(const UnaryExpr* expression) {
     SemanticType operand = analyseExpression(expression->operand.get());
     if (operand.isUnknown()) return operand;
+    if (expression->op.type == TokenType::MINUS && specialMethod(operand, "_neg")) {
+        // -v on a class with _neg: v._neg()
+        return lowerToMethod(expression, std::move(const_cast<UnaryExpr*>(expression)->operand), "_neg", {});
+    }
     switch (expression->op.type) {
         case TokenType::NOT:
             if (!operand.isBoolean()) error(expression, "Operator '!' requires a Bul operand, got " + operand.toString());
             return simple(SemanticTypeKind::Bul);
         case TokenType::MINUS:
             if (!operand.isNumeric()) {
-                error(expression, "Unary '-' requires a numeric operand, got " + operand.toString());
+                error(expression, "Unary '-' requires a numeric operand, got " + operand.toString() +
+                      (operand.isClass() ? " (give the class a method _neg() for -v)" : ""));
                 return SemanticType::unknown();
             }
             {
@@ -434,6 +441,58 @@ SemanticType Analyser::analysePostfix(const PostfixExpr* expression) {
     return operand;
 }
 
+void Analyser::checkTypeofComparison(const BinaryExpr* expression) {
+    auto typeofArg = [&](const Expr* e) -> const Expr* {
+        e = unwrapGrouping(e);
+        if (!e || e->kind != ExprKind::Call) return nullptr;
+        const auto* call = static_cast<const CallExpr*>(e);
+        const Expr* callee = call->callee.get();
+        if (call->args.size() != 1 || callee->kind != ExprKind::Identifier ||
+            static_cast<const IdentifierExpr*>(callee)->name.lexeme != "typeof") return nullptr;
+        const Symbol* s = symbolOf(callee);
+        if (s && s->kind != SymbolKind::Builtin) return nullptr;
+        return call->args[0].value.get();
+    };
+    auto text = [&](const Expr* e) -> const LiteralExpr* {
+        e = unwrapGrouping(e);
+        if (!e || e->kind != ExprKind::Literal) return nullptr;
+        const auto* l = static_cast<const LiteralExpr*>(e);
+        return l->token.type == TokenType::STRING ? l : nullptr;
+    };
+    const Expr* arg = typeofArg(expression->left.get());
+    const LiteralExpr* name = text(expression->right.get());
+    if (!arg || !name) {
+        arg = typeofArg(expression->right.get());
+        name = text(expression->left.get());
+    }
+    if (!arg || !name) return;
+    // the declared type: a variable may only be narrowed here
+    const SemanticType* t = typeOf(arg);
+    if (!t) return;
+    SemanticType type = *t;
+    if (unwrapGrouping(arg)->kind == ExprKind::Identifier) {
+        if (const Symbol* s = symbolOf(unwrapGrouping(arg))) {
+            if (s->kind == SymbolKind::Variable || s->kind == SymbolKind::Parameter || s->kind == SymbolKind::Constant) type = s->type;
+        }
+    }
+    // what typeof can give for it; objects may be of a subclass, Obj anything
+    std::vector<SemanticType> members = type.kind == SemanticTypeKind::Union ? type.unionMembers : std::vector<SemanticType>{type};
+    std::vector<std::string> names;
+    for (const auto& m : members) {
+        if (m.isUnknown() || m.is(SemanticTypeKind::Obj) || m.isReference()) return;
+        names.push_back(m.toString());
+    }
+    const bool equal = expression->op.type == TokenType::EQUAL_EQUAL;
+    const std::string& wanted = name->token.lexeme;
+    std::string list;
+    for (size_t i = 0; i < names.size(); ++i) list += (i ? (i + 1 == names.size() ? " or " : ", ") : "") + names[i];
+    if (std::find(names.begin(), names.end(), wanted) == names.end()) {
+        warning(expression, "Always " + std::string(equal ? "false" : "true") + ": typeof gives " + list + " here, never \"" + wanted + "\"");
+    } else if (names.size() == 1) {
+        warning(expression, "Always " + std::string(equal ? "true" : "false") + ": the value is always " + names[0]);
+    }
+}
+
 SemanticType Analyser::analyseBinary(const BinaryExpr* expression) {
     const TokenType op = expression->op.type;
 
@@ -452,6 +511,7 @@ SemanticType Analyser::analyseBinary(const BinaryExpr* expression) {
 
     SemanticType left = analyseExpression(expression->left.get());
     SemanticType right = analyseExpression(expression->right.get());
+    if (op == TokenType::EQUAL_EQUAL || op == TokenType::BANG_EQUAL) checkTypeofComparison(expression);
 
     if ((op == TokenType::EQUAL_EQUAL || op == TokenType::BANG_EQUAL) &&
         (isNilLiteral(expression->left.get()) || isNilLiteral(expression->right.get()))) {
@@ -500,6 +560,65 @@ SemanticType Analyser::analyseBinary(const BinaryExpr* expression) {
     }
 
     return binaryResult(expression->op, left, right, expression);
+}
+
+const Symbol* Analyser::specialMethod(const SemanticType& type, const std::string& name) const {
+    if (!type.isClass() || type.containsNil()) return nullptr;
+    const Symbol* method = findMember(type, name);
+    return method && method->kind == SymbolKind::Method ? method : nullptr;
+}
+
+namespace {
+ExprPtr makeMethodCall(ExprPtr receiver, const std::string& method, std::vector<ExprPtr> args, int line, int column) {
+    auto member = std::make_unique<MemberExpr>(std::move(receiver), Token(TokenType::IDENTIFIER, method, line, column), false);
+    member->line = line;
+    member->column = column;
+    std::vector<Argument> arguments;
+    for (auto& a : args) {
+        Argument argument;
+        argument.value = std::move(a);
+        arguments.push_back(std::move(argument));
+    }
+    auto call = std::make_unique<CallExpr>(std::move(member), std::move(arguments), Token(TokenType::R_PAREN, ")", line, column));
+    call->line = line;
+    call->column = column;
+    return call;
+}
+
+// A copy of a simple expression (a name, this, a literal, a.b.c), for
+// obj<i> += v -> obj._set(i, obj._get(i) + v); nullptr when it's not simple
+ExprPtr copySimple(const Expr* e) {
+    if (!e) return nullptr;
+    ExprPtr copy;
+    switch (e->kind) {
+        case ExprKind::Identifier: {
+            const auto* id = static_cast<const IdentifierExpr*>(e);
+            if (!id->typeArgs.empty()) return nullptr;
+            copy = std::make_unique<IdentifierExpr>(id->name);
+            break;
+        }
+        case ExprKind::Literal:
+            copy = std::make_unique<LiteralExpr>(static_cast<const LiteralExpr*>(e)->token);
+            break;
+        case ExprKind::Member: {
+            const auto* m = static_cast<const MemberExpr*>(e);
+            if (m->isOptional || !m->typeArgs.empty()) return nullptr;
+            ExprPtr object = copySimple(m->object.get());
+            if (!object) return nullptr;
+            copy = std::make_unique<MemberExpr>(std::move(object), m->name, false);
+            break;
+        }
+        default: return nullptr;
+    }
+    copy->line = e->line;
+    copy->column = e->column;
+    return copy;
+}
+} // namespace
+
+SemanticType Analyser::lowerToMethod(const Expr* original, ExprPtr receiver, const std::string& method, std::vector<ExprPtr> args) {
+    original->lowered = makeMethodCall(std::move(receiver), method, std::move(args), original->line, original->column);
+    return analyseExpression(original->lowered.get());
 }
 
 // a + b, a == b, a < b ... on a class that has _add, _eq, _lt (or _cmp) ...
@@ -832,6 +951,52 @@ SemanticType Analyser::analyseAssignment(const AssignExpr* expression) {
         return SemanticType::unknown();
     }
 
+    if (target->kind == ExprKind::Index) {
+        // v<i> = x on a class with _set: v._set(i, x); v<i> += x: v._set(i, v._get(i) + x)
+        auto* ix = const_cast<IndexExpr*>(static_cast<const IndexExpr*>(target));
+        SemanticType objectType = analyseExpression(ix->object.get());
+        if (objectType.isClass() && !objectType.containsNil()) {
+            if (!specialMethod(objectType, "_set")) {
+                error(target, objectType.toString() + " can't be changed through <...>; give the class a method " +
+                      "func[Emp] _set(index[...], value[...])");
+                analyseExpression(expression->value.get());
+                return SemanticType::unknown();
+            }
+            auto* assign = const_cast<AssignExpr*>(expression);
+            const int line = expression->line, column = expression->column;
+            if (expression->op.type == TokenType::EQUAL) {
+                std::vector<ExprPtr> args;
+                args.push_back(std::move(ix->index));
+                args.push_back(std::move(assign->value));
+                return lowerToMethod(expression, std::move(ix->object), "_set", std::move(args));
+            }
+            ExprPtr objectCopy = copySimple(ix->object.get());
+            ExprPtr indexCopy = copySimple(ix->index.get());
+            static const std::unordered_map<std::string, TokenType> ops = {
+                {"+=", TokenType::PLUS}, {"-=", TokenType::MINUS}, {"*=", TokenType::MULT}, {"/=", TokenType::DIV},
+                {"%=", TokenType::MOD}, {"^=", TokenType::EXPONENT},
+            };
+            auto op = ops.find(expression->op.lexeme);
+            if (op == ops.end() || !objectCopy || !indexCopy || !specialMethod(objectType, "_get")) {
+                error(expression, "'" + expression->op.lexeme + "' on " + objectType.toString() +
+                      "<...> needs _get and _set and a plain variable and index; write it as v._set(i, v._get(i) ...)");
+                analyseExpression(expression->value.get());
+                return SemanticType::unknown();
+            }
+            std::vector<ExprPtr> getArgs;
+            getArgs.push_back(std::move(indexCopy));
+            ExprPtr current = makeMethodCall(std::move(objectCopy), "_get", std::move(getArgs), line, column);
+            const std::string symbol = expression->op.lexeme.substr(0, expression->op.lexeme.size() - 1);
+            auto combined = std::make_unique<BinaryExpr>(std::move(current), Token(op->second, symbol, line, column), std::move(assign->value));
+            combined->line = line;
+            combined->column = column;
+            std::vector<ExprPtr> args;
+            args.push_back(std::move(ix->index));
+            args.push_back(std::move(combined));
+            return lowerToMethod(expression, std::move(ix->object), "_set", std::move(args));
+        }
+    }
+
     SemanticType targetType = analyseAssignmentTarget(target);
     SemanticType valueType;
 
@@ -913,6 +1078,13 @@ SemanticType Analyser::analyseTernary(const TernaryExpr* expression) {
 
 SemanticType Analyser::analyseIndex(const IndexExpr* expression) {
     SemanticType objectType = analyseExpression(expression->object.get());
+    if (specialMethod(objectType, "_get")) {
+        // v<i> on a class with _get: v._get(i)
+        auto* ix = const_cast<IndexExpr*>(expression);
+        std::vector<ExprPtr> args;
+        args.push_back(std::move(ix->index));
+        return lowerToMethod(expression, std::move(ix->object), "_get", std::move(args));
+    }
     SemanticType indexType = analyseExpression(expression->index.get());
 
     if (objectType.is(SemanticTypeKind::Map)) {
@@ -933,7 +1105,8 @@ SemanticType Analyser::analyseIndex(const IndexExpr* expression) {
     if (objectType.isUnknown()) return objectType;
 
     error(expression, "Type " + objectType.toString() + " cannot be indexed with <...>" +
-          (objectType.is(SemanticTypeKind::Set) ? " (sets are unordered; use .contains() or a for-in loop)" : ""));
+          (objectType.is(SemanticTypeKind::Set) ? " (sets are unordered; use .includes() or a for-in loop)"
+           : objectType.isClass() ? " (give the class a method _get(index) for v<index>)" : ""));
     return SemanticType::unknown();
 }
 
@@ -1281,6 +1454,11 @@ SemanticType Analyser::analyseMember(const MemberExpr* expression) {
         return SemanticType::unknown(); // must be called; analyseCall handles it
     }
 
+    if (name == "length" && !findMember(objectType, name) && specialMethod(objectType, "_length")) {
+        // v.length() on a class with _length: v._length()
+        const_cast<MemberExpr*>(expression)->name.lexeme = "_length";
+        return analyseMember(expression);
+    }
     if (const Symbol* member = findMember(objectType, name)) {
         memberSymbols[expression] = *member;
         memberType = member->type;
@@ -1532,6 +1710,25 @@ SemanticType Analyser::analyseZip(const CallExpr* expression, const Symbol& symb
 SemanticType Analyser::analyseCall(const CallExpr* expression) {
     const Expr* callee = expression->callee.get();
     std::vector<SemanticType> argTypes;
+
+    if (callee->kind == ExprKind::Member && expression->args.empty() &&
+        static_cast<const MemberExpr*>(callee)->name.lexeme == "isEmpty" && !static_cast<const MemberExpr*>(callee)->isOptional) {
+        // v.isEmpty() on a class with _length (and no isEmpty): v._length() == 0
+        auto* member = const_cast<MemberExpr*>(static_cast<const MemberExpr*>(callee));
+        SemanticType objectType = analyseExpression(member->object.get());
+        if (!findMember(objectType, "isEmpty") && specialMethod(objectType, "_length")) {
+            const int line = expression->line, column = expression->column;
+            ExprPtr length = makeMethodCall(std::move(member->object), "_length", {}, line, column);
+            auto zero = std::make_unique<LiteralExpr>(Token(TokenType::INT_LITERAL, "0", line, column));
+            zero->line = line;
+            zero->column = column;
+            auto test = std::make_unique<BinaryExpr>(std::move(length), Token(TokenType::EQUAL_EQUAL, "==", line, column), std::move(zero));
+            test->line = line;
+            test->column = column;
+            expression->lowered = std::move(test);
+            return analyseExpression(expression->lowered.get());
+        }
+    }
 
     // f(...) -- a named function, builtin, method (inside a class) or a
     // variable holding a lambda.

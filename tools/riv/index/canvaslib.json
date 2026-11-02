@@ -1,0 +1,13 @@
+{
+  "name": "canvaslib",
+  "description": "Drawing and simple games on a web page: shapes, text, images, keys, mouse, frames",
+  "versions": {
+    "1.0.0": {
+      "infohash": "6db9d572af08f63dcf6fc06ea36774e213fe62a6",
+      "torrent": "ZDg6YW5ub3VuY2U0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2UxMzphbm5vdW5jZS1saXN0bGw0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2VlbDMzOnVkcDovL29wZW4uc3RlYWx0aC5zaTo4MC9hbm5vdW5jZWVsNDE6dWRwOi8vdHJhY2tlci50b3JyZW50LmV1Lm9yZzo0NTEvYW5ub3VuY2VlbDM3OnVkcDovL2V4b2R1cy5kZXN5bmMuY29tOjY5NjkvYW5ub3VuY2VlZTEwOmNyZWF0ZWQgYnkxMTpyaXYgKERlc3NhKTQ6aW5mb2Q1OmZpbGVzbGQ2Omxlbmd0aGk3Nzk3ZTQ6cGF0aGwxMjpjYW52YXNsaWIuZG1lZWQ2Omxlbmd0aGkxNjZlNDpwYXRobDc6cml2LnBrZ2VlZTQ6bmFtZTk6Y2FudmFzbGliMTI6cGllY2UgbGVuZ3RoaTE2Mzg0ZTY6cGllY2VzMjA6mxMdx9RSINmmakXxFB8NXR1JyphlODp1cmwtbGlzdGw3ODpodHRwczovL3Jhdy5naXRodWJ1c2VyY29udGVudC5jb20vZC11c3RpbmR3YXluZS9EZXNzYS9tYWluL3Rvb2xzL3Jpdi9wYWNrYWdlcy9lZQ==",
+      "manifest": "name = canvaslib\nversion = 1.0.0\nentry = canvaslib.dm\ndescription = Drawing and simple games on a web page: shapes, text, images, keys, mouse, frames\n\n[dependencies]\n",
+      "files": 2,
+      "bytes": 7963
+    }
+  }
+}

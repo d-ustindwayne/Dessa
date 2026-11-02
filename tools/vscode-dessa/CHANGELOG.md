@@ -1,9 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.5.6
 
 - The code inside `$"... {expr} ..."` is coloured as code in every theme (it took the string's colour, or grey, before)
 - `with` (a reserved word) is coloured as a keyword, not greyed out as deprecated
+- In a class body, typing `_` (or a method name after `func[...]`) suggests the special methods: `_add`, `_eq`, `_cmp`, `_neg`, `_get`, `_set`, `_length`, `_iter`, `_hash`, `toStr` ..., with their parameters filled in for the class
+- `typeof(x) == "` / `!= "` suggests the type names `x` can have (its union's members, or the usual list)
+- `yes` and `no` are coloured like `true` and `false`
 
 ## 0.5.0
 

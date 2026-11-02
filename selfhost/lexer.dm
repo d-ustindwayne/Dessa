@@ -56,7 +56,7 @@ const[Map[Str, TokenType]] KEYWORDS = {
     "break": TokenType.BREAK, "continue": TokenType.CONTINUE, "return": TokenType.RETURN, "in": TokenType.IN,
     "try": TokenType.TRY, "catch": TokenType.CATCH, "throw": TokenType.THROW,
     "as": TokenType.AS, "new": TokenType.NEW, "this": TokenType.THIS, "super": TokenType.SUPER,
-    "init": TokenType.INIT, "true": TokenType.TRUE, "false": TokenType.FALSE, "nil": TokenType.NIL,
+    "init": TokenType.INIT, "true": TokenType.TRUE, "false": TokenType.FALSE, "yes": TokenType.TRUE, "no": TokenType.FALSE, "nil": TokenType.NIL,
     "with": TokenType.WITH, "is": TokenType.IS,
 };
 

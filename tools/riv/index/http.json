@@ -1,0 +1,13 @@
+{
+  "name": "http",
+  "description": "A small web server: routes with :params, text/html/json answers, query and form parsing",
+  "versions": {
+    "1.0.0": {
+      "infohash": "55054b96d5711932e5490e4bff552c3dfd9fd9b6",
+      "torrent": "ZDg6YW5ub3VuY2U0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2UxMzphbm5vdW5jZS1saXN0bGw0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2VlbDMzOnVkcDovL29wZW4uc3RlYWx0aC5zaTo4MC9hbm5vdW5jZWVsNDE6dWRwOi8vdHJhY2tlci50b3JyZW50LmV1Lm9yZzo0NTEvYW5ub3VuY2VlbDM3OnVkcDovL2V4b2R1cy5kZXN5bmMuY29tOjY5NjkvYW5ub3VuY2VlZTEwOmNyZWF0ZWQgYnkxMTpyaXYgKERlc3NhKTQ6aW5mb2Q1OmZpbGVzbGQ2Omxlbmd0aGkxMzQ1ZTQ6cGF0aGw2Omh0dHAuY2VlZDY6bGVuZ3RoaTExMzEyZTQ6cGF0aGw3Omh0dHAuZG1lZWQ2Omxlbmd0aGk5MjFlNDpwYXRobDg6aHR0cC5ocHBlZWQ2Omxlbmd0aGkzNjdlNDpwYXRobDExOmh0dHAubmF0aXZlZWVkNjpsZW5ndGhpNDM3NmU0OnBhdGhsMTM6aHR0cF9zb2NrZXQuaGVlZDY6bGVuZ3RoaTE2MmU0OnBhdGhsNzpyaXYucGtnZWVlNDpuYW1lNDpodHRwMTI6cGllY2UgbGVuZ3RoaTE2Mzg0ZTY6cGllY2VzNDA61dSa1yjCs8EGmaAsuz2wAj5XLgiYSV7vvN9CaJ4ila3Jwj6T9nrzKWU4OnVybC1saXN0bDc4Omh0dHBzOi8vcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbS9kLXVzdGluZHdheW5lL0Rlc3NhL21haW4vdG9vbHMvcml2L3BhY2thZ2VzL2Vl",
+      "manifest": "name = http\nversion = 1.0.0\nentry = http.dm\ndescription = A small web server: routes with :params, text/html/json answers, query and form parsing\n\n[dependencies]\n",
+      "files": 6,
+      "bytes": 18483
+    }
+  }
+}

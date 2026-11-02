@@ -62,12 +62,13 @@ print(a % b); // 0
 // Logical
 // ------------------------------------------------------------
 
-var[Bul] yes = true;
-var[Bul] no = false;
+var[Bul] on = true;
+var[Bul] off = false;
 
-print(yes || no); // true
-print(yes && no); // false
-print(!no);       // true
+print(on || off); // true
+print(on && off); // false
+print(!off);      // true
+print(yes, !yes); // yes no (the same values as true / false, printed as written)
 
 // ------------------------------------------------------------
 // Comparison

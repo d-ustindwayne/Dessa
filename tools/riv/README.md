@@ -43,6 +43,9 @@ A package with C++ code also has a `<name>.native` file (see `include/README.md`
 | `sql` | SQLite (bundled, ~9 MB of C) + SQL Server / ODBC |
 | `ashwee` | desktop GUI (Windows, Linux, macOS), with `examples/todo.ds` |
 | `torrent` | the BitTorrent engine riv uses (C++: trackers, local network discovery, web seeds) |
+| `http` | a small web server (sockets in C) |
+| `regex`, `argparse`, `chimb` | regular expressions, command-line arguments, tests (written in Dessa) |
+| `canvaslib` | drawing and simple games in a page |
 | `colors`, `textfx`, `codes`, `numbers` | small packages written in Dessa |
 
 ## Commands

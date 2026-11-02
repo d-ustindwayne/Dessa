@@ -1,0 +1,10 @@
+GET / -> 200 text/html; charset=utf-8 <h1>Hello</h1>
+GET /hello/Ann%20Lee -> 200 text/plain; charset=utf-8 Hello, Ann Lee!
+get /add?a=2&b=40 -> 200 text/plain; charset=utf-8 42
+POST /echo -> 201 application/json {"x": 1}
+GET /files/a/b/c.txt -> 200 text/plain; charset=utf-8 a/b/c.txt
+GET /nope -> 404 text/plain; charset=utf-8 Not Found: /nope
+DELETE / -> 405 text/plain; charset=utf-8 Method Not Allowed
+GET /boom -> 500 text/plain; charset=utf-8 IndexError: Index 5 is out of range for list of length 2
+302 /
+{"q": "café au lait", "empty": "", "x": ""}

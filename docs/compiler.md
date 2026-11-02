@@ -11,6 +11,8 @@ dessa build app.ds                   make a program: app.exe on Windows, app els
 dessa build app.ds -o tools/app.exe  choose the output file
 dessa build app.ds --release         fully optimized: slower to build, a little faster to run
 dessa check app.ds                   only look for errors
+dessa test                           run every *_test.ds and *.test.ds under this folder (tests use the chimb package)
+dessa test tests/math_test.ds        run one test file
 ```
 
 `dessa run` compiles the program once and keeps the result in your temporary

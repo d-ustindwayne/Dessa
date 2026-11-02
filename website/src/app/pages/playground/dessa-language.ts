@@ -1,7 +1,7 @@
 // Dessa in CodeMirror: highlighting (the keywords of src/lexer/lexer.cpp),
 // and errors, completions and hover from the real compiler (dessa check
 // --json, complete, hover), as in the VS Code extension.
-import { autocompletion, Completion, CompletionContext, CompletionResult, startCompletion } from '@codemirror/autocomplete';
+import { autocompletion, Completion, CompletionContext, CompletionResult, snippetCompletion, startCompletion } from '@codemirror/autocomplete';
 import { HighlightStyle, StreamLanguage, StringStream, syntaxHighlighting } from '@codemirror/language';
 import { Diagnostic as LintDiagnostic, linter } from '@codemirror/lint';
 import { EditorState, Extension, StateEffect, StateField } from '@codemirror/state';
@@ -14,7 +14,7 @@ const KEYWORDS = new Set(
   'var const func class interface enum if else switch case default for while loop break continue return in try catch throw as new this super init with is typeof'.split(' '),
 );
 const TYPES = new Set('Str Int Bul Flt Dbl Chr Emp Nil Obj Map Func'.split(' '));
-const ATOMS = new Set(['true', 'false', 'nil']);
+const ATOMS = new Set(['true', 'false', 'yes', 'no', 'nil']);
 
 interface State {
   /** what we're inside: a block comment, a triple string, a template string and its {expr} depth */
@@ -168,7 +168,8 @@ export interface CompilerHooks {
   path: () => string;
   check: () => Promise<Diagnostic[]>;
   complete: (line: number, column: number) => Promise<string>;
-  hover: (line: number, column: number) => Promise<string>;
+  /** `cursor` (L:C): where the user is typing, so a half-written line still compiles */
+  hover: (line: number, column: number, cursor?: string) => Promise<string>;
   /** `dessa symbols` of the open file, or of another workspace file */
   symbols: (file?: string) => Promise<string>;
   /** the other Dessa files an import can name: import spec (lib.util) -> workspace path */
@@ -235,7 +236,7 @@ const describe = (s: Symbol) => (s.params ? `(${s.params.map((p) => `${p.name}[$
 
 /** The built-in types, as the VS Code extension describes them */
 const PRIMITIVES: Record<string, string> = {
-  Str: 'Text', Int: '64-bit integer (Int[2], Int[8], Int[16] print in that base)', Bul: 'Boolean (true / false)',
+  Str: 'Text', Int: '64-bit integer (Int[2], Int[8], Int[16] print in that base)', Bul: 'Boolean (true / false, or yes / no)',
   Flt: '32-bit floating point', Dbl: '64-bit floating point', Chr: 'Single character', Emp: 'No value (functions that return nothing)',
   Nil: 'The type of nil; use T | Nil for optional values',
   Obj: 'Any value (fields are looked up when the program runs): new { name = "Ann" }',
@@ -270,6 +271,77 @@ function symbolCache(hooks: CompilerHooks) {
     return data;
   };
 }
+
+/** What a class can define so its objects work with operators: [name, parameters, return type, what for]; C = the class */
+const SPECIAL_METHODS: [string, string, string, string][] = [
+  ['_add', 'other[C]', 'C', 'a + b (and +=)'],
+  ['_sub', 'other[C]', 'C', 'a - b (and -=)'],
+  ['_mul', 'other[C]', 'C', 'a * b (and *=)'],
+  ['_div', 'other[C]', 'C', 'a / b (and /=)'],
+  ['_mod', 'other[C]', 'C', 'a % b (and %=)'],
+  ['_pow', 'other[C]', 'C', 'a ^ b (and ^=)'],
+  ['_neg', '', 'C', '-a'],
+  ['_eq', 'other[C]', 'Bul', 'a == b and a != b; also list.includes / indexOf and map keys'],
+  ['_lt', 'other[C]', 'Bul', 'a < b'],
+  ['_gt', 'other[C]', 'Bul', 'a > b'],
+  ['_le', 'other[C]', 'Bul', 'a <= b'],
+  ['_ge', 'other[C]', 'Bul', 'a >= b'],
+  ['_cmp', 'other[C]', 'Int', 'a < b, a <= b, a > b, a >= b in one method: negative, 0 or positive'],
+  ['_get', 'index[Int]', 'Int', 'v<index>'],
+  ['_set', 'index[Int], value[Int]', 'Emp', 'v<index> = value (and v<index> += value with _get)'],
+  ['_length', '', 'Int', 'v.length() and v.isEmpty()'],
+  ['_iter', '', 'Int<>', 'for (x in v): return the items to walk through'],
+  ['_hash', '', 'Int', 'objects as map keys by value (needs _eq too)'],
+  ['toStr', '', 'Str', 'how print(v) and $"{v}" show it'],
+];
+
+/** Code without its strings and comments */
+const codeOnly = (text: string) =>
+  text
+    .replace(/\/\*[\s\S]*?(\*\/|$)/g, ' ')
+    .replace(/\/\/[^\n]*/g, ' ')
+    .replace(/\$?"(?:\\.|[^"\\\n])*"?/g, '""')
+    .replace(/'(?:\\.|[^'\\\n])*'?/g, "''");
+
+/** The class whose body (not a method's body) the text ends in: its name and its text so far */
+function classBodyAt(before: string): { name: string; body: string } | null {
+  const code = codeOnly(before);
+  let depth = 0;
+  for (let i = code.length - 1; i >= 0; i--) {
+    const c = code[i];
+    if (c === '}') depth++;
+    else if (c === '{') {
+      if (depth > 0) {
+        depth--;
+        continue;
+      }
+      const head = /\bclass\s+(\w+)[^;{}]*$/.exec(code.slice(Math.max(0, i - 300), i));
+      return head ? { name: head[1], body: code.slice(i + 1) } : null;
+    }
+  }
+  return null;
+}
+
+/** "Int | Map[Str, Int | Nil]" -> ["Int", "Map[Str, Int | Nil]"] */
+function unionParts(type: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < type.length; i++) {
+    const c = type[i];
+    if ('[(<{'.includes(c)) depth++;
+    else if (')]>}'.includes(c)) depth--;
+    else if (c === '|' && depth === 0) {
+      parts.push(type.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  parts.push(type.slice(start).trim());
+  return parts.filter(Boolean);
+}
+
+const TYPEOF_COMPARE = /\btypeof\s*\(\s*([\w.]+)\s*\)\s*(?:==|!=)\s*("?)(\w*)$/;
+const FUNC_NAME = /^\s*func\s*\[[^\]]*\]\s*(\w*)$/;
 
 /** Completions from `dessa complete --at L:C`: names that fit at the cursor, with their types. */
 function completions(hooks: CompilerHooks, typing: DessaTyping, symbols: ReturnType<typeof symbolCache>): Extension {
@@ -309,13 +381,83 @@ function completions(hooks: CompilerHooks, typing: DessaTyping, symbols: ReturnT
     return { from: context.matchBefore(/\w*/)!.from, options, validFor: /^\w*$/ };
   };
 
-  return autocompletion({
+  // typeof(age) != "|: the type names age can have
+  const typeNames = async (context: CompletionContext, m: RegExpExecArray): Promise<CompletionResult> => {
+    const state = context.state;
+    const line = state.doc.lineAt(context.pos);
+    const lineBefore = state.sliceDoc(line.from, context.pos);
+    const at = lineBefore.search(/\btypeof\s*\(/);
+    const nameEnd = at + lineBefore.slice(at).indexOf(m[1]) + m[1].length;
+    let declared = '';
+    try {
+      const answer = JSON.parse(await hooks.hover(line.number, nameEnd, `${line.number}:${context.pos - line.from + 1}`)) as { found?: boolean; type?: string; symbol?: Symbol };
+      if (answer.found) declared = answer.symbol?.type ?? answer.type ?? '';
+    } catch {
+      // the general list
+    }
+    const data = await symbols(state);
+    const classes = (data?.globals ?? []).filter((g) => g.kind === 'class' || g.kind === 'enum').map((g) => g.name);
+    const parts = declared ? unionParts(declared) : [];
+    let names = !parts.length || parts.some((t) => t === 'Obj' || t === 'Unknown' || t === 'Any')
+      ? ['Int', 'Dbl', 'Flt', 'Str', 'Chr', 'Bul', 'Nil', ...classes]
+      : parts.flatMap((t) => (classes.includes(t) ? classes : [t]));
+    names = [...new Set(names)];
+    const quoted = m[2] === '"';
+    const from = context.pos - m[3].length - (quoted ? 1 : 0);
+    const options: Completion[] = names.map((name, i) => ({
+      label: `"${name}"`, type: 'enum', detail: declared ? `${m[1]} is ${declared}` : 'a type name', boost: -i / 1000,
+      apply: (view: EditorView, _c: Completion, start: number, to: number) => {
+        const end = view.state.sliceDoc(to, to + 1) === '"' ? to + 1 : to;
+        view.dispatch({ changes: { from: start, to: end, insert: `"${name}"` }, selection: { anchor: start + name.length + 2 } });
+      },
+    }));
+    return { from, options, validFor: /^"?\w*$/ };
+  };
+
+  // In a class body: _add, _get, toStr ... (the special methods)
+  const specialMethods = (context: CompletionContext, before: string, lineBefore: string): CompletionResult | null => {
+    const cls = classBodyAt(before);
+    if (!cls) return null;
+    const afterFunc = FUNC_NAME.exec(lineBefore);
+    const bare = /^\s*(_\w*)$/.exec(lineBefore);
+    if (!afterFunc && !bare) return null;
+    const typed = (afterFunc ?? bare)![1];
+    const line = context.state.doc.lineAt(context.pos);
+    const rest = context.state.sliceDoc(context.pos, line.to).trim();
+    const defined = new Set([...cls.body.matchAll(/\bfunc\s*\[[^\]]*\]\s*(\w+)\s*\(/g)].map((x) => x[1]));
+    const options: Completion[] = [];
+    for (const [name, params, ret, what] of SPECIAL_METHODS) {
+      if (defined.has(name)) continue;
+      const p = params.replace(/\bC\b/g, cls.name);
+      const r = ret.replace(/\bC\b/g, cls.name);
+      const fields = p.replace(/\[([^\]]+)\]/g, (_x, t) => `[\${${t}}]`);
+      const template = (afterFunc ? '' : `func[${r}] `) + `${name}(${fields})` + (rest ? '' : ' {\n\t${}\n}');
+      options.push(snippetCompletion(template, { label: name, type: 'method', detail: `func[${r}] ${name}(${p})`, info: `Special method: ${what}`, boost: 3 }));
+    }
+    return options.length ? { from: context.pos - typed.length, options, validFor: /^\w*$/ } : null;
+  };
+
+  // A space after typeof(x) == or func[T] in a class, or a quote after typeof(x) ==, opens the list
+  const opener = EditorView.updateListener.of((update) => {
+    if (!update.docChanged || !update.transactions.some((t) => t.isUserEvent('input.type'))) return;
+    const pos = update.state.selection.main.head;
+    const line = update.state.doc.lineAt(pos);
+    const lineBefore = update.state.sliceDoc(line.from, pos);
+    if (/\btypeof\s*\([\w.]+\)\s*(?:==|!=)\s*"?$/.test(lineBefore) || /^\s*func\s*\[[^\]]*\]\s$/.test(lineBefore)) {
+      startCompletion(update.view);
+    }
+  });
+
+  return [opener, autocompletion({
     activateOnTyping: true,
     override: [
       async (context: CompletionContext): Promise<CompletionResult | null> => {
         const state = context.state;
         const before = state.sliceDoc(Math.max(0, context.pos - 2000), context.pos);
         const lineBefore = before.slice(before.lastIndexOf('\n') + 1);
+
+        const typeofCompare = TYPEOF_COMPARE.exec(lineBefore);
+        if (typeofCompare) return typeNames(context, typeofCompare);
 
         // $("dcrypto") { sha| : what the module offers
         const braces = /\$\(\s*"([\w.]+)"(?:\s+as\s+\w+)?\s*\)\s*\{([^{}]*)$/.exec(before);
@@ -361,6 +503,9 @@ function completions(hooks: CompilerHooks, typing: DessaTyping, symbols: ReturnT
         }
         if (inStringOrComment(state, context.pos)) return null;
 
+        const special = specialMethods(context, before, lineBefore);
+        if (special) return special;
+
         // : after a generic's name (func[T] first:|, class Box:|, new Box:|) or a type's [
         if (/\b(func\s*\[[^\]]*\]\s*\w+|class\s+\w+|new\s+\w+)\s*:\s*\[?[\w,\s]*$/.test(lineBefore)) return types(context, null);
         if (inTypeBrackets(before)) return types(context, typeBracketsOf(before));
@@ -393,7 +538,7 @@ function completions(hooks: CompilerHooks, typing: DessaTyping, symbols: ReturnT
         return { from: word?.from ?? context.pos, options, validFor: /^[\w$]*$/ };
       },
     ],
-  });
+  })];
 }
 
 /** Hovering a name: its declaration from `dessa hover --at L:C`. */

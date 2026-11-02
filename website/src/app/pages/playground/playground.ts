@@ -196,7 +196,8 @@ export class Playground implements OnDestroy {
       path: () => path,
       check: async () => (await this.tools.diagnostics(path.slice(1), this.filesNow())),
       complete: async (line: number, column: number) => (await this.tools.command(['complete', path.slice(1), '--at', `${line}:${column}`], this.filesNow())).out,
-      hover: async (line: number, column: number) => (await this.tools.command(['hover', path.slice(1), '--at', `${line}:${column}`], this.filesNow())).out,
+      hover: async (line: number, column: number, cursor?: string) =>
+        (await this.tools.command(['hover', path.slice(1), '--at', `${line}:${column}`, ...(cursor ? ['--cursor', cursor] : [])], this.filesNow())).out,
       symbols: async (file = path.slice(1)) => (await this.tools.command(['symbols', file], this.filesNow())).out,
       modules: () => this.modulesFor(path),
       goTo: (declaration: Declaration) => this.goTo(path, declaration),

@@ -50,7 +50,7 @@ void dsw_push_str(ds_str* s) {
     else js_push_null();
 }
 void dsw_push_num(double v) { js_push_num(v); }
-void dsw_push_bool(ds_bul v) { js_push_bool(v ? 1 : 0); }
+void dsw_push_bool(ds_bul v) { js_push_bool(DS_T(v)); }
 void dsw_push_obj(void* object) {
     if (object) js_push_obj(js_of(object));
     else js_push_null();

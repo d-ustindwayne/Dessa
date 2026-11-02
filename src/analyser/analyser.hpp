@@ -378,6 +378,14 @@ private:
     SemanticType analyseAssignmentTarget(const Expr* target);
     SemanticType analyseTernary(const TernaryExpr* expression);
     SemanticType analyseCall(const CallExpr* expression);
+    // Special methods (_get, _set, _neg, _iter, _length, _hash): the class's
+    // method with that name, or nullptr
+    const Symbol* specialMethod(const SemanticType& type, const std::string& name) const;
+    // Turns `original` into receiver.method(args) (Expr::lowered) and analyses that
+    SemanticType lowerToMethod(const Expr* original, ExprPtr receiver, const std::string& method, std::vector<ExprPtr> args);
+    void checkSpecialMethods(const ClassInfo& info);
+    // typeof(x) == "Str" where the answer is known before the program runs
+    void checkTypeofComparison(const BinaryExpr* expression);
     SemanticType analyseZip(const CallExpr* expression, const Symbol& symbol);
     SemanticType analyseIndex(const IndexExpr* expression);
     SemanticType analyseMember(const MemberExpr* expression);

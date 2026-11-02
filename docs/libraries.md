@@ -151,7 +151,10 @@ for checksums only.
 
 ### webutils
 
-The web page, for programs that run in a browser. See [web.md](web.md).
+The web page, for programs that run in a browser. See [web.md](web.md). A
+`<canvas>` is drawn on through `canvas.getContext("2d")` (a `Context2D`, with the
+browser's names: `fillRect`, `arc`, `fillText`, `drawImage`, ...); the
+`canvaslib` package below is the simpler way.
 
 ## Packages
 
@@ -249,6 +252,108 @@ shares a piece.
 ...)`. Each returns a `Response` with `status`, `ok` (true for 2xx), `text`
 (the body), `headers`, `header(name)`, `json()` and `raiseForStatus()`. It uses the `curl` program, which Windows 10+, macOS and most Linux
 systems have.
+
+### http
+
+A small web server (native programs; WebAssembly can't open one):
+
+```dessa
+$("http") { Server, Request, text, html, json }
+var[Server] server = new Server(8080);
+server.get("/", (req[Request]) := html("<h1>Hello from Dessa</h1>"));
+server.get("/hello/:name", (req[Request]) := text($"Hello, {req.params<"name">}!"));
+server.post("/echo", (req[Request]) := json(req.body));
+server.listen();
+```
+
+A `Request` has `method`, `path`, `query`, `headers`, `body`, `params` and
+`form()`. Answers are `text`, `html`, `json`, `redirect` or `new Response(status,
+body, type)`, with `.header(name, value)` to add headers. `*` at the end of a
+route takes the rest of the path. No route: 404; a handler that throws: 500.
+`server.handle(new Request("GET", "/hello/Ann"))` answers without the network,
+for tests. One request at a time.
+
+### regex
+
+Regular expressions, written in Dessa (they work everywhere):
+
+```dessa
+$("regex") { Regex, Match }
+var[Regex] date = new Regex("""(\d{4})-(\d\d)-(\d\d)""");
+date.test("due 2026-11-02")                    // true
+date.find("due 2026-11-02")?.group(1)          // "2026"
+date.replaceAll("2026-11-02", "$3/$2/$1")      // "02/11/2026"
+new Regex(""",\s*""").split("a, b,c")         // <"a", "b", "c">
+```
+
+`test`, `matches` (the whole text), `find` (a `Match`: `text`, `start`, `end`,
+`group(n)`), `findAll`, `replace`, `replaceAll` (`$0`, `$1`, `$$`), `split`,
+and `escape(text)`. Patterns: `. [abc] [^a-z] \d \w \s \b ^ $ * + ? {n,m}`
+(add `?` for as few as possible), groups `( )` and `(?: )`, `|`. Flags: `"i"`
+(ignore case), `"m"` (`^ $` per line), `"s"` (`.` takes newlines). Write
+patterns in `"""triple quotes"""`, where a backslash stays a backslash.
+
+### argparse
+
+Command-line arguments with `--help` made for you:
+
+```dessa
+$("argparse") { ArgParser, Args }
+$("sys") { args }
+var[ArgParser] parser = new ArgParser("greet", "Says hello");
+parser.flag("loud", "l", "shout it");
+parser.option("name", "n", "who to greet", "World");
+parser.positional("file", "where to write it", false);
+var[Args] a = parser.parse(args());
+print(a.has("loud"), a.get("name"), a.find("file"));
+```
+
+Options are written `--name Ann`, `--name=Ann` or `-n Ann`; short flags join
+(`-lv`). `rest(name, help)` takes the words left over (`a.list(name)`),
+`getInt` / `getDbl` read numbers. A mistake prints what is wrong with the usage
+line and exits with code 2.
+
+### chimb
+
+Tests for your code:
+
+```dessa
+$("chimb") { test, expect, expectTrue, expectThrows, done }
+test("adds", () := { expect(2 + 3).toBe(5); });
+test("lists", () := { expect(<1, 2>.map((x[Int]) := x * 2)).toBe(<2, 4>); });
+test("errors", () := { expectThrows(() := { var[Int<>] e = <>; print(e<0>); }); });
+done();
+```
+
+Each test prints `ok` or `FAIL` with what went wrong. `expect(x)` has `toBe`,
+`notToBe` and `toBeIn`; there are also `expectTrue`, `expectFalse`,
+`expectNear` (decimals) and `fail(message)`. `done()` prints the totals and
+exits with code 1 when a test failed.
+
+`dessa test` runs every `*_test.ds` and `*.test.ds` file under the folder (not
+`riv_modules/` or `build/`) and adds up the results.
+
+### canvaslib
+
+Drawing and simple games in a page (`.dhtml`):
+
+```dessa
+$("canvaslib") { Canvas, rgb }
+var[Canvas] c = new Canvas(400, 300);
+var[Dbl] x = 20;
+c.onFrame((dt[Dbl]) := {
+    if (c.isKeyDown("ArrowRight")) x += 120 * dt;
+    c.background("#203040");
+    c.fill("tomato");
+    c.circle(x, 150, 20);
+});
+```
+
+Shapes: `rect`, `rectOutline`, `circle`, `circleOutline`, `line`, `polygon`,
+`text`, `image(url, x, y)`; colours with `fill`, `stroke(color, width)`,
+`alpha`, `background`, `clear`. Input: `mouseX`, `mouseY`, `mouseDown`,
+`isKeyDown(key)`, `onClick`, `onKey`. `onFrame(draw, fps)` animates, `stop()`
+ends it; `c.context` is the browser's own drawing object.
 
 ### ashwee
 

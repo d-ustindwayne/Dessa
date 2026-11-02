@@ -18,7 +18,7 @@ const KEYWORDS = new Set(
   'var const func class interface enum if else switch case default for while loop break continue return in try catch throw as new this super init with is typeof'.split(' '),
 );
 const TYPES = new Set('Str Int Bul Flt Dbl Chr Emp Nil Obj Map Func'.split(' '));
-const LITERALS = new Set(['true', 'false', 'nil']);
+const LITERALS = new Set(['true', 'false', 'yes', 'no', 'nil']);
 
 export function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

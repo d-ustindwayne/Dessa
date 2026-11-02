@@ -1,0 +1,7 @@
+  ok   adds
+  ok   lists and text
+  ok   near
+  ok   throws
+  FAIL fails: expected "y", got "x"
+
+4 passed, 1 failed

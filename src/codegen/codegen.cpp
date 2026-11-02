@@ -342,6 +342,17 @@ void Codegen::emitClass(const ClassInfo& info) {
         }
     }
     line("dessa::Str ds_class() const override { return \"" + info.type().toString() + "\"; }");
+    // _hash / _eq: map keys by value, includes/indexOf
+    if (auto h = info.methods.find("_hash"); h != info.methods.end() && h->second.parameters.empty() && h->second.returnType.isInteger()) {
+        line("std::size_t ds_hash() const override { return static_cast<std::size_t>(const_cast<" + name + "*>(this)->" + mangle("_hash") + "()); }");
+    }
+    if (auto e = info.methods.find("_eq"); e != info.methods.end() && e->second.parameters.size() == 1 &&
+        e->second.parameters[0].type.isClass() && !e->second.parameters[0].type.containsNil() && e->second.returnType.is(SemanticTypeKind::Bul)) {
+        const std::string other = cppType(e->second.parameters[0].type);
+        line("bool ds_equals(const dessa::Object& ds_o) const override { auto* ds_t = dynamic_cast<" + other +
+             "::element_type*>(const_cast<dessa::Object*>(&ds_o)); return ds_t && const_cast<" + name + "*>(this)->" + mangle("_eq") +
+             "(" + other + "(ds_t)); }");
+    }
     line("dessa::Str ds_str() const override;");
     line("bool ds_get(const dessa::Str& ds_name, dessa::Obj& ds_out) const override;");
     line("bool ds_set(const dessa::Str& ds_name, const dessa::Obj& ds_value) override;");
@@ -1001,6 +1012,7 @@ std::string Codegen::exprAs(const Expr* e, const SemanticType& target) {
 
 std::string Codegen::expr(const Expr* e) {
     if (!e) return "";
+    if (e->lowered) return expr(e->lowered.get());
     switch (e->kind) {
         case ExprKind::Literal: return literal(static_cast<const LiteralExpr*>(e));
         case ExprKind::TemplateString: return templateString(static_cast<const TemplateStringExpr*>(e));
@@ -1120,8 +1132,8 @@ std::string Codegen::literal(const LiteralExpr* e) {
             return buffer;
         }
         case TokenType::STRING: return cppString(text);
-        case TokenType::TRUE: return "true";
-        case TokenType::FALSE: return "false";
+        case TokenType::TRUE: return e->token.lexeme == "yes" ? "dessa::Bul::yes()" : "dessa::Bul(true)";
+        case TokenType::FALSE: return e->token.lexeme == "no" ? "dessa::Bul::no()" : "dessa::Bul(false)";
         case TokenType::NIL: return "dessa::nil";
         default: return "/* ? */";
     }
@@ -1211,6 +1223,11 @@ std::string Codegen::binary(const BinaryExpr* e) {
             if (isPlain(lt) && isPlain(rt)) return "(" + expr(l) + (negate ? " != " : " == ") + expr(r) + ")";
             return std::string("(") + (negate ? "!" : "") + "dessa::eq(" + expr(l) + ", " + expr(r) + "))";
         }
+        case TokenType::AND_AND:
+        case TokenType::OR_OR:
+            // the operand that decided it (yes && no is no), the right side only when needed
+            return std::string(e->op.type == TokenType::AND_AND ? "dessa::bul_and(" : "dessa::bul_or(") + "dessa::Bul(" + expr(l) +
+                   "), [&]() -> dessa::Bul { return " + expr(r) + "; })";
         case TokenType::QUESTION_QUESTION: {
             const SemanticType& result = typeOf(e);
             std::string type = cppType(result);
@@ -1312,6 +1329,7 @@ std::string Codegen::assign(const AssignExpr* e) {
 }
 
 bool Codegen::hasSideEffects(const Expr* e) {
+    e = actual(e);
     if (!e) return false;
     switch (e->kind) {
         case ExprKind::Call:

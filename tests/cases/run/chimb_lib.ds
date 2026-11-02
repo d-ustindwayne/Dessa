@@ -1,0 +1,13 @@
+// exit: 1
+// The chimb package: passing and failing tests, done() exits with 1 when one failed
+$("chimb") { test, expect, expectTrue, expectThrows, expectNear, done }
+
+test("adds", () := { expect(2 + 3).toBe(5); });
+test("lists and text", () := {
+    expect(<1, 2>.map((x[Int]) := x * 2)).toBe(<2, 4>);
+    expect("a" + "b").notToBe("ba");
+});
+test("near", () := { expectNear(0.1 + 0.2, 0.3); });
+test("throws", () := { expectTrue(expectThrows(() := { var[Int<>] e = <>; print(e<1>); }).includes("out of range")); });
+test("fails", () := { expect("x").toBe("y"); });
+done();

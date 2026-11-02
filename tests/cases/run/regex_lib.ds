@@ -1,0 +1,26 @@
+// The regex package
+$("regex") { Regex, Match, escape }
+
+var[Regex] date = new Regex("""(\d{4})-(\d\d)-(\d\d)""");
+print(date.test("due 2026-11-02"), date.test("no date"), date.matches("2026-11-02"), date.matches("x2026-11-02"));
+var[Match | Nil] m = date.find("due 2026-11-02 and 2027-01-15");
+if (m != nil) print(m.text, m.group(1), m.group(3), m.start, m.end);
+print(date.findAll("2026-11-02 and 2027-01-15").map((x[Match]) := x.text));
+print(date.replaceAll("2026-11-02, 2027-01-15", "$3/$2/$1"), date.replace("2026-11-02 2027-01-15", "[$0]"));
+print(new Regex(""",\s*""").split("a, b,c,  d"));
+print(new Regex("hello", "i").test("HeLLo there"), new Regex("^b", "m").findAll("a\nb\nb").length());
+print(new Regex("a+?").find("aaa"), new Regex("a+").find("aaa"), new Regex("(a|ab)(c|bcd)").find("abcd"));
+print(new Regex("""\bcat\b""").findAll("cat concat cat.").length(), new Regex("[^aeiou ]+").findAll("hello world").map((x[Match]) := x.text));
+print(new Regex("(x)?y").find("y")?.group(1), new Regex("""[\d.]+""").find("v1.25b")?.text, new Regex("(a*)*b").test("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaac"));
+print(new Regex("é+", "i").find("ÉÉé!")?.text, escape("1+1=2?"), new Regex(escape("1+1")).test("x1+1y"));
+print(new Regex("x*").replaceAll("abc", "-"), new Regex("""\s+""").split("  one two  "));
+try {
+    new Regex("(ab");
+} catch (e[Error]) {
+    print(typeof(e), e.message);
+}
+try {
+    new Regex("a{3,1}");
+} catch (e[Error]) {
+    print(e.message);
+}

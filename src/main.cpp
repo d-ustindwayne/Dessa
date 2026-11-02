@@ -39,7 +39,7 @@ namespace fs = std::filesystem;
 
 namespace {
 
-constexpr const char* kVersion = "0.5.0";
+constexpr const char* kVersion = "0.5.6";
 const char* g_argv0 = nullptr; // to find runtime/ and include/ next to the compiler
 
 void printUsage() {
@@ -52,6 +52,7 @@ void printUsage() {
         "                                               programs go through C; --cpp uses C++ instead;\n"
         "                                               --target wasm makes WebAssembly (app.wasm, and app.js for Node)\n"
         "  dessa run     <file.ds> [-- args...]         compile and run\n"
+        "  dessa test    [folder or file]               run the tests: every *_test.ds and *.test.ds (see the chimb package)\n"
         "  dessa fix-lists <file.ds>                    rewrite old [1, 2] lists as <1, 2>\n"
         "  dessa symbols <file.ds> [--stdin]            symbol table as JSON (for editors)\n"
         "  dessa serve [folder] [--port N]              a web server for pages (.dhtml compiled on each request)\n"
@@ -557,6 +558,81 @@ int cmdRun(const std::string& path, const std::vector<std::string>& programArgs,
     return toolchain::run(exe, programArgs);
 }
 
+// ---- dessa test: runs every *_test.ds / *.test.ds and adds up chimb's results
+
+bool isTestFile(const fs::path& p) {
+    static const std::set<std::string> kinds = {".ds", ".dx", ".dz", ".dsx", ".dxx", ".dzx", ".dds", ".dss"};
+    if (!kinds.count(p.extension().string())) return false;
+    const std::string stem = p.stem().string();
+    auto endsWith = [&](const std::string& tail) {
+        return stem.size() > tail.size() && stem.compare(stem.size() - tail.size(), tail.size(), tail) == 0;
+    };
+    return endsWith("_test") || endsWith(".test");
+}
+
+int cmdTest(const std::string& target, const char* argv0) {
+    const fs::path root = target.empty() ? fs::current_path() : fs::path(target);
+    std::error_code ec;
+    std::vector<fs::path> files;
+    if (fs::is_regular_file(root, ec)) {
+        files.push_back(root);
+    } else if (fs::is_directory(root, ec)) {
+        for (auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec);
+             it != fs::recursive_directory_iterator(); it.increment(ec)) {
+            if (ec) break;
+            const std::string name = it->path().filename().string();
+            if (it->is_directory(ec)) {
+                // packages, build output and hidden folders aren't the project's tests
+                if (name == "riv_modules" || name == "build" || name == "node_modules" || (!name.empty() && name[0] == '.')) {
+                    it.disable_recursion_pending();
+                }
+                continue;
+            }
+            if (isTestFile(it->path())) files.push_back(it->path());
+        }
+    } else {
+        std::cerr << "dessa test: " << root.string() << " not found\n";
+        return 1;
+    }
+    std::sort(files.begin(), files.end());
+    if (files.empty()) {
+        std::cerr << "dessa test: no test files (name_test.ds or name.test.ds) in " << root.string() << "\n";
+        return 1;
+    }
+
+    int passed = 0, failed = 0, broken = 0;
+    const fs::path report = fs::temp_directory_path(ec) / ("dessa_test_" + std::to_string(std::time(nullptr)) + ".txt");
+    for (const auto& file : files) {
+        fs::path shown = fs::relative(file, fs::is_directory(root) ? root : root.parent_path(), ec);
+        if (ec || shown.empty()) shown = file;
+        std::cout << "\n" << shown.generic_string() << "\n";
+        std::cout.flush();
+        fs::remove(report, ec);
+        const int code = cmdRun(file.string(), {"--chimb-report=" + report.string()}, argv0);
+        int filePassed = 0, fileFailed = 0;
+        std::ifstream in(report);
+        for (std::string line; std::getline(in, line);) {
+            if (line.rfind("pass\t", 0) == 0) ++filePassed;
+            else if (line.rfind("fail\t", 0) == 0) ++fileFailed;
+        }
+        in.close();
+        fs::remove(report, ec);
+        passed += filePassed;
+        failed += fileFailed;
+        if (code != 0 && fileFailed == 0) {
+            // didn't compile, or stopped with an error outside a test
+            ++broken;
+            std::cout << "  FAIL " << shown.generic_string() << " (exit code " << code << ")\n";
+        } else if (filePassed + fileFailed == 0) {
+            std::cout << "  (no tests: use test(...) from $(\"chimb\"))\n";
+        }
+    }
+    std::cout << "\n" << passed << " passed, " << failed << " failed";
+    if (broken) std::cout << ", " << broken << " file" << (broken == 1 ? "" : "s") << " didn't finish";
+    std::cout << " (" << files.size() << " file" << (files.size() == 1 ? "" : "s") << ")\n";
+    return failed || broken ? 1 : 0;
+}
+
 // dessa setup wasm: downloads the WebAssembly compiler (clang, the linker and
 // the WASI C library, cut down from wasi-sdk; about 50 MB) from the GitHub
 // release of this Dessa into <Dessa>/wasm, or ~/.dessa/wasm when that folder
@@ -638,6 +714,17 @@ int cmdSetup(const std::string& what) {
 
 std::string typeString(const SemanticType& t) { return t.toString(); }
 
+// What editors show as a symbol's type: a module is `module "os"`, and a
+// builtin taking any value says Any (the analyser's Unknown) instead of Unknown
+std::string symbolTypeText(const Symbol& s) {
+    if (s.kind == SymbolKind::Module) return "module \"" + (s.modulePath.empty() ? s.name : s.modulePath) + "\"";
+    std::string text = typeString(s.type);
+    if (s.kind != SymbolKind::Builtin) return text;
+    const std::string unknown = "Unknown";
+    for (size_t at = text.find(unknown); at != std::string::npos; at = text.find(unknown, at + 3)) text.replace(at, unknown.size(), "Any");
+    return text;
+}
+
 std::string symbolKindName(SymbolKind k) {
     switch (k) {
         case SymbolKind::Variable: return "variable";
@@ -684,7 +771,7 @@ std::string defaultText(const Expr* value) {
 
 void writeSymbol(std::ostream& out, const std::string& name, const Symbol& s, const std::string& file = "") {
     out << "{\"name\":" << json::quote(name) << ",\"kind\":" << json::quote(symbolKindName(s.kind))
-        << ",\"type\":" << json::quote(typeString(s.type)) << ",\"line\":" << s.line;
+        << ",\"type\":" << json::quote(symbolTypeText(s)) << ",\"line\":" << s.line;
     if (!file.empty()) out << ",\"file\":" << json::quote(file);
     if (s.kind == SymbolKind::Builtin) {
         // dessa::math::sqrt -> "math" (runtime/decl/math.ds); dessa::print -> "builtins"
@@ -1065,7 +1152,8 @@ int cmdHover(const std::string& path, bool fromStdin, const std::string& at, con
     std::ostream& out = std::cout;
     out << "{\"found\":" << (probe.found ? "true" : "false");
     if (probe.found) {
-        out << ",\"type\":" << json::quote(probe.type.toString());
+        const bool shown = probe.symbol.kind == SymbolKind::Module || probe.symbol.kind == SymbolKind::Builtin;
+        out << ",\"type\":" << json::quote(shown ? symbolTypeText(probe.symbol) : probe.type.toString());
         if (!probe.memberOf.empty()) out << ",\"memberOf\":" << json::quote(probe.memberOf);
         out << ",\"symbol\":";
         writeSymbol(out, probe.symbol.name, probe.symbol, declaringFile(c, probe.symbol));
@@ -1159,6 +1247,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (command == "setup") return cmdSetup(file);
+    if (command == "test") return cmdTest(file, argv[0]);
     if (command == "serve") {
         if (!file.empty() && !fs::is_directory(file)) {
             std::cerr << "dessa serve: " << file << " is not a folder\n";

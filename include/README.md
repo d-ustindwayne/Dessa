@@ -44,6 +44,11 @@ These libraries are packages, so programs that don't use them stay small. Instal
 | `sql` | ✓ (`sql.c` / `sql.cpp` + SQLite) | databases: `connectMssql`, `connect` (any ODBC), `openSqlite` (also in WebAssembly) |
 | `ashwee` | ✓ | desktop GUI: `Window`, `Button`, `TextBox`, `ListBox`, ... (Windows, Linux with GTK 3, macOS) |
 | `torrent` | ✓ | BitTorrent: share folders peer to peer (riv uses it) |
+| `http` | ✓ (`http.c` / `http.hpp`: sockets, native only) | a small web server: routes, `text` / `html` / `json` answers |
+| `regex` | | regular expressions (written in Dessa) |
+| `argparse` | | command-line flags, options, positionals, `--help` |
+| `chimb` | | tests: `test`, `expect(x).toBe(y)`, `done`; `dessa test` runs them |
+| `canvaslib` | | drawing and simple games in a page (through `webutils`) |
 | `colors`, `textfx` | | small examples of plain Dessa packages |
 
 A package's native part is described by a **`<name>.native`** file next to its `.hpp`:

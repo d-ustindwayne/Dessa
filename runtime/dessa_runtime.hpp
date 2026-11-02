@@ -34,7 +34,28 @@ using Int = long long;
 using Flt = float;
 using Dbl = double;
 using Chr = char32_t;   // one Unicode character ('é', '😀'), not one byte
-using Bul = bool;
+// Bul: true / false, or yes / no -- the same two values, printed the way
+// they were written. Bit 0 is the value, bit 1 says "written yes/no".
+struct Bul {
+    unsigned char raw = 0;
+    constexpr Bul() = default;
+    constexpr Bul(bool b) : raw(b ? 1 : 0) {}
+    static constexpr Bul from_raw(unsigned char r) { Bul b; b.raw = r; return b; }
+    static constexpr Bul yes() { return from_raw(3); }
+    static constexpr Bul no() { return from_raw(2); }
+    constexpr operator bool() const { return (raw & 1) != 0; }
+    constexpr Bul operator!() const { return from_raw(static_cast<unsigned char>(raw ^ 1)); }   // !yes is no
+    friend constexpr bool operator==(Bul a, Bul b) { return bool(a) == bool(b); }   // yes == true
+    friend constexpr bool operator==(Bul a, bool b) { return bool(a) == b; }
+    friend constexpr bool operator==(bool a, Bul b) { return a == bool(b); }
+    friend constexpr bool operator!=(Bul a, Bul b) { return bool(a) != bool(b); }
+    friend constexpr bool operator!=(Bul a, bool b) { return bool(a) != b; }
+    friend constexpr bool operator!=(bool a, Bul b) { return a != bool(b); }
+    friend constexpr bool operator<(Bul a, Bul b) { return bool(a) < bool(b); }
+};
+// a && b, a || b: the operand that decided it (yes && no is no), b only when needed
+template <class F> Bul bul_and(Bul a, F&& b) { return a ? Bul(b()) : a; }
+template <class F> Bul bul_or(Bul a, F&& b) { return a ? a : Bul(b()); }
 using Str = std::string; // UTF-8 text
 
 // ============================================================
@@ -263,6 +284,8 @@ struct Object {
     virtual bool ds_set(const Str&, const Obj&) { return false; }
     virtual void ds_field_names(std::vector<Str>&) const {}
     virtual bool ds_equals(const Object& other) const { return this == &other; }
+    // _hash: map keys by value (else by identity)
+    virtual std::size_t ds_hash() const { return std::hash<const void*>()(this); }
 };
 
 // A class instance: a counted pointer to an Object. The object is deleted
@@ -326,8 +349,10 @@ private:
     }
 };
 
-template <class A, class B> bool operator==(const Ref<A>& a, const Ref<B>& b) noexcept {
-    return static_cast<const void*>(a.get()) == static_cast<const void*>(b.get());
+// The same object, or equal by the class's _eq
+template <class A, class B> bool operator==(const Ref<A>& a, const Ref<B>& b) {
+    if (static_cast<const void*>(a.get()) == static_cast<const void*>(b.get())) return true;
+    return a && b && static_cast<const Object&>(*a).ds_equals(static_cast<const Object&>(*b));
 }
 template <class A> bool operator==(const Ref<A>& a, std::nullptr_t) noexcept { return !a; }
 template <class A, class B> bool operator<(const Ref<A>& a, const Ref<B>& b) noexcept {
@@ -818,7 +843,8 @@ Str to_str(const T& value) {
     else if constexpr (std::is_same_v<U, const char*> || std::is_same_v<U, char*>) return Str(value);
     else if constexpr (std::is_array_v<U>) return Str(value);
     else if constexpr (std::is_same_v<U, Chr>) return utf8_encode(value);
-    else if constexpr (std::is_same_v<U, Bul>) return value ? "true" : "false";
+    else if constexpr (std::is_same_v<U, Bul>) return (value.raw & 2) ? (value ? "yes" : "no") : (value ? "true" : "false");
+    else if constexpr (std::is_same_v<U, bool>) return value ? "true" : "false";   // a comparison's result
     else if constexpr (std::is_same_v<U, Nil>) return "Nil";
     else if constexpr (std::is_same_v<U, Obj>) return value.str();
     else if constexpr (std::is_same_v<U, Radix>) return radix_str(value);
@@ -953,9 +979,13 @@ Bul to_bul(const T& value) {
     } else if constexpr (std::is_same_v<U, Str>) {
         Str t = trim_copy(value);
         for (auto& c : t) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        if (t == "true" || t == "1" || t == "yes") return true;
-        if (t == "false" || t == "0" || t == "no") return false;
+        if (t == "yes") return Bul::yes();
+        if (t == "no") return Bul::no();
+        if (t == "true" || t == "1") return true;
+        if (t == "false" || t == "0") return false;
         fail("Cannot convert \"" + value + "\" to Bul (use true/false, 1/0 or yes/no)");
+    } else if constexpr (std::is_same_v<U, Bul>) {
+        return value;
     } else {
         return !(value == U(0)); // 0 is false, everything else is true
     }
@@ -1025,6 +1055,7 @@ struct ObjBoxOf final : ObjBox {
     bool numeric() const override { return std::is_arithmetic_v<T> && !std::is_same_v<T, Bul> && !std::is_same_v<T, Chr>; }
     Dbl number() const override {
         if constexpr (std::is_arithmetic_v<T>) return static_cast<Dbl>(value);
+        else if constexpr (std::is_same_v<T, Bul>) return value ? 1 : 0;
         else return 0;
     }
     const Ref<Object>* object() const override {
@@ -1033,15 +1064,15 @@ struct ObjBoxOf final : ObjBox {
     }
     bool same(const ObjBox& other) const override;
     Int toInt() const override {
-        if constexpr (std::is_same_v<T, Str> || std::is_arithmetic_v<T> || std::is_enum_v<T>) return to_int(value);
+        if constexpr (std::is_same_v<T, Str> || std::is_arithmetic_v<T> || std::is_same_v<T, Bul> || std::is_enum_v<T>) return to_int(value);
         else fail("Cannot convert " + type() + " to Int");
     }
     Dbl toDbl() const override {
-        if constexpr (std::is_same_v<T, Str> || (std::is_arithmetic_v<T> && !std::is_same_v<T, Chr>)) return to_dbl(value);
+        if constexpr (std::is_same_v<T, Str> || std::is_same_v<T, Bul> || (std::is_arithmetic_v<T> && !std::is_same_v<T, Chr>)) return to_dbl(value);
         else fail("Cannot convert " + type() + " to Dbl");
     }
     Bul toBul() const override {
-        if constexpr (std::is_same_v<T, Str> || (std::is_arithmetic_v<T> && !std::is_same_v<T, Chr>)) return to_bul(value);
+        if constexpr (std::is_same_v<T, Str> || std::is_same_v<T, Bul> || (std::is_arithmetic_v<T> && !std::is_same_v<T, Chr>)) return to_bul(value);
         else fail("Cannot convert " + type() + " to Bul");
     }
     Chr toChr() const override {
@@ -1056,7 +1087,8 @@ struct Obj {
     Obj() = default;
     Obj(Nil) {}
     Obj(const char* text) : Obj(Str(text)) {}
-    template <class T, std::enable_if_t<!std::is_same_v<bare<T>, Obj> && !std::is_same_v<bare<T>, Nil>, int> = 0>
+    Obj(bool b) : Obj(Bul(b)) {}   // a comparison's result is a Bul
+    template <class T, std::enable_if_t<!std::is_same_v<bare<T>, Obj> && !std::is_same_v<bare<T>, Nil> && !std::is_same_v<bare<T>, bool>, int> = 0>
     Obj(const T& value) { set(value); }
 
     bool isNil() const { return !box; }
@@ -1620,6 +1652,9 @@ inline Int m_code(Chr c) { return static_cast<Int>(c); }
 
 // ---- numbers ----
 template <class T, std::enable_if_t<std::is_arithmetic_v<T>, int> = 0> Int m_toInt(T v) { return static_cast<Int>(v); }
+inline Int m_toInt(Bul b) { return b ? 1 : 0; }
+inline Dbl m_toDbl(Bul b) { return b ? 1 : 0; }
+inline Flt m_toFlt(Bul b) { return b ? 1 : 0; }
 // '7'.toInt() is the digit's value (its code is .code())
 inline Int m_toInt(Chr c) {
     if (c < U'0' || c > U'9') fail("Cannot convert '" + utf8_encode(c) + "' to Int: only the digits 0 to 9 have a value");
@@ -1847,7 +1882,11 @@ struct std::hash<dessa::Obj> {
         return std::hash<std::string>()(o.type() + ":" + o.repr());
     }
 };
+template <>
+struct std::hash<dessa::Bul> {
+    size_t operator()(dessa::Bul b) const { return static_cast<bool>(b) ? 1 : 0; }   // yes and true: one key
+};
 template <class T>
 struct std::hash<dessa::Ref<T>> {
-    size_t operator()(const dessa::Ref<T>& r) const { return std::hash<const void*>()(r.get()); }
+    size_t operator()(const dessa::Ref<T>& r) const { return r ? static_cast<const dessa::Object&>(*r).ds_hash() : 0; }
 };

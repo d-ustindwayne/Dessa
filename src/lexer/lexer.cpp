@@ -43,6 +43,8 @@ const std::unordered_map<std::string, TokenType> Lexer::keywords = {
     {"init",  TokenType::INIT},
     {"true",  TokenType::TRUE},
     {"false", TokenType::FALSE},
+    {"yes",   TokenType::TRUE},    // the same values, printed as yes / no
+    {"no",    TokenType::FALSE},
     {"nil",   TokenType::NIL},
     {"with",  TokenType::WITH},
     {"is",    TokenType::IS},

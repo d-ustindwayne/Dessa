@@ -344,6 +344,7 @@ void Analyser::processImports(const Module& module) {
             Symbol alias;
             alias.kind = SymbolKind::Module;
             alias.name = *spec->alias;
+            alias.modulePath = spec->path;
             alias.isGlobal = true;
             alias.moduleId = module.id;
             alias.line = spec->line;
@@ -995,7 +996,8 @@ void Analyser::reportUnusedImports(const Module& module) {
             continue;
         }
         for (const ImportRecord* r : records) {
-            if (!r->used) hint(r->line, r->column, r->length, "'" + r->name + "' is imported but never used");
+            // the nameless record of `$("x" as m)` is covered by m's own record
+            if (!r->used && !r->name.empty()) hint(r->line, r->column, r->length, "'" + r->name + "' is imported but never used");
         }
     }
 }
@@ -1637,10 +1639,45 @@ void Analyser::analyseFunctionBody(const FuncDeclStmt* statement) {
     inConstructor = previousInConstructor;
 }
 
+// _get, _set, _neg, _iter, _length, _hash: the shapes the compiler relies on
+void Analyser::checkSpecialMethods(const ClassInfo& info) {
+    for (const auto& [name, method] : info.methods) {
+        if (name.size() < 2 || name[0] != '_') continue;
+        const size_t params = method.parameters.size();
+        const SemanticType& ret = method.returnType;
+        auto report = [&](const std::string& message) { error(method.line, method.column, "'" + name + "' " + message); };
+        if (name == "_get") {
+            if (params != 1) report("must take one parameter (the index in v<index>)");
+            else if (ret.isVoidLike()) report("must return the value v<index> gives");
+        } else if (name == "_set") {
+            if (params != 2) report("must take two parameters (the index and the new value in v<index> = value)");
+        } else if (name == "_neg") {
+            if (params != 0) report("must take no parameters (it gives -v)");
+            else if (ret.isVoidLike()) report("must return the value -v gives");
+        } else if (name == "_iter") {
+            if (params != 0) report("must take no parameters");
+            else if (!ret.isUnknown() && !ret.is(SemanticTypeKind::List) && !ret.is(SemanticTypeKind::Set) &&
+                     !ret.is(SemanticTypeKind::Map) && !ret.is(SemanticTypeKind::Str)) {
+                report("must return what for (x in v) walks through: a list, set, map or Str, not " + ret.toString());
+            }
+        } else if (name == "_length") {
+            if (params != 0) report("must take no parameters");
+            else if (!ret.isInteger() && !ret.isUnknown()) report("must return an Int");
+        } else if (name == "_hash") {
+            if (params != 0) report("must take no parameters");
+            else if (!ret.isInteger() && !ret.isUnknown()) report("must return an Int");
+            else if (!findMember(info.type(), "_eq")) {
+                report("needs _eq as well: map keys with the same _hash are told apart with _eq");
+            }
+        }
+    }
+}
+
 void Analyser::analyseClassBody(const ClassDeclStmt* statement) {
     auto it = classes.find(SemanticType::userDefined(statement->name, currentModule, UserTypeKind::Class).key());
     if (it == classes.end() || it->second.decl != statement) return;
     const ClassInfo& info = it->second;
+    checkSpecialMethods(info);
 
     const std::string previousClass = currentClassKey;
     currentClassKey = info.type().key();
@@ -1820,6 +1857,7 @@ void assignedNames(const Stmt* s, std::unordered_set<std::string>& names) {
 }
 
 void assignedNames(const Expr* e, std::unordered_set<std::string>& names) {
+    e = actual(e);
     if (!e) return;
     switch (e->kind) {
         case ExprKind::Assign: {
@@ -1915,6 +1953,19 @@ void Analyser::analyseFor(const ForStmt* statement) {
 
 void Analyser::analyseForIn(const ForInStmt* statement) {
     SemanticType iterableType = analyseExpression(statement->iterable.get());
+    if (specialMethod(iterableType, "_iter")) {
+        // for (x in v) on a class with _iter: for (x in v._iter())
+        auto* loop = const_cast<ForInStmt*>(statement);
+        const int line = loop->iterable->line, column = loop->iterable->column;
+        auto member = std::make_unique<MemberExpr>(std::move(loop->iterable), Token(TokenType::IDENTIFIER, "_iter", line, column), false);
+        member->line = line;
+        member->column = column;
+        auto call = std::make_unique<CallExpr>(std::move(member), std::vector<Argument>{}, Token(TokenType::R_PAREN, ")", line, column));
+        call->line = line;
+        call->column = column;
+        loop->iterable = std::move(call);
+        iterableType = analyseExpression(statement->iterable.get());
+    }
     SemanticType elementType = SemanticType::unknown();
 
     if (iterableType.kind == SemanticTypeKind::List || iterableType.kind == SemanticTypeKind::Set) {
@@ -1924,7 +1975,8 @@ void Analyser::analyseForIn(const ForInStmt* statement) {
     } else if (iterableType.is(SemanticTypeKind::Str)) {
         elementType = SemanticType::simple(SemanticTypeKind::Chr);
     } else if (!iterableType.isUnknown()) {
-        error(statement->iterable.get(), "Value of type " + iterableType.toString() + " is not iterable");
+        error(statement->iterable.get(), "Value of type " + iterableType.toString() + " is not iterable" +
+              (iterableType.isClass() ? " (give the class a method _iter() that returns a list)" : ""));
     }
 
     beginScope(ScopeKind::Block);

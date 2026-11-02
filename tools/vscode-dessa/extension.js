@@ -14,7 +14,7 @@ const path = require('path');
 const fs = require('fs');
 
 const PRIMITIVES = {
-    Str: 'Text', Int: '64-bit integer (Int[2], Int[8], Int[16] print in that base)', Bul: 'Boolean (true / false)',
+    Str: 'Text', Int: '64-bit integer (Int[2], Int[8], Int[16] print in that base)', Bul: 'Boolean (true / false, or yes / no)',
     Flt: '32-bit floating point', Dbl: '64-bit floating point', Chr: 'Single character', Emp: 'No value (functions that return nothing)',
     Nil: 'The type of nil; use T | Nil for optional values',
     Obj: 'Any value (fields are looked up when the program runs): new { name = "Ann" }',
@@ -1370,6 +1370,136 @@ function eventItems(doc, position, typed) {
     });
 }
 
+// ---- Special methods: what a class can define so its objects work with operators
+
+// [name, parameters, return type, what it is for]; C = the class's own name
+const SPECIAL_METHODS = [
+    ['_add', 'other[C]', 'C', 'a + b (and +=)'],
+    ['_sub', 'other[C]', 'C', 'a - b (and -=)'],
+    ['_mul', 'other[C]', 'C', 'a * b (and *=)'],
+    ['_div', 'other[C]', 'C', 'a / b (and /=)'],
+    ['_mod', 'other[C]', 'C', 'a % b (and %=)'],
+    ['_pow', 'other[C]', 'C', 'a ^ b (and ^=)'],
+    ['_neg', '', 'C', '-a'],
+    ['_eq', 'other[C]', 'Bul', 'a == b and a != b; also list.includes / indexOf and map keys'],
+    ['_lt', 'other[C]', 'Bul', 'a < b'],
+    ['_gt', 'other[C]', 'Bul', 'a > b'],
+    ['_le', 'other[C]', 'Bul', 'a <= b'],
+    ['_ge', 'other[C]', 'Bul', 'a >= b'],
+    ['_cmp', 'other[C]', 'Int', 'a < b, a <= b, a > b, a >= b in one method: negative, 0 or positive'],
+    ['_get', 'index[Int]', 'Int', 'v<index>'],
+    ['_set', 'index[Int], value[Int]', 'Emp', 'v<index> = value (and v<index> += value with _get)'],
+    ['_length', '', 'Int', 'v.length() and v.isEmpty()'],
+    ['_iter', '', 'Int<>', 'for (x in v): return the items to walk through'],
+    ['_hash', '', 'Int', 'objects as map keys by value (needs _eq too)'],
+    ['toStr', '', 'Str', 'how print(v) and $"{v}" show it'],
+];
+
+// Code without its strings and comments (same length is not kept)
+function codeOnly(text) {
+    return text
+        .replace(/\/\*[\s\S]*?(\*\/|$)/g, ' ')
+        .replace(/\/\/[^\n]*/g, ' ')
+        .replace(/\$?"(?:\\.|[^"\\\n])*"?/g, '""')
+        .replace(/'(?:\\.|[^'\\\n])*'?/g, "''");
+}
+
+// The class whose body (not a method's body) the text ends in: its name and
+// the class text so far, or null
+function classBodyAt(before) {
+    const code = codeOnly(before);
+    let depth = 0;
+    for (let i = code.length - 1; i >= 0; i--) {
+        const c = code[i];
+        if (c === '}') depth++;
+        else if (c === '{') {
+            if (depth > 0) { depth--; continue; }
+            const head = /\bclass\s+(\w+)[^;{}]*$/.exec(code.slice(Math.max(0, i - 300), i));
+            return head ? { name: head[1], body: code.slice(i + 1) } : null;
+        }
+    }
+    return null;
+}
+
+function specialMethodItems(doc, position, linePrefix, before) {
+    const cls = classBodyAt(before);
+    if (!cls) return null;
+    const afterFunc = /^\s*func\s*\[[^\]]*\]\s*(\w*)$/.exec(linePrefix);
+    const bare = /^\s*(_\w*)$/.exec(linePrefix);
+    if (!afterFunc && !bare) return null;
+    const typed = (afterFunc || bare)[1];
+    const rest = doc.lineAt(position).text.slice(position.character);
+    const defined = new Set([...cls.body.matchAll(/\bfunc\s*\[[^\]]*\]\s*(\w+)\s*\(/g)].map((m) => m[1]));
+    const items = [];
+    for (const [name, params, ret, what] of SPECIAL_METHODS) {
+        if (defined.has(name)) continue;
+        const p = params.replace(/\bC\b/g, cls.name);
+        const r = ret.replace(/\bC\b/g, cls.name);
+        const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Method);
+        item.detail = `func[${r}] ${name}(${p})`;
+        item.documentation = new vscode.MarkdownString(`Special method: ${what}`);
+        item.range = new vscode.Range(position.translate(0, -typed.length), position);
+        item.sortText = '0' + name;
+        // only the name and parameters when the line goes on, else the whole method
+        const body = rest.trim() ? '' : ' {\n\t$0\n}';
+        let n = 1;
+        const snippetParams = p.replace(/\[([^\]]+)\]/g, (_m, t) => `[\${${n++}:${t}}]`);
+        item.insertText = new vscode.SnippetString(
+            (afterFunc ? '' : `func[${r}] `) + `${name}(${snippetParams})` + body);
+        items.push(item);
+    }
+    return items;
+}
+
+// ---- typeof(x) == "|": the type names x can have
+
+const TYPE_NAMES = ['Int', 'Dbl', 'Flt', 'Str', 'Chr', 'Bul', 'Nil'];
+
+// "Int | Str | Nil" -> ["Int", "Str", "Nil"] (a | inside [...] or (...) stays)
+function unionParts(type) {
+    const parts = [];
+    let depth = 0, start = 0;
+    for (let i = 0; i < type.length; i++) {
+        const c = type[i];
+        if (c === '[' || c === '(' || c === '<' || c === '{') depth++;
+        else if (c === ']' || c === ')' || c === '>' || c === '}') depth--;
+        else if (c === '|' && depth === 0) {
+            parts.push(type.slice(start, i).trim());
+            start = i + 1;
+        }
+    }
+    parts.push(type.slice(start).trim());
+    return parts.filter(Boolean);
+}
+
+async function typeofItems(doc, position, linePrefix, data) {
+    const m = /\btypeof\s*\(\s*([\w.]+)\s*\)\s*(?:==|!=)\s*("?)(\w*)$/.exec(linePrefix);
+    if (!m) return null;
+    const quoted = m[2] === '"';
+    const typed = m[3];
+    // the type of the name, from the compiler (the line so far is fine)
+    const nameEnd = linePrefix.search(/\btypeof\s*\(/) + linePrefix.slice(linePrefix.search(/\btypeof\s*\(/)).indexOf(m[1]) + m[1].length;
+    const cursor = `${position.line + 1}:${position.character + 1}`;
+    const hover = await compilerQuery(doc, 'hover', new vscode.Position(position.line, nameEnd - 1), ['--cursor', cursor]);
+    const declared = hover && hover.symbol ? (hover.symbol.type || hover.type || '') : '';
+    const classes = (data && data.globals ? data.globals : []).filter((g) => g.kind === 'class' || g.kind === 'enum').map((g) => g.name);
+    let names;
+    const parts = declared ? unionParts(declared) : [];
+    if (!parts.length || parts.some((t) => t === 'Obj' || t === 'Unknown' || t === 'Any')) names = [...TYPE_NAMES, ...classes];
+    else names = parts.flatMap((t) => (classes.includes(t) ? classes : [t]));
+    names = [...new Set(names)];
+    const close = doc.lineAt(position).text.slice(position.character).startsWith('"') ? '' : '"';
+    return names.map((name, i) => {
+        const item = new vscode.CompletionItem(`"${name}"`, vscode.CompletionItemKind.EnumMember);
+        item.detail = declared ? `${m[1]} is ${declared}` : 'a type name';
+        item.range = new vscode.Range(position.translate(0, -typed.length - (quoted ? 1 : 0)), position);
+        item.insertText = `"${name}` + (quoted ? close : '"');
+        item.filterText = `"${name}`;
+        item.sortText = String(i).padStart(3, '0');
+        return item;
+    });
+}
+
 // ============================================================
 // Providers
 // ============================================================
@@ -1379,6 +1509,9 @@ const completionProvider = {
         if (!inDessaScript(doc, position)) return undefined;   // HTML markup: leave it to the HTML extension
         const linePrefix = doc.lineAt(position).text.slice(0, position.character);
         const before = doc.getText(new vscode.Range(new vscode.Position(0, 0), position));
+        // a space only opens suggestions after typeof(x) == and func[T] in a class
+        if (context && context.triggerCharacter === ' ' && !/\btypeof\s*\([\w.]+\)\s*(?:==|!=)\s$/.test(linePrefix) &&
+            !/^\s*func\s*\[[^\]]*\]\s$/.test(linePrefix)) return undefined;
         const data = await symbols(doc);
 
         // $("dcrypto") { sha| : what the module offers
@@ -1442,6 +1575,9 @@ const completionProvider = {
         // addEventListener("cl|"): the events
         const event = /\b(?:add|remove)EventListener\s*\(\s*"(\w*)$/.exec(linePrefix);
         if (event) return eventItems(doc, position, event[1]);
+        // typeof(age) != "|: the type names age can have
+        const typeNames = await typeofItems(doc, position, linePrefix, data);
+        if (typeNames) return typeNames;
         // A quote typed anywhere else starts an ordinary string
         if (context && context.triggerCharacter === '"') return undefined;
         if (inStringOrComment(doc, position)) return undefined;
@@ -1451,6 +1587,10 @@ const completionProvider = {
             const leave = vscode.workspace.getConfiguration('dessa').get('autoBrackets') ? leaveTypeCommand(before.slice(-2000)) : null;
             return typeItems(await compilerCompletions(doc, position), data, leave);
         }
+
+        // In a class body: _add, _get, toStr ... (the special methods)
+        const special = specialMethodItems(doc, position, linePrefix, before);
+        if (special) return special;
 
         // Ask the compiler first: exact types, locals, narrowing, imports
         const fromCompiler = await compilerCompletions(doc, position);
@@ -2036,7 +2176,7 @@ function activate(context) {
     context.subscriptions.push(
         diagnosticCollection,
         output,
-        vscode.languages.registerCompletionItemProvider(selector, completionProvider, '.', '"', '$', '{', ',', '[', '|', ':'),
+        vscode.languages.registerCompletionItemProvider(selector, completionProvider, '.', '"', '$', '{', ',', '[', '|', ':', ' '),
         vscode.languages.registerHoverProvider(selector, hoverProvider),
         vscode.languages.registerSignatureHelpProvider(selector, signatureHelpProvider, '(', ','),
         vscode.languages.registerDefinitionProvider(selector, definitionProvider),

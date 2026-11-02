@@ -42,6 +42,7 @@ std::string elemOf(const SemanticType& t) {
 // A C value (expression `e` of glueCType(t)) as the C++ value
 std::string toCpp(const std::string& e, const SemanticType& t) {
     switch (t.kind) {
+        case SemanticTypeKind::Bul: return "dessa::Bul::from_raw(" + e + ")";
         case SemanticTypeKind::Chr: return "static_cast<dessa::Chr>(" + e + ")";
         case SemanticTypeKind::Str: return "dessa::Str((" + e + ")->data, static_cast<size_t>((" + e + ")->len))";
         case SemanticTypeKind::List: {
@@ -61,6 +62,7 @@ std::string toCpp(const std::string& e, const SemanticType& t) {
 // A C++ value (expression `e` of cppType(t)) as a new C value
 std::string toC(const std::string& e, const SemanticType& t) {
     switch (t.kind) {
+        case SemanticTypeKind::Bul: return "static_cast<ds_bul>((" + e + ").raw)";
         case SemanticTypeKind::Chr: return "static_cast<ds_chr>(" + e + ")";
         case SemanticTypeKind::Str: return "[](const dessa::Str& s) { return ds_str_new(s.data(), static_cast<int64_t>(s.size())); }(" + e + ")";
         case SemanticTypeKind::List: {

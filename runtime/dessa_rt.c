@@ -484,7 +484,10 @@ static ds_str* float_text(double value, bool isFloat) {
 
 ds_str* ds_dbl_str(ds_dbl v) { return float_text(v, false); }
 ds_str* ds_flt_str(ds_flt v) { return float_text(v, true); }
-ds_str* ds_bul_str(ds_bul v) { return ds_str_cstr(v ? "true" : "false"); }
+ds_str* ds_bul_str(ds_bul v) {
+    if (v & 2) return ds_str_cstr(DS_T(v) ? "yes" : "no");
+    return ds_str_cstr(DS_T(v) ? "true" : "false");
+}
 
 ds_str* ds_quote(ds_str* s, char q) {
     ds_sb b;
@@ -621,7 +624,7 @@ bool ds_item_eq(const ds_elem* et, const void* a, const void* b) {
         case DS_E_ENUM: return *(const ds_int*)a == *(const ds_int*)b;
         case DS_E_DBL: return *(const ds_dbl*)a == *(const ds_dbl*)b;
         case DS_E_FLT: return *(const ds_flt*)a == *(const ds_flt*)b;
-        case DS_E_BUL: return *(const ds_bul*)a == *(const ds_bul*)b;
+        case DS_E_BUL: return DS_T(*(const ds_bul*)a) == DS_T(*(const ds_bul*)b);   /* yes == true */
         case DS_E_CHR: return *(const ds_chr*)a == *(const ds_chr*)b;
         default: return head_eq(*(ds_head* const*)a, *(ds_head* const*)b);
     }
@@ -641,6 +644,7 @@ static bool head_eq(ds_head* a, ds_head* b) {
         case DS_K_LIST:
         case DS_K_SET: return ds_list_eq((ds_list*)a, (ds_list*)b);
         case DS_K_MAP: return ds_map_eq((ds_map*)a, (ds_map*)b);
+        case DS_K_OBJECT: return a->type->eq ? a->type->eq(a, b) : false;   /* _eq */
         default: return false;
     }
 }
@@ -671,7 +675,7 @@ static uint64_t item_hash(const ds_elem* et, const void* item) {
             memcpy(&bits, &f, sizeof bits);
             return mix(bits);
         }
-        case DS_E_BUL: return mix(*(const ds_bul*)item);
+        case DS_E_BUL: return mix(DS_T(*(const ds_bul*)item));
         case DS_E_CHR: return mix(*(const ds_chr*)item);
         default: {
             ds_head* h = *(ds_head* const*)item;
@@ -687,6 +691,7 @@ static uint64_t item_hash(const ds_elem* et, const void* item) {
                     default: return item_hash(x->et, &x->v);
                 }
             }
+            if (h && h->type->kind == DS_K_OBJECT && h->type->hash) return mix(h->type->hash(h));   /* _hash */
             return mix((uint64_t)(uintptr_t)h);
         }
     }
@@ -734,7 +739,7 @@ static int item_cmp(const ds_elem* et, const void* a, const void* b) {
             ds_flt x = *(const ds_flt*)a, y = *(const ds_flt*)b;
             return x < y ? -1 : x > y;
         }
-        case DS_E_BUL: return (int)*(const ds_bul*)a - (int)*(const ds_bul*)b;
+        case DS_E_BUL: return (int)DS_T(*(const ds_bul*)a) - (int)DS_T(*(const ds_bul*)b);
         case DS_E_CHR: {
             ds_chr x = *(const ds_chr*)a, y = *(const ds_chr*)b;
             return x < y ? -1 : x > y;
@@ -1493,8 +1498,10 @@ ds_bul ds_str_to_bul(ds_str* s) {
     if (n < (int64_t)sizeof t) {
         for (int64_t i = 0; i < n; ++i) t[i] = (char)tolower((unsigned char)s->data[b + i]);
         t[n] = 0;
-        if (!strcmp(t, "true") || !strcmp(t, "1") || !strcmp(t, "yes")) return true;
-        if (!strcmp(t, "false") || !strcmp(t, "0") || !strcmp(t, "no")) return false;
+        if (!strcmp(t, "yes")) return DS_YES;
+        if (!strcmp(t, "no")) return DS_NO;
+        if (!strcmp(t, "true") || !strcmp(t, "1")) return 1;
+        if (!strcmp(t, "false") || !strcmp(t, "0")) return 0;
     }
     ds_fail("Cannot convert \"%.*s\" to Bul (use true/false, 1/0 or yes/no)", (int)s->len, s->data);
 }
@@ -2271,7 +2278,7 @@ ds_int ds_dyn_to_int(ds_head* p) {
         case DS_E_INT: case DS_E_ENUM: return ((ds_box*)p)->v.i;
         case DS_E_DBL: return (ds_int)((ds_box*)p)->v.d;
         case DS_E_FLT: return (ds_int)((ds_box*)p)->v.f;
-        case DS_E_BUL: return ((ds_box*)p)->v.b ? 1 : 0;
+        case DS_E_BUL: return DS_T(((ds_box*)p)->v.b);
         case DS_E_CHR: return (ds_int)((ds_box*)p)->v.c;
         default: cannot_convert(p, "Int");
     }
@@ -2280,7 +2287,7 @@ ds_dbl ds_dyn_to_dbl(ds_head* p, const char* type) {
     if (!p) ds_fail("Cannot convert Nil to %s", type);
     if (p->type->kind == DS_K_STR) return ds_str_to_dbl((ds_str*)p, type);
     if (box_numeric(p)) return box_number(p);
-    if (box_kind(p) == DS_E_BUL) return ((ds_box*)p)->v.b ? 1 : 0;
+    if (box_kind(p) == DS_E_BUL) return DS_T(((ds_box*)p)->v.b);
     cannot_convert(p, type);
 }
 ds_bul ds_dyn_to_bul(ds_head* p) {

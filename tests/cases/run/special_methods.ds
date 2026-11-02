@@ -1,0 +1,50 @@
+// Special methods: v<i> (_get), v<i> = x (_set), -v (_neg), for-in (_iter),
+// v.length() / v.isEmpty() (_length), map keys (_hash with _eq)
+
+class Grid {
+    var[Int<>] cells = <>;
+    var[Int] width = 0;
+    init(width[Int], height[Int]) {
+        this.width = width;
+        for (var[Int] i = 0; i < width * height; i++) this.cells.push(0);
+    }
+    func[Int] _get(i[Int]) { return this.cells<i>; }
+    func[Emp] _set(i[Int], value[Int]) { this.cells<i> = value; }
+    func[Int] _length() { return this.cells.length(); }
+    func[Int<>] _iter() { return this.cells; }
+}
+
+var[Grid] g = new Grid(2, 2);
+g<0> = 5;
+g<3> = 7;
+g<3> += 1;
+print(g<0>, g<3>, g.length(), g.isEmpty());
+var[Int] sum = 0;
+for (var[Int] c in g) sum += c;
+print(sum);
+
+class Vec {
+    var[Int] x = 0;
+    var[Int] y = 0;
+    init(x[Int], y[Int]) { this.x = x; this.y = y; }
+    func[Vec] _neg() { return new Vec(-this.x, -this.y); }
+    func[Bul] _eq(other[Vec]) { return this.x == other.x && this.y == other.y; }
+    func[Int] _hash() { return this.x * 31 + this.y; }
+    func[Str] toStr() { return $"({this.x}, {this.y})"; }
+}
+
+var[Vec] v = new Vec(1, -2);
+print(-v, -(-v) == v);
+
+var[Map[Vec, Str]] names = {:};
+names<new Vec(0, 0)> = "origin";
+names<new Vec(1, 2)> = "a";
+names<new Vec(0, 0)> = "still origin";
+print(names.length(), names<new Vec(0, 0)>, names.has(new Vec(1, 2)), names.has(new Vec(2, 1)));
+var[Vec<>] vs = <new Vec(1, 1), new Vec(2, 2)>;
+print(vs.includes(new Vec(2, 2)), vs.indexOf(new Vec(2, 2)));
+
+class Empty {
+    func[Int] _length() { return 0; }
+}
+print(new Empty().isEmpty(), new Empty().length());

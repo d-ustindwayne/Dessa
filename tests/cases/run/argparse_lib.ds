@@ -1,0 +1,18 @@
+// The argparse package: flags, options (long, short, =, joined), positionals, rest
+$("argparse") { ArgParser, Args }
+
+var[ArgParser] parser = new ArgParser("greet", "Says hello");
+parser.flag("loud", "l", "shout");
+parser.flag("verbose", "v", "say more");
+parser.option("name", "n", "who", "World");
+parser.option("times", "t", "how many times", "1");
+parser.option("out", "o", "where to write");
+parser.positional("first", "the first word");
+parser.rest("others", "the other words");
+
+var[Args] a = parser.parse(<"--name", "Ann", "-lv", "-t3", "one", "two", "--", "-three">);
+print(a.get("name"), a.getInt("times"), a.has("loud"), a.has("verbose"), a.find("out"));
+print(a.get("first"), a.list("others"));
+var[Args] b = parser.parse(<"--name=Bo", "x">);
+print(b.get("name"), b.getInt("times"), b.has("loud"), b.list("others"));
+print(parser.usage());

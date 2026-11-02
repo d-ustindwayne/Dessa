@@ -1,0 +1,4 @@
+Ann 3 true true Nil
+one <"two", "-three">
+Bo 1 false <>
+usage: greet [-l] [-v] [-n NAME] [-t TIMES] [-o OUT] first [others...]

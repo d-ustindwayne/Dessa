@@ -1,0 +1,6 @@
+name = http
+version = 1.0.0
+entry = http.dm
+description = A small web server: routes with :params, text/html/json answers, query and form parsing
+
+[dependencies]

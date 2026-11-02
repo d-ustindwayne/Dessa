@@ -1,6 +1,6 @@
 {
   "name": "dessalang",
-  "version": "0.5.0",
+  "version": "0.5.6",
   "description": "Dessa for Node: compile Dessa programs and .dhtml pages to WebAssembly and run them.",
   "keywords": [
     "dessa",

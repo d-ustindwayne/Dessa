@@ -40,7 +40,7 @@ doesn't run.
 | `Flt` | decimal number, 32-bit | `9.23f` |
 | `Str` | text (UTF-8) | `"hello"` |
 | `Chr` | one character | `'a'`, `'é'` |
-| `Bul` | true or false | `true` |
+| `Bul` | true or false (also written yes or no) | `true`, `yes` |
 | `Emp` | no value (a function that returns nothing) | |
 | `Nil` | the empty value | `nil` |
 | `T<>` | list of T | `<1, 2, 3>` |
@@ -60,6 +60,19 @@ Any Int can be shown in another base with `toHex()`, `toOct()`, `toBin()` and
 `toDec()`. They give the same number as an `Int[16]`, `Int[8]`, `Int[2]` or
 plain `Int`, so it still works in arithmetic: `255.toHex()` prints `0xff`,
 `0xff.toDec()` prints `255`, `Str(5.toBin())` is `"0b101"`.
+
+`yes` and `no` are the same two values as `true` and `false`; a value
+remembers how it was written and prints that way:
+
+```dessa
+var[Bul] agreed = yes;
+print(agreed, !agreed, agreed == true);   // yes no true
+print(agreed && no, agreed || false);    // no yes: the operand that decided
+print(1 < 2);                            // true: comparisons give true / false
+```
+
+`Bul("yes")` gives `yes`, `Bul("true")` gives `true`. JSON and SQL store both
+spellings as plain true / false.
 
 `Int` arithmetic never wraps around silently: going past the 64-bit range is
 an error. For bigger numbers use `Big` from `$("math")`.
@@ -104,6 +117,7 @@ compare without case use `caseless`: `name.caseless() == "ANN".caseless()`.
 
 ```dessa
 Int("42")      Dbl("2.5")     Str(42)      Bul("yes")     Chr(65)     Int('A')
+typeof(x)      // the type's name: "Int", "Str", "Nil", "Int<>", "Person" ...
 true.toInt()   // 1 (false is 0)
 '7'.toInt()    // 7, the digit's value ('7'.code() is 55)
 ```
@@ -320,6 +334,30 @@ print(total == new Money(355), total > new Money(1));
 | `+ - * / % ^` | `_add _sub _mul _div _mod _pow` (also used by `+=` and the others) |
 | `==`, `!=` | `_eq` (returns Bul) |
 | `< > <= >=` | `_lt _gt _le _ge` (return Bul), or one `_cmp` returning negative, 0 or positive |
+| `-v` | `_neg()` |
+| `v<i>` | `_get(i)` |
+| `v<i> = x` | `_set(i, x)` (with `_get`, also `v<i> += x` and the others) |
+| `v.length()`, `v.isEmpty()` | `_length()` returning Int |
+| `for (x in v)` | `_iter()` returning the list (or set, map, Str) to walk through |
+| map keys, `includes`, `indexOf` | `_hash()` returning Int, together with `_eq` |
+
+```dessa
+class Grid {
+    var[Int<>] cells = <0, 0, 0, 0>;
+    func[Int] _get(i[Int]) { return this.cells<i>; }
+    func[Emp] _set(i[Int], value[Int]) { this.cells<i> = value; }
+    func[Int] _length() { return this.cells.length(); }
+    func[Int<>] _iter() { return this.cells; }
+}
+var[Grid] g = new Grid();
+g<0> = 5;
+g<0> += 1;
+for (var[Int] c in g) print(c);
+print(g.length(), g.isEmpty());
+```
+
+Objects of a class with `_hash` and `_eq` are equal map keys when `_eq` says
+so; without them, a map key is that one object.
 - Without a `toStr()`, an object prints as `Dog(name: "Rex", age: 3)`.
 
 ## Generics

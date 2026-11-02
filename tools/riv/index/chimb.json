@@ -1,0 +1,13 @@
+{
+  "name": "chimb",
+  "description": "Tests: test(), expect(x).toBe(y), expectThrows, done(); run them all with dessa test",
+  "versions": {
+    "1.0.0": {
+      "infohash": "677bd418bdb794324e02d31d860c747373b84892",
+      "torrent": "ZDg6YW5ub3VuY2U0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2UxMzphbm5vdW5jZS1saXN0bGw0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2VlbDMzOnVkcDovL29wZW4uc3RlYWx0aC5zaTo4MC9hbm5vdW5jZWVsNDE6dWRwOi8vdHJhY2tlci50b3JyZW50LmV1Lm9yZzo0NTEvYW5ub3VuY2VlbDM3OnVkcDovL2V4b2R1cy5kZXN5bmMuY29tOjY5NjkvYW5ub3VuY2VlZTEwOmNyZWF0ZWQgYnkxMTpyaXYgKERlc3NhKTQ6aW5mb2Q1OmZpbGVzbGQ2Omxlbmd0aGk0NTA2ZTQ6cGF0aGw4OmNoaW1iLmRtZWVkNjpsZW5ndGhpMTYxZTQ6cGF0aGw3OnJpdi5wa2dlZWU0Om5hbWU1OmNoaW1iMTI6cGllY2UgbGVuZ3RoaTE2Mzg0ZTY6cGllY2VzMjA67ecp68WIX6GywTIA1+4cZlEsFEhlODp1cmwtbGlzdGw3ODpodHRwczovL3Jhdy5naXRodWJ1c2VyY29udGVudC5jb20vZC11c3RpbmR3YXluZS9EZXNzYS9tYWluL3Rvb2xzL3Jpdi9wYWNrYWdlcy9lZQ==",
+      "manifest": "name = chimb\nversion = 1.0.0\nentry = chimb.dm\ndescription = Tests: test(), expect(x).toBe(y), expectThrows, done(); run them all with dessa test\n\n[dependencies]\n",
+      "files": 2,
+      "bytes": 4667
+    }
+  }
+}

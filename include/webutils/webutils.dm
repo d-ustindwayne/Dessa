@@ -52,6 +52,49 @@ class ClassList {
     func[Bul] contains(name[Str]) { ... }
 }
 
+// Drawing on a <canvas>: canvas.getContext("2d"). The browser's own names
+// (CanvasRenderingContext2D); the canvaslib package wraps it in a simpler API.
+//     var[Element] canvas = document.createElement("canvas");
+//     var[Context2D] g = canvas.getContext("2d");
+//     g.fillStyle = "tomato";
+//     g.fillRect(10, 10, 50, 50);
+class Context2D {
+    var[Str] fillStyle;            // a CSS colour: "red", "#ff8800", "rgb(0 128 255)"
+    var[Str] strokeStyle;
+    var[Dbl] lineWidth;
+    var[Str] font;                 // "16px sans-serif"
+    var[Str] textAlign;            // "left", "center", "right"
+    var[Str] textBaseline;         // "top", "middle", "alphabetic", "bottom"
+    var[Dbl] globalAlpha;          // 0 (see-through) to 1
+    var[Str] lineCap;              // "butt", "round", "square"
+    func[Emp] fillRect(x[Dbl], y[Dbl], width[Dbl], height[Dbl]) { ... }
+    func[Emp] strokeRect(x[Dbl], y[Dbl], width[Dbl], height[Dbl]) { ... }
+    func[Emp] clearRect(x[Dbl], y[Dbl], width[Dbl], height[Dbl]) { ... }
+    func[Emp] beginPath() { ... }
+    func[Emp] closePath() { ... }
+    func[Emp] moveTo(x[Dbl], y[Dbl]) { ... }
+    func[Emp] lineTo(x[Dbl], y[Dbl]) { ... }
+    // A circle's part: angles in radians (a whole circle is 0 to 2 * PI)
+    func[Emp] arc(x[Dbl], y[Dbl], radius[Dbl], startAngle[Dbl], endAngle[Dbl]) { ... }
+    func[Emp] rect(x[Dbl], y[Dbl], width[Dbl], height[Dbl]) { ... }
+    func[Emp] fill() { ... }
+    func[Emp] stroke() { ... }
+    func[Emp] fillText(text[Str], x[Dbl], y[Dbl]) { ... }
+    func[Emp] strokeText(text[Str], x[Dbl], y[Dbl]) { ... }
+    func[TextMetrics] measureText(text[Str]) { ... }
+    // An <img> (or another canvas) at x, y
+    func[Emp] drawImage(image[Element], x[Dbl], y[Dbl]) { ... }
+    func[Emp] save() { ... }
+    func[Emp] restore() { ... }
+    func[Emp] translate(x[Dbl], y[Dbl]) { ... }
+    func[Emp] rotate(angle[Dbl]) { ... }
+    func[Emp] scale(x[Dbl], y[Dbl]) { ... }
+}
+
+class TextMetrics {
+    var[Dbl] width;
+}
+
 // What happened: passed to event listeners.
 class Event {
     var[Str] type;                 // "click", "input", "keydown", ...
@@ -90,6 +133,9 @@ class Element {
     var[Element<>] children;
     var[Dbl] offsetWidth;
     var[Dbl] offsetHeight;
+    var[Dbl] width;                // <canvas>, <img>: the size in pixels
+    var[Dbl] height;
+    var[Bul] complete;             // <img>: finished loading
     var[Func[Emp, [Event]] | Nil] onclick;
     var[Func[Emp, [Event]] | Nil] oninput;
     var[Func[Emp, [Event]] | Nil] onchange;
@@ -116,6 +162,17 @@ class Element {
     func[Emp] click() { ... }
     func[Emp] focus() { ... }
     func[Emp] blur() { ... }
+    // A <canvas>'s drawing surface: getContext("2d")
+    func[Context2D] getContext(kind[Str]) { ... }
+    // Where it is on the screen (for mouse positions inside it)
+    func[Rect] getBoundingClientRect() { ... }
+}
+
+class Rect {
+    var[Dbl] left;
+    var[Dbl] top;
+    var[Dbl] width;
+    var[Dbl] height;
 }
 
 // The page itself.
