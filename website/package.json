@@ -43,7 +43,7 @@
     "@angular/compiler-cli": "^22.2.0",
     "@types/node": "^22.12.0",
     "@yowasp/clang": "22.0.0-git20542-10",
-    "marked": "^18.1.2",
+    "marked": "^18.1.3",
     "prettier": "^3.8.1",
     "typescript": "~6.0.2"
   }
