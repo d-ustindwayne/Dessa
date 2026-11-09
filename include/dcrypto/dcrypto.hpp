@@ -480,7 +480,11 @@ inline bool sameBytes(const Bytes& a, const Bytes& b) {
     return diff == 0;
 }
 
-constexpr int kIterations = 100000;
+// PBKDF2 rounds for what is made now (OWASP's figure for HMAC-SHA256). A hash
+// says its own rounds. Encrypted text says them through its version byte:
+// version 1 was 100000, and still opens.
+constexpr int kIterations = 600000;
+constexpr std::uint8_t kEncryptVersion = 2;
 
 // ============================================================
 // The library
@@ -508,13 +512,13 @@ inline Bul verifyPassword(const Str& password, const Str& stored) {
     return sameBytes(pbkdf2(bytesOf(password), salt, iterations, expected.size()), expected);
 }
 
-// base64 of: version (1) | salt (16) | nonce (12) | encrypted text | tag (16)
+// base64 of: version (kEncryptVersion) | salt (16) | nonce (12) | encrypted text | tag (16)
 inline Str encrypt(const Str& text, const Str& password) {
     Bytes salt = randomBytes(16), nonce = randomBytes(12);
     Aes256 aes(pbkdf2(bytesOf(password), salt, kIterations, 32));
     Bytes cipher = gcmCrypt(aes, nonce.data(), bytesOf(text));
     Bytes tag = gcmTag(aes, nonce.data(), cipher);
-    Bytes out{1};
+    Bytes out{kEncryptVersion};
     out.insert(out.end(), salt.begin(), salt.end());
     out.insert(out.end(), nonce.begin(), nonce.end());
     out.insert(out.end(), cipher.begin(), cipher.end());
@@ -524,12 +528,12 @@ inline Str encrypt(const Str& text, const Str& password) {
 
 inline Str decrypt(const Str& data, const Str& password) {
     Bytes all = bytesOfBase64(data, "decrypt");
-    if (all.size() < 1 + 16 + 12 + 16 || all[0] != 1) fail("decrypt: this isn't text made by encrypt");
+    if (all.size() < 1 + 16 + 12 + 16 || (all[0] != 1 && all[0] != kEncryptVersion)) fail("decrypt: this isn't text made by encrypt");
     Bytes salt(all.begin() + 1, all.begin() + 17);
     const std::uint8_t* nonce = all.data() + 17;
     Bytes cipher(all.begin() + 29, all.end() - 16);
     Bytes tag(all.end() - 16, all.end());
-    Aes256 aes(pbkdf2(bytesOf(password), salt, kIterations, 32));
+    Aes256 aes(pbkdf2(bytesOf(password), salt, all[0] == 1 ? 100000 : kIterations, 32));
     if (!sameBytes(gcmTag(aes, nonce, cipher), tag)) fail("decrypt: wrong password, or the text was changed");
     return textOf(gcmCrypt(aes, nonce, cipher));
 }

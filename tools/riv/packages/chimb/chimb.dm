@@ -63,19 +63,69 @@ func[Emp] _record(passed[Bul], name[Str], message[Str]) {
     }
 }
 
+// Inside group(): the group's name, and what runs around each of its tests
+var[Str] _prefix = "";
+var[Func[Emp]<>] _before = <>;
+var[Func[Emp]<>] _after = <>;
+
+// Tests that belong together: their names start with the group's, and
+// beforeEach and afterEach inside it only reach its own tests.
+//     group("cart", () := {
+//         beforeEach(() := { cart = new Cart(); });
+//         test("starts empty", () := { expect(cart.size()).toBe(0); });
+//     });
+func[Emp] group(name[Str], body[Func[Emp]]) {
+    var[Str] outerPrefix = _prefix;
+    var[Func[Emp]<>] outerBefore = _before;
+    var[Func[Emp]<>] outerAfter = _after;
+    _prefix = outerPrefix + name + " > ";
+    try {
+        body();
+    } catch (e[Error]) {
+        _record(false, _prefix + "(the group itself)", $"threw {typeof(e)}: {e.message}");
+    } catch (e[Str]) {
+        _record(false, _prefix + "(the group itself)", $"threw: {e}");
+    }
+    _prefix = outerPrefix;
+    _before = outerBefore;
+    _after = outerAfter;
+}
+
+// Runs before each test from here on (to the end of the group, or of the file)
+func[Emp] beforeEach(action[Func[Emp]]) { _before.push(action); }
+
+// Runs after each test, also a failed one
+func[Emp] afterEach(action[Func[Emp]]) { _after.insert(0, action); }
+
 // Runs one test now: it passes when `body` finishes without a failed expect
 // and without an error.
 func[Emp] test(name[Str], body[Func[Emp]]) {
+    var[Str] full = _prefix + name;
+    var[Str] problem = "";
+    var[Bul] passed = true;
     try {
+        for (var[Func[Emp]] action in _before) action();
         body();
-        _record(true, name, "");
     } catch (e[ChimbFailure]) {
-        _record(false, name, e.message);
+        passed = false;
+        problem = e.message;
     } catch (e[Error]) {
-        _record(false, name, $"threw {typeof(e)}: {e.message}");
+        passed = false;
+        problem = $"threw {typeof(e)}: {e.message}";
     } catch (e[Str]) {
-        _record(false, name, $"threw: {e}");
+        passed = false;
+        problem = $"threw: {e}";
     }
+    try {
+        for (var[Func[Emp]] action in _after) action();
+    } catch (e[Error]) {
+        if (passed) problem = $"afterEach threw {typeof(e)}: {e.message}";
+        passed = false;
+    } catch (e[Str]) {
+        if (passed) problem = $"afterEach threw: {e}";
+        passed = false;
+    }
+    _record(passed, full, problem);
 }
 
 // Prints the totals; exit code 1 if a test failed

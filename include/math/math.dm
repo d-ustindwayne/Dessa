@@ -13,7 +13,7 @@
  * another number accept a Big or an Int.
  */
 
-$("math") { _bigNormalize, _bigAdd, _bigSub, _bigMul, _bigDiv, _bigMod, _bigPow, _bigCompare, _bigSci, _bigToInt, _bigToDbl, sqrt }
+$("math") { _bigNormalize, _bigAdd, _bigSub, _bigMul, _bigDiv, _bigMod, _bigPow, _bigCompare, _bigSci, _bigToInt, _bigToDbl, sqrt, idiv }
 
 class Big {
     var[Str] digits = "0";
@@ -48,6 +48,54 @@ class Big {
     // The remainder, never negative (same rule as %).
     func[Big] mod(other[Big | Int]) { return this._make(_bigMod(this.digits, this._of(other))); }
 
+    // The greatest common divisor, never negative.
+    func[Big] gcd(other[Big | Int]) {
+        var[Big] a = this.abs();
+        var[Big] b = this._make(this._of(other)).abs();
+        while (!b.isZero()) {
+            var[Big] rest = a.mod(b);
+            a = b;
+            b = rest;
+        }
+        return a;
+    }
+
+    // The least common multiple, never negative.
+    func[Big] lcm(other[Big | Int]) {
+        var[Big] o = this._make(this._of(other));
+        if (this.isZero() || o.isZero()) return new Big(0);
+        return this.abs().div(this.gcd(o)).mul(o.abs());
+    }
+
+    // this ^ exponent % modulus, quick even for huge numbers.
+    func[Big] modPow(exponent[Big | Int], modulus[Big | Int]) {
+        var[Big] m = this._make(this._of(modulus));
+        var[Big] e = this._make(this._of(exponent));
+        if (m.isZero()) throw "Division by zero";
+        if (e.isNegative()) throw "modPow: the exponent can't be negative";
+        var[Big] result = new Big(1).mod(m);
+        var[Big] base = this.mod(m);
+        while (!e.isZero()) {
+            if (!e.mod(2).isZero()) result = result.mul(base).mod(m);
+            base = base.mul(base).mod(m);
+            e = e.div(2);
+        }
+        return result;
+    }
+
+    // The whole part of the square root. Error if negative.
+    func[Big] isqrt() {
+        if (this.isNegative()) throw "isqrt of a negative number";
+        if (this.isZero()) return this;
+        var[Big] x = new Big(10).pow(Int((this.length() + 1) / 2));
+        var[Big] next = x.add(this.div(x)).div(2);
+        while (next.compare(x) < 0) {
+            x = next;
+            next = x.add(this.div(x)).div(2);
+        }
+        return x;
+    }
+
     func[Big] pow(exponent[Int]) { return this._make(_bigPow(this.digits, exponent)); }
 
     func[Big] negate() { return this._make(_bigSub("0", this.digits)); }
@@ -60,6 +108,10 @@ class Big {
     func[Bul] equals(other[Big | Int]) { return this.compare(other) == 0; }
     func[Bul] isNegative() { return this.digits.startsWith("-"); }
     func[Bul] isZero() { return this.digits == "0"; }
+    func[Bul] isEven() { return "02468".includes(Str(this.digits<this.digits.length() - 1>)); }
+
+    // -1, 0 or 1
+    func[Int] sign() { return this.isZero() ? 0 : this.isNegative() ? -1 : 1; }
 
     // ---- Showing and converting ----
     // Scientific notation: 265252859812191058636308480000000 -> "2.65E32"
@@ -76,6 +128,46 @@ class Big {
 
     // All the digits; print(big) shows these.
     func[Str] toStr() { return this.digits; }
+
+    // Operators: a + b, a * 2, a < b, a == b, -a, a ^ 3
+    func[Big] _add(other[Big | Int]) { return this.add(other); }
+    func[Big] _sub(other[Big | Int]) { return this.sub(other); }
+    func[Big] _mul(other[Big | Int]) { return this.mul(other); }
+    func[Big] _div(other[Big | Int]) { return this.div(other); }
+    func[Big] _mod(other[Big | Int]) { return this.mod(other); }
+    func[Big] _pow(exponent[Int]) { return this.pow(exponent); }
+    func[Big] _neg() { return this.negate(); }
+    func[Bul] _eq(other[Big]) { return this.digits == other.digits; }
+    func[Int] _cmp(other[Big]) { return this.compare(other); }
+    func[Int] _hash() {
+        var[Int] h = 7;
+        for (var[Chr] c in this.digits) h = (h % 1000000007) * 31 + c.code();
+        return h;
+    }
+}
+
+// The greatest common divisor, never negative: gcd(12, 18) is 6
+func[Int] gcd(a[Int], b[Int]) {
+    var[Int] x = a;
+    var[Int] y = b;
+    while (y != 0) {
+        var[Int] rest = x % y;
+        x = y;
+        y = rest;
+    }
+    return x < 0 ? -x : x;
+}
+
+// The least common multiple, never negative: lcm(4, 6) is 12
+func[Int] lcm(a[Int], b[Int]) {
+    if (a == 0 || b == 0) return 0;
+    var[Int] out = idiv(a, gcd(a, b)) * b;
+    return out < 0 ? -out : out;
+}
+
+// -1, 0 or 1
+func[Int] sign(x[Dbl]) {
+    return x > 0 ? 1 : x < 0 ? -1 : 0;
 }
 
 // ============================================================

@@ -7,8 +7,13 @@
 #include <sys/stat.h>
 #ifdef _WIN32
 #include <direct.h>
+#include <io.h>
 #else
+#include <fcntl.h>
 #include <unistd.h>
+#endif
+#ifndef __wasm__
+#include "os_exec.h"
 #endif
 
 static void push_text(ds_list* list, const char* text) {
@@ -78,6 +83,78 @@ ds_int dsx_os_deleteAll(ds_str* path) {
     ds_int count = 0;
     if (!remove_all(path->data, &count)) ds_fail("Cannot delete '%s': %s", path->data, strerror(errno));
     return count;
+}
+
+void dsx_os_copyFile(ds_str* from, ds_str* to) {
+    FILE* in = fopen(from->data, "rb");
+    if (!in) ds_fail("Cannot read file '%s': %s", from->data, strerror(errno));
+    FILE* out = fopen(to->data, "wb");
+    if (!out) {
+        fclose(in);
+        ds_fail("Cannot write file '%s': %s", to->data, strerror(errno));
+    }
+    char chunk[65536];
+    size_t n;
+    bool wrote = true;
+    while (wrote && (n = fread(chunk, 1, sizeof chunk, in)) > 0) wrote = fwrite(chunk, 1, n, out) == n;
+    fclose(in);
+    if (fclose(out) != 0 || !wrote) ds_fail("Cannot write file '%s'", to->data);
+}
+
+void dsx_os_moveFile(ds_str* from, ds_str* to) {
+#ifdef _WIN32
+    /* rename won't replace a file on Windows, as it does elsewhere */
+    if (_access(to->data, 0) == 0 && _access(from->data, 0) == 0) remove(to->data);
+#endif
+    if (rename(from->data, to->data) != 0) ds_fail("Cannot move '%s' to '%s': %s", from->data, to->data, strerror(errno));
+}
+
+ds_int dsx_os_fileSize(ds_str* path) {
+    struct stat st;
+    if (stat(path->data, &st) != 0) ds_fail("Cannot read file '%s': %s", path->data, strerror(errno));
+    return (ds_int)st.st_size;
+}
+
+ds_int dsx_os_modifiedTime(ds_str* path) {
+    struct stat st;
+    if (stat(path->data, &st) != 0) ds_fail("Cannot read file '%s': %s", path->data, strerror(errno));
+    return (ds_int)st.st_mtime;
+}
+
+void dsx_os_setEnv(ds_str* name, ds_str* value) {
+#ifdef _WIN32
+    if (_putenv_s(name->data, value->data) != 0) ds_fail("Cannot set '%s'", name->data);
+#else
+    if (setenv(name->data, value->data, 1) != 0) ds_fail("Cannot set '%s': %s", name->data, strerror(errno));
+#endif
+}
+
+/* [exit code, output], see os_exec.h */
+ds_list* dsx_os__execute(ds_str* program, ds_list* args) {
+#ifdef __wasm__
+    (void)program;
+    (void)args;
+    ds_fail("execute: WebAssembly can't start other programs");
+#else
+    fflush(stdout);
+    const char** values = (const char**)malloc(((size_t)args->len + 1) * sizeof(char*));
+    for (int64_t i = 0; i < args->len; ++i) values[i] = ((ds_str**)args->data)[i]->data;
+    os_exec_buffer output = {NULL, 0, 0};
+    char error[1200];
+    int code = os_exec_run(program->data, values, (size_t)args->len, &output, error, sizeof error);
+    free(values);
+    if (code < 0) {
+        free(output.data);
+        ds_fail("%s", error);
+    }
+    ds_list* out = ds_list_new(&ds_elem_str, 2);
+    char number[24];
+    snprintf(number, sizeof number, "%d", code);
+    ((ds_str**)out->data)[out->len++] = ds_str_cstr(number);
+    ((ds_str**)out->data)[out->len++] = ds_str_new(output.data ? output.data : "", (int64_t)output.len);
+    free(output.data);
+    return out;
+#endif
 }
 
 ds_int dsx_os_run(ds_str* command) {

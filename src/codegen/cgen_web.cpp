@@ -149,6 +149,11 @@ CCodegen::CV CCodegen::externGet(const MemberExpr* e, const SemanticType& type) 
             isCounted(type)};
 }
 
+// A field of a page object already held in the variable `object`
+CCodegen::CV CCodegen::externField(const std::string& object, const std::string& name, const SemanticType& type) {
+    return {"({ dsw_get(" + object + ", " + cText(name) + "); " + externTake(type) + "; })", isCounted(type)};
+}
+
 // object.field = value, += and -=
 CCodegen::CV CCodegen::externAssign(const AssignExpr* e) {
     const auto* m = static_cast<const MemberExpr*>(e->target.get());

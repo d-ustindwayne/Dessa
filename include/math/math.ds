@@ -5,12 +5,13 @@
  *     $("math") { sqrt, PI }     // or just some names
  *
  * Declaration file: documentation only. Bodies are `...`; the real
- * implementation is C++ in runtime/lib/math.hpp.
+ * implementation is in the runtime and in math.c / math.hpp.
  *
  * abs, min, max and clamp accept any number type (Int, Flt or Dbl) and
  * return the same type; they are declared with Dbl below for readability.
  *
- * class Big (whole numbers of any size) is written in Dessa: see math.dm.
+ * class Big (whole numbers of any size), gcd, lcm and sign are written in
+ * Dessa: see math.dm.
  */
 
 // 3.14159265358979...
@@ -101,6 +102,57 @@ func[Dbl] log10(x[Dbl]) {
 
 // E raised to x.
 func[Dbl] exp(x[Dbl]) {
+    ...
+}
+
+// The angle in radians whose sine is x. Error if x is outside -1 to 1.
+func[Dbl] asin(x[Dbl]) {
+    ...
+}
+
+// The angle in radians whose cosine is x. Error if x is outside -1 to 1.
+func[Dbl] acos(x[Dbl]) {
+    ...
+}
+
+// The angle in radians whose tangent is x.
+func[Dbl] atan(x[Dbl]) {
+    ...
+}
+
+// Hyperbolic sine.
+func[Dbl] sinh(x[Dbl]) {
+    ...
+}
+
+// Hyperbolic cosine.
+func[Dbl] cosh(x[Dbl]) {
+    ...
+}
+
+// Hyperbolic tangent.
+func[Dbl] tanh(x[Dbl]) {
+    ...
+}
+
+// Base-2 logarithm. Error if x <= 0.
+func[Dbl] log2(x[Dbl]) {
+    ...
+}
+
+// The length of the long side of a right triangle: hypot(3, 4) is 5.
+func[Dbl] hypot(a[Dbl], b[Dbl]) {
+    ...
+}
+
+// Drops what is after the point: trunc(2.7) is 2, trunc(-2.7) is -2.
+func[Int] trunc(x[Dbl]) {
+    ...
+}
+
+// Whole-number division, exact for every Int: idiv(7, 2) is 3, idiv(-7, 2) is -3.
+// a / b goes through a Dbl, so past 2^53 (about 9 quadrillion) it loses digits.
+func[Int] idiv(a[Int], b[Int]) {
     ...
 }
 

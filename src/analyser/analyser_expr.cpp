@@ -1805,8 +1805,12 @@ SemanticType Analyser::analyseCall(const CallExpr* expression) {
     if (callee->kind == ExprKind::Member) {
         const auto* member = static_cast<const MemberExpr*>(callee);
         // db.all:Person(...): a generic method, filled in. The call then names
-        // the filled-in method (all$1), for the code generators too.
-        if (member->name.type == TokenType::IDENTIFIER && member->name.lexeme.find('$') == std::string::npos) {
+        // the filled-in method (all$1), for the code generators too. This looks
+        // at the receiver, and analyseExpression(callee) below does again, so
+        // only when it can matter: doing it on every call doubles the work at
+        // each link of a.b().c().d()...
+        if (member->name.type == TokenType::IDENTIFIER && member->name.lexeme.find('$') == std::string::npos &&
+            (!member->typeArgs.empty() || genericMethodNames.count(member->name.lexeme))) {
             const size_t diagnosticCount = diagnostics.size();
             const SemanticType objectType = withoutNil(analyseExpression(member->object.get()));
             diagnostics.resize(diagnosticCount);

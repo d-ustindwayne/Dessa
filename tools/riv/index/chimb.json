@@ -8,6 +8,13 @@
       "manifest": "name = chimb\nversion = 1.0.0\nentry = chimb.dm\ndescription = Tests: test(), expect(x).toBe(y), expectThrows, done(); run them all with dessa test\n\n[dependencies]\n",
       "files": 2,
       "bytes": 4667
+    },
+    "1.1.0": {
+      "infohash": "03b358bc315a18b8b4ef266bdd89b2709e306e9e",
+      "torrent": "ZDg6YW5ub3VuY2U0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2UxMzphbm5vdW5jZS1saXN0bGw0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2VlbDMzOnVkcDovL29wZW4uc3RlYWx0aC5zaTo4MC9hbm5vdW5jZWVsNDE6dWRwOi8vdHJhY2tlci50b3JyZW50LmV1Lm9yZzo0NTEvYW5ub3VuY2VlbDM3OnVkcDovL2V4b2R1cy5kZXN5bmMuY29tOjY5NjkvYW5ub3VuY2VlZTEwOmNyZWF0ZWQgYnkxMTpyaXYgKERlc3NhKTQ6aW5mb2Q1OmZpbGVzbGQ2Omxlbmd0aGkxMjI0ZTQ6cGF0aGw5OlJFQURNRS5tZGVlZDY6bGVuZ3RoaTYyNDdlNDpwYXRobDg6Y2hpbWIuZG1lZWQ2Omxlbmd0aGkxNjFlNDpwYXRobDc6cml2LnBrZ2VlZTQ6bmFtZTU6Y2hpbWIxMjpwaWVjZSBsZW5ndGhpMTYzODRlNjpwaWVjZXMyMDr+DyQphUPYJSN6UYXc4rytnsdg42U4OnVybC1saXN0bDc4Omh0dHBzOi8vcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbS9kLXVzdGluZHdheW5lL0Rlc3NhL21haW4vdG9vbHMvcml2L3BhY2thZ2VzL2Vl",
+      "manifest": "name = chimb\nversion = 1.1.0\nentry = chimb.dm\ndescription = Tests: test(), expect(x).toBe(y), expectThrows, done(); run them all with dessa test\n\n[dependencies]\n",
+      "files": 3,
+      "bytes": 7632
     }
   }
 }

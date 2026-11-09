@@ -1,0 +1,53 @@
+find one true 1
+must one | The page has no element matching #none
+&lt;img src=x onerror=&quot;document.title=&#39;HACKED&#39;&quot;&gt;&#39;&amp;
+safeHtml 0 imgs, 1 b
+safeHtml: more values than {} in the template
+url https://a.com/x
+url /local/path
+url page.html?x=a:b
+url mailto:a@b.c
+url #
+url #
+url #
+url #
+url #
+h card 4 0 imgs
+h text true
+h links # https://ok.example/
+h: use on(...), not the attribute onclick
+on 2
+removed 2
+once 1
+direct 1
+a%20b%26c%3Dd%2F%C3%A9%E2%82%AC%F0%9F%98%80
+a b&c=d/é€😀 x%zz
+round trip é€😀 &=?#
+url https example.com:8080 /search/a two words [] top x
+https://example.com:8080/search/a?q=two%20words&empty=&page=2&x%20y=%C3%A9#top%20x
+/just/a/path page.html?a=1 https://a.com
+form {"user": "ann", "agree": "true", "size": "m", "color": "blue", "note": "hello"}
+form {"user": "bo", "agree": "false", "size": "s", "color": "red", "note": "n"}
+check true false false false false false
+check true false true false true false false true
+store [] dflt false
+store 1 true
+store soon|with|bars []
+store expires|notnumber|x
+store false
+session x true
+cookie true
+state 5 5 7
+router <"home", "user a b", "missing">
+toast <b>not html</b> 0
+media true false
+page webutils utilities true
+tree before before one
+tree swapped
+end of script
+post false 0 true
+fetch true 200 from the server [] after the rest
+fetch false 404
+debounce 1 throttle 1
+toast gone 0
+done

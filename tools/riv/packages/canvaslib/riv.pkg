@@ -1,5 +1,5 @@
 name = canvaslib
-version = 1.0.0
+version = 1.0.1
 entry = canvaslib.dm
 description = Drawing and simple games on a web page: shapes, text, images, keys, mouse, frames
 

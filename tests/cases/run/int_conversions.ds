@@ -1,0 +1,31 @@
+// Turning text or a decimal into an Int: too big is an error, as with any other
+// Int overflow, never a wrong number.
+$("math") { floor, ceil, round, trunc, pow }
+
+func[Str] show(action[Func[Int]]) {
+    try {
+        return Str(action());
+    } catch (e[OverflowError]) {
+        return $"OverflowError: {e.message}";
+    } catch (e[ValueError]) {
+        return $"ValueError: {e.message}";
+    }
+}
+
+for (var[Str] t in <"9223372036854775807", "9223372036854775808", "-9223372036854775808", "-9223372036854775809", "123456789012345678901234567890", "1e30", "12abc", " 12 ", "", "1.5", "+5">) {
+    print(t, "->", show(() := Int(t)));
+}
+
+const[Dbl] huge = pow(10, 30);
+const[Dbl] largest = 9007199254740992.0;
+const[Dbl] infinite = 1.0 / 0.0;
+const[Dbl] notNumber = infinite - infinite;
+const[Flt] hugeFlt = Flt(huge);
+print(show(() := Int(huge)), "|", show(() := Int(-huge)), "|", show(() := Int(infinite)), "|", show(() := Int(notNumber)));
+print(show(() := Int(hugeFlt)), "|", show(() := huge.toInt()), "|", show(() := Int(largest)), "|", show(() := Int(2.9)), "|", show(() := Int(-2.9)));
+print(show(() := floor(huge)), "|", show(() := ceil(-huge)), "|", show(() := round(infinite)), "|", show(() := trunc(notNumber)));
+print(floor(2.5), ceil(2.5), round(2.5), round(-2.5), trunc(-2.5));
+
+var[Int] kept = 7 / 2;
+kept /= 2;
+print(kept);

@@ -10,7 +10,7 @@ print(hmac("key", "The quick brown fox jumps over the lazy dog"));
 print(sha256("a".repeat(1000)) == sha256("a".repeat(999) + "a"));
 
 var[Str] stored = hashPassword("s3cret");
-print(stored.startsWith("pbkdf2-sha256$100000$"), verifyPassword("s3cret", stored), verifyPassword("S3cret", stored));
+print(stored.startsWith("pbkdf2-sha256$600000$"), verifyPassword("s3cret", stored), verifyPassword("S3cret", stored));
 print(stored != hashPassword("s3cret"));   // a new salt each time
 
 // made earlier (by either runtime): must still decrypt
@@ -29,3 +29,9 @@ print(toBase64("Hello, Dessa!"), fromBase64("SGVsbG8sIERlc3NhIQ=="), toBase64("a
 print(toHex("Hi ñ"), fromHex("4869"), fromHex("C3B1"));
 try { fromHex("abc"); } catch (e[Str]) { print(e); }
 print(token(16).length(), token(16) != token(16));
+
+// New hashes use today's rounds; what older versions made still opens
+print(hashPassword("x").startsWith("pbkdf2-sha256$600000$"));
+print(verifyPassword("old password", "pbkdf2-sha256$100000$8JGcWqcc6bpOHY4a6kyuww==$1P+yjulCKodp2lRYRnr49Ug/cfXtqba+W/sl5n/Z5NI="));
+print(verifyPassword("other", "pbkdf2-sha256$100000$8JGcWqcc6bpOHY4a6kyuww==$1P+yjulCKodp2lRYRnr49Ug/cfXtqba+W/sl5n/Z5NI="));
+print(decrypt("AeA7pkqQ8zqsrLBp6CLcmFIo1mZGXnOLZSU+VuLB/cK3+ul2HrgdGBs8qOldPfJmyPSpKkgMsFzZCy3z6CMWIKaorSlSIP9WhCBb", "old password"));

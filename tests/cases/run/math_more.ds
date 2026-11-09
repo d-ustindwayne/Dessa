@@ -1,0 +1,40 @@
+// The rest of math, Big's operators, and exact whole-number division.
+$("math");
+
+print(asin(1) * 2 == PI, acos(1), atan(0), sinh(0), cosh(0), tanh(0), log2(8), log2(1024), hypot(3, 4));
+print(trunc(2.7), trunc(-2.7), gcd(12, 18), gcd(-12, 18), gcd(0, 5), lcm(4, 6), lcm(0, 5), lcm(-4, 6), sign(5), sign(-2.5), sign(0));
+
+// a / b goes through a Dbl; idiv doesn't
+print(idiv(7, 2), idiv(-7, 2), idiv(9007199254740993, 1), idiv(9223372036854775807, 10));
+try { idiv(1, 0); } catch (e[Str]) { print(e); }
+try { idiv(-9223372036854775807 - 1, -1); } catch (e[Str]) { print(e); }
+try { asin(2); } catch (e[Str]) { print(e); }
+try { log2(0); } catch (e[Str]) { print(e); }
+
+var[Big] a = new Big("123456789012345678901234567890");
+var[Big] b = new Big("987654321098765432109876543210");
+print(a + b, b - a, a * b);
+print(b / a, b % a, a / 7, -a, a ^ 3);
+print(a * 2, a + 1, a < b, a > b, a <= a, a == new Big("123456789012345678901234567890"), a != b);
+print(a.gcd(b), a.lcm(b), new Big(-12).gcd(18), new Big(0).gcd(5), new Big(4).lcm(6));
+print(new Big(2).modPow(1000, 1000000007), new Big(3).modPow(a, b), new Big(5).modPow(0, 1));
+print(new Big(10).pow(40).isqrt(), a.isqrt(), new Big(0).isqrt(), new Big(1).isqrt(), new Big(15).isqrt(), new Big(16).isqrt());
+print(new Big(10).isEven(), new Big(7).isEven(), new Big(-3).sign(), new Big().sign(), new Big(3).sign());
+
+// Long division: quotient * divisor + remainder gives the number back, at
+// every size and where digits of the quotient are at their largest
+var[Big] n = new Big(7).pow(3000);
+var[Big<>] divisors = <new Big(3), new Big(1000000000), new Big(999999999), new Big(10).pow(9).pow(5).sub(1), new Big(13).pow(700), n.sub(1), n, n.add(1)>;
+var[Bul] exact = true;
+for (var[Big] d in divisors) {
+    var[Big] q = n / d;
+    var[Big] r = n % d;
+    if (q * d + r != n || r < new Big(0) || r >= d) exact = false;
+}
+print(exact, new Big(10).pow(18).sub(1) / new Big(10).pow(9).sub(1), new Big(10).pow(27) / new Big(10).pow(9).sub(1));
+print(new Big(-7) / 2, new Big(7) / -2, new Big(-7) % 3);
+try { new Big(1).modPow(-1, 5); } catch (e[Str]) { print(e); }
+
+var[Map[Big, Str]] names = {:};
+names<new Big(5)> = "five";
+print(names.getOr(new Big(5), "?"), names.has(new Big(6)));

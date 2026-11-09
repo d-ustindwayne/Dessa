@@ -4,7 +4,8 @@
  *     $("os") { readFile, writeFile }
  *
  * Declaration file: documentation only. Bodies are `...`; the real
- * implementation is C++ in runtime/lib/os.hpp.
+ * implementation is in the runtime and in os.c / os.hpp. os.dm has File,
+ * execute, and the path helpers (joinPath, baseName, dirName, extension).
  *
  * Relative paths are relative to the folder the program is run from.
  */
@@ -67,7 +68,34 @@ func[Str | Nil] getEnv(name[Str]) {
     ...
 }
 
+// Copies a file, replacing what is at `to`. Error if it can't.
+func[Emp] copyFile(from[Str], to[Str]) {
+    ...
+}
+
+// Moves or renames a file, replacing what is at `to`. Error if it can't.
+func[Emp] moveFile(from[Str], to[Str]) {
+    ...
+}
+
+// A file's size in bytes. Error if it can't be read.
+func[Int] fileSize(path[Str]) {
+    ...
+}
+
+// When a file last changed, in seconds since 1970. Error if it can't be read.
+func[Int] modifiedTime(path[Str]) {
+    ...
+}
+
+// Sets an environment variable for this program and the ones it starts.
+func[Emp] setEnv(name[Str], value[Str]) {
+    ...
+}
+
 // Runs a shell command and returns its exit code (0 usually means success).
+// The shell acts on everything in the text: never put something a user typed,
+// or anything from a file or the network, into it. Use execute for that: see os.dm.
 func[Int] run(command[Str]) {
     ...
 }

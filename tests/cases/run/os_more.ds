@@ -1,0 +1,22 @@
+// Files and paths. (execute is tested in tests/test.py: execute_test)
+$("os");
+
+const[Str] folder = "os_more_test.tmp";
+deleteAll(folder);
+makeDir(folder);
+writeFile(joinPath(folder, "a.txt"), "hello");
+copyFile(joinPath(folder, "a.txt"), joinPath(folder, "b.txt"));
+moveFile(joinPath(folder, "b.txt"), joinPath(folder, "c.txt"));
+print(listDir(folder), readFile(joinPath(folder, "c.txt")), fileSize(joinPath(folder, "a.txt")), modifiedTime(joinPath(folder, "a.txt")) > 1000000000);
+writeFile(joinPath(folder, "d.txt"), "other");
+moveFile(joinPath(folder, "d.txt"), joinPath(folder, "c.txt"));
+print(listDir(folder), readFile(joinPath(folder, "c.txt")));
+try { copyFile(joinPath(folder, "none"), joinPath(folder, "x")); } catch { print("copy failed"); }
+try { moveFile(joinPath(folder, "none"), joinPath(folder, "x")); } catch { print("move failed"); }
+try { fileSize(joinPath(folder, "none")); } catch { print("size failed"); }
+setEnv("DESSA_OS_TEST", "set");
+print(getEnv("DESSA_OS_TEST"));
+print(joinPath("a", "b", "c.txt"), joinPath("a/", "b"), joinPath("", "b"), joinPath());
+print(baseName("logs/a.txt"), baseName("a.txt"), baseName("c:\\x\\y.txt"), dirName("logs/2026/a.txt"), dirName("a.txt"), dirName("/a"));
+print(extension("a.tar.gz"), extension("notes"), extension(".env"), extension("x.y/notes"));
+deleteAll(folder);

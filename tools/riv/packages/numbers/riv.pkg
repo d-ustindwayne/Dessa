@@ -1,4 +1,4 @@
 name = numbers
-version = 1.2.0
+version = 2.0.0
 entry = lib.ds
-description = Roman numerals, numbers in words, spreadsheet columns, digits, fractions, temperatures
+description = Exact decimals and fractions, complex numbers, NumPy-style arrays, statistics, primes, numbers in words, units, formats

@@ -44,6 +44,17 @@ function exeName() {
 }
 
 // Downloads `url` (following GitHub's redirects) into `file`
+// Throws unless `file` is in the release's list of checksums, with that checksum
+function checkDownload(file, sums) {
+    const name = path.basename(file);
+    const line = fs.readFileSync(sums, "utf8").split("\n").map((l) => l.trim().split(/\s+/)).find((w) => w[1] && w[1].replace(/^\*/, "") === name);
+    const actual = require("crypto").createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+    if (!line || line[0] !== actual) {
+        fs.rmSync(file, { force: true });
+        throw new DessaError(`dessalang: ${name} doesn't match the release's checksums: not installing it`);
+    }
+}
+
 function download(url, file) {
     return new Promise((resolve, reject) => {
         const get = (address, left) => {
@@ -93,6 +104,9 @@ function install() {
             const archive = path.join(home(), name + (process.platform === "win32" ? ".zip" : ".tar.gz"));
             console.error(`dessalang: downloading Dessa ${VERSION} (once)...`);
             await download(`${REPO}/releases/download/v${VERSION}/${path.basename(archive)}`, archive);
+            const sums = path.join(home(), "SHA256SUMS");
+            await download(`${REPO}/releases/download/v${VERSION}/SHA256SUMS`, sums);
+            checkDownload(archive, sums);
             unpack(archive, home());
             fs.rmSync(archive, { force: true });
         }

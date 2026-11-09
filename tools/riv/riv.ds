@@ -973,7 +973,10 @@ class Release {
     var[Str] version = "";
     var[Str] asset = "";   // the archive for this computer
     var[Str] url = "";
+    var[Str] sums = "";   // the release's list of checksums
 }
+
+const[Str] RELEASE_FILES = "https://github.com/d-ustindwayne/Dessa/releases/download/";
 
 func[Str] dessaCommand() {
     return getEnv("DESSA") ?? "dessa";
@@ -1006,7 +1009,10 @@ func[Release | Nil] latestRelease(timeout[Int]) {
         release.asset = assetName(release.version);
         var[Json] assets = data.get("assets");
         for (var[Int] i = 0; i < assets.length(); i++) {
-            if (assets.at(i).get("name").asStr() == release.asset) release.url = assets.at(i).get("browser_download_url").asStr();
+            var[Str] name = assets.at(i).get("name").asStr();
+            var[Str] link = assets.at(i).get("browser_download_url").asStr();
+            if (name == release.asset) release.url = link;
+            if (name == "SHA256SUMS") release.sums = link;
         }
         return release;
     } catch {
@@ -1047,6 +1053,15 @@ func[Emp] checkForUpdate() {
     }
 }
 
+// "0.5.7": digits and dots only
+func[Bul] plainVersion(version[Str]) {
+    if (version.isEmpty()) return false;
+    for (var[Chr] c in version) {
+        if (!c.isDigit() && c != '.') return false;
+    }
+    return true;
+}
+
 // riv update: the newest Dessa and riv, from the GitHub release
 func[Emp] cmdUpdate(rest[Str<>]) {
     var[Bul] force = rest.includes("--force");
@@ -1060,6 +1075,10 @@ func[Emp] cmdUpdate(rest[Str<>]) {
         return;
     }
     if (release.url.isEmpty()) throw new RivError($"the release {release.version} has no {release.asset} for this computer");
+    // These end up in commands: only this project's own files, and a plain version
+    if (!plainVersion(release.version) || !release.url.startsWith(RELEASE_FILES) || !release.sums.startsWith(RELEASE_FILES)) {
+        throw new RivError($"the release {release.version} has no checksums, or its files aren't this project's: not installing it");
+    }
     var[Str] home = capture($"\"{dessaCommand()}\" home");
     if (home.isEmpty() || !isDir(home)) throw new RivError("could not find where Dessa is installed (is `dessa` on the PATH?)");
 
@@ -1070,6 +1089,14 @@ func[Emp] cmdUpdate(rest[Str<>]) {
     print($"Downloading Dessa {release.version}...");
     if (run($"curl -fsSL -o \"{archive}\" \"{release.url}\"") != 0 || !fileExists(archive)) {
         throw new RivError($"could not download {release.url}");
+    }
+    var[Str] sums = $"{folder}/SHA256SUMS";
+    if (run($"curl -fsSL -o \"{sums}\" \"{release.sums}\"") != 0 || !fileExists(sums)) {
+        throw new RivError($"could not download {release.sums}");
+    }
+    if (run($"\"{dessaCommand()}\" verify-download \"{archive}\" \"{sums}\"") != 0) {
+        deleteAll(folder);
+        throw new RivError("the download doesn't match the release's checksums: not installing it");
     }
     if (run($"tar -xf \"{archive}\" -C \"{folder}\"") != 0) throw new RivError($"could not unpack {archive}");
     var[Str] unpacked = $"{folder}/dessa-{release.version}-" + (platform() == "windows" ? "windows-x64" : platform() == "macos" ? "macos-arm64" : "linux-x64");

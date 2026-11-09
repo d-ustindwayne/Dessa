@@ -394,6 +394,19 @@ void openBrowser(const std::string& url) {
 
 } // namespace
 
+// Is the request's Host header this computer? (any port)
+static bool hostIsLocal(const std::string& request) {
+    std::string lowered = lower(request.substr(0, request.find("\r\n\r\n")));
+    const size_t at = lowered.find("\r\nhost:");
+    if (at == std::string::npos) return false;
+    const size_t start = lowered.find_first_not_of(" \t", at + 7);
+    if (start == std::string::npos) return false;
+    std::string host = lowered.substr(start, lowered.find("\r\n", start) - start);
+    if (host.compare(0, 5, "[::1]") == 0) return true;
+    host = host.substr(0, host.find(':'));
+    return host == "localhost" || host == "127.0.0.1";
+}
+
 int serve(const std::string& folderArg, int port, const std::string& open, const CompileFn& compile) {
     std::error_code ec;
     const fs::path root = fs::weakly_canonical(fs::absolute(folderArg.empty() ? "." : folderArg), ec);
@@ -434,12 +447,26 @@ int serve(const std::string& folderArg, int port, const std::string& open, const
     while (true) {
         socket_t client = accept(server, nullptr, nullptr);
         if (client == INVALID_SOCKET) continue;
+        // A connection that sends nothing can't stop the server for long
+#ifdef _WIN32
+        const DWORD patience = 5000;
+#else
+        const timeval patience{5, 0};
+#endif
+        setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&patience), sizeof patience);
         std::string request;
         char buffer[4096];
         while (request.find("\r\n\r\n") == std::string::npos && request.size() < 65536) {
             int n = recv(client, buffer, sizeof buffer, 0);
             if (n <= 0) break;
             request.append(buffer, static_cast<size_t>(n));
+        }
+        // Only pages of this computer's own sites: a site elsewhere could point
+        // its own name at 127.0.0.1 and read the folder from the visitor's browser
+        if (!hostIsLocal(request)) {
+            respond(client, 403, "text/plain", "Forbidden");
+            DESSA_CLOSE(client);
+            continue;
         }
         std::istringstream first(request.substr(0, request.find("\r\n")));
         std::string method, target;
@@ -452,9 +479,9 @@ int serve(const std::string& folderArg, int port, const std::string& open, const
             continue;
         }
         fs::path file = fs::weakly_canonical(root / pathPart.substr(1), ec);
-        // Stay inside the folder
-        std::string rootText = root.string(), fileText = file.string();
-        if (fileText.compare(0, rootText.size(), rootText) != 0) {
+        // Stay inside the folder (a whole part of the path: "site-secret" isn't inside "site")
+        const auto parts = std::mismatch(root.begin(), root.end(), file.begin(), file.end());
+        if (ec || parts.first != root.end()) {
             respond(client, 403, "text/plain", "Forbidden");
             DESSA_CLOSE(client);
             continue;

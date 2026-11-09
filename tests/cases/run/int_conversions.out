@@ -1,0 +1,16 @@
+9223372036854775807 -> 9223372036854775807
+9223372036854775808 -> OverflowError: Int overflow: 9223372036854775808 is too big for an Int
+-9223372036854775808 -> -9223372036854775808
+-9223372036854775809 -> OverflowError: Int overflow: -9223372036854775809 is too big for an Int
+123456789012345678901234567890 -> OverflowError: Int overflow: 123456789012345678901234567890 is too big for an Int
+1e30 -> OverflowError: Int overflow: 1e+30 is too big for an Int
+12abc -> ValueError: Cannot convert "12abc" to Int
+ 12  -> 12
+ -> ValueError: Cannot convert "" to Int
+1.5 -> 1
++5 -> 5
+OverflowError: Int overflow: 1e+30 is too big for an Int | OverflowError: Int overflow: -1e+30 is too big for an Int | OverflowError: Int overflow: inf is too big for an Int | OverflowError: Int overflow: not a number can't be an Int
+OverflowError: Int overflow: 1e+30 is too big for an Int | OverflowError: Int overflow: 1e+30 is too big for an Int | 9007199254740992 | 2 | -2
+OverflowError: Int overflow: 1e+30 is too big for an Int | OverflowError: Int overflow: -1e+30 is too big for an Int | OverflowError: Int overflow: inf is too big for an Int | OverflowError: Int overflow: not a number can't be an Int
+2 3 3 -3 -2
+1

@@ -1,59 +1,1150 @@
 /***
- * numbers -- number conversions and digit helpers.
+ * numbers -- working with numbers beyond what Int and Dbl can do.
  *
- *     $("numbers") { toRoman, toWords, excelColumn }     (after `riv add numbers`)
+ *     $("numbers") { Decimal, Fraction, Complex, NDArray, array, zeros, stats, words, roman }
+ *     (after `riv add numbers`)
  *
- *     toRoman(2026)                 "MMXXVI"
- *     fromRoman("XLII")             42
- *     toWords(78056)                "seventy-eight thousand fifty-six"
- *     fromWords("thirty three thousand eight hundred forty four")   33844
- *     excelColumn(28)               "AB"
- *     excelColumnNumber("XFD")      16384
- *     sumDigits(1234)               10
- *     mixedFraction("24/5")         "4 4/5"
- *     convertTemperature(100, "C", "F")   212
+ * Exact numbers of any size:
+ *     new Decimal("0.1") + new Decimal("0.2")     0.3 (a Dbl would give 0.30000000000000004)
+ *     new Fraction(1, 3) + new Fraction(1, 6)     1/2
+ *     words.of("1000000000000000000000000")       "one septillion"
+ *
+ * Arrays, in the manner of NumPy (of Dbl, any number of dimensions):
+ *     var[NDArray] a = array2d(<<1.0, 2.0>, <3.0, 4.0>>);
+ *     print(a * 2, a.sum(), a.sumAlong(0), a.transpose(), a.dot(a), a.inverse());
+ *
+ * Each kind of work has its own class. The ones that keep no state of their
+ * own come as a ready-made object:
+ *     stats      RealStatistics    mean, median, stdev, percentile, ...
+ *     primes     PrimeNumbers      isPrime, factorize, upTo, ...
+ *     words      NumberWords       numbers in English, of any size
+ *     roman      RomanNumerals     1 to 3999
+ *     digits     DigitTools        the digits of a number
+ *     radix      NumberBases       any base from 2 to 36
+ *     units      UnitConverter     length, mass, time, temperature, data, ...
+ *     columns    SpreadsheetColumns  1 <-> "A", 28 <-> "AB"
+ *     numformat  NumberFormat      1,234,567  1.5M  3rd  12.5%  1.5 MB
+ *
+ * Whole numbers of any size are Big, from $("math"). The functions of version
+ * 1 (toRoman, toWords, sumDigits, ...) still work, at the end of this file;
+ * they will go in a later version.
  */
 
+$("math") { Big, sqrt, abs, floor, ceil, sin, cos, exp, log, pow, atan2 }
+
+class NumberError(Error) {}
+
+// Whatever kind of whole number it came as
+func[Big] _big(value[Big | Int | Str]) {
+    if (value is Big) return value;
+    if (value is Int) return new Big(value);
+    if (value is Str) return new Big(value);
+    return new Big(0);
+}
+
 // ============================================================
-// Roman numerals
+// Decimal: exact decimal numbers, of any size
 // ============================================================
 
-const[Int<>] _romanValues = <1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1>;
-const[Str<>] _romanSymbols = <"M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I">;
+// Money and anything else where 0.1 has to be exactly 0.1. Never changes:
+// every method gives a new Decimal.
+//     new Decimal("19.99").mul(3)              59.97
+//     new Decimal(1).div(3, places: 5)         0.33333
+//     new Decimal("2.675").round(2)            2.68
+class Decimal {
+    var[Big] _digits = new Big(0);     // the value without its point ...
+    var[Int] _places = 0;              // ... and how many digits follow the point
 
-// 1 to 3999 in Roman numerals: toRoman(1994) is "MCMXCIV".
-func[Str] toRoman(number[Int]) {
-    if (number < 1 || number > 3999) throw $"toRoman: {number} can't be written in Roman numerals (1 to 3999)";
-    var[Str] out = "";
-    var[Int] left = number;
-    for (var[Int] i = 0; i < _romanValues.length(); i++) {
-        while (left >= _romanValues<i>) {
-            out += _romanSymbols<i>;
-            left -= _romanValues<i>;
+    // new Decimal("12.50"), new Decimal(12), new Decimal(0.1), new Decimal("1.5e3")
+    init(value[Str | Int | Dbl | Big] = 0) {
+        if (value is Int) {
+            this._digits = new Big(value);
+        } else if (value is Big) {
+            this._digits = value;
+        } else if (value is Dbl) {
+            this._read(Str(value));
+        } else if (value is Str) {
+            this._read(value);
         }
+    }
+
+    func[Emp] _read(text[Str]) {
+        var[Str] t = text.trim().lower();
+        var[Int] shift = 0;
+        var[Int] e = t.indexOf("e");
+        if (e >= 0) {
+            try {
+                shift = Int(t.substr(e + 1, t.length() - e - 1));
+            } catch {
+                throw new NumberError($"'{text}' is not a number");
+            }
+            t = t.substr(0, e);
+        }
+        var[Int] dot = t.indexOf(".");
+        var[Str] whole = dot >= 0 ? t.substr(0, dot) : t;
+        var[Str] rest = dot >= 0 ? t.substr(dot + 1, t.length() - dot - 1) : "";
+        var[Str] plain = whole.startsWith("-") || whole.startsWith("+") ? whole.substr(1, whole.length() - 1) : whole;
+        if (plain == "" && rest == "") throw new NumberError($"'{text}' is not a number");
+        for (var[Chr] c in plain + rest) {
+            if (!c.isDigit()) throw new NumberError($"'{text}' is not a number");
+        }
+        var[Str] sign = whole.startsWith("-") ? "-" : "";
+        var[Str] all = plain + rest;
+        this._digits = new Big(sign + (all == "" ? "0" : all));
+        this._places = rest.length() - shift;
+        if (this._places < 0) {
+            this._digits = this._digits.mul(new Big(10).pow(-this._places));
+            this._places = 0;
+        }
+    }
+
+    func[Decimal] _of(other[Decimal | Int | Str | Dbl]) {
+        if (other is Decimal) return other;
+        if (other is Int) return new Decimal(other);
+        if (other is Str) return new Decimal(other);
+        if (other is Dbl) return new Decimal(other);
+        return new Decimal(0);
+    }
+
+    func[Decimal] _make(digits[Big], places[Int]) {
+        var[Decimal] out = new Decimal(digits);
+        out._places = places;
+        return out;
+    }
+
+    // Its digits, as if it had `places` digits after the point
+    func[Big] _at(places[Int]) {
+        return places == this._places ? this._digits : this._digits.mul(new Big(10).pow(places - this._places));
+    }
+
+    func[Decimal] add(other[Decimal | Int | Str | Dbl]) {
+        var[Decimal] o = this._of(other);
+        var[Int] places = this._places > o._places ? this._places : o._places;
+        return this._make(this._at(places).add(o._at(places)), places);
+    }
+
+    func[Decimal] sub(other[Decimal | Int | Str | Dbl]) {
+        var[Decimal] o = this._of(other);
+        var[Int] places = this._places > o._places ? this._places : o._places;
+        return this._make(this._at(places).sub(o._at(places)), places);
+    }
+
+    func[Decimal] mul(other[Decimal | Int | Str | Dbl]) {
+        var[Decimal] o = this._of(other);
+        return this._make(this._digits.mul(o._digits), this._places + o._places);
+    }
+
+    // `places` digits after the point at most, the last one rounded. Error for 0.
+    func[Decimal] div(other[Decimal | Int | Str | Dbl], places[Int] = 28) {
+        var[Decimal] o = this._of(other);
+        if (o.isZero()) throw new NumberError("Division by zero");
+        // One digit more than asked, for rounding
+        var[Int] extra = places + 1 + o._places - this._places;
+        var[Big] top = extra >= 0 ? this._digits.mul(new Big(10).pow(extra)) : this._digits.div(new Big(10).pow(-extra));
+        return this._make(top.div(o._digits), places + 1).round(places).trim();
+    }
+
+    // Halves round away from zero: 2.675 to 2 places is 2.68, -0.5 to 0 places is -1
+    func[Decimal] round(places[Int] = 0) {
+        if (places < 0) throw new NumberError("round: the number of places can't be negative");
+        if (places >= this._places) return this._make(this._at(places), places);
+        var[Big] scale = new Big(10).pow(this._places - places);
+        var[Big] size = this._digits.abs().add(scale.div(2)).div(scale);
+        return this._make(this._digits.isNegative() ? size.negate() : size, places);
+    }
+
+    // Cuts off the digits after `places`, without rounding
+    func[Decimal] truncate(places[Int] = 0) {
+        if (places >= this._places) return this._make(this._at(places), places);
+        return this._make(this._digits.div(new Big(10).pow(this._places - places)), places);
+    }
+
+    // Without zeros at the end: 1.500 is 1.5
+    func[Decimal] trim() {
+        var[Big] d = this._digits;
+        var[Int] p = this._places;
+        while (p > 0 && d.mod(10).isZero()) {
+            d = d.div(10);
+            p--;
+        }
+        return this._make(d, p);
+    }
+
+    func[Decimal] pow(exponent[Int]) {
+        if (exponent < 0) throw new NumberError("pow: use 1 / the number for a negative power");
+        return this._make(this._digits.pow(exponent), this._places * exponent);
+    }
+
+    func[Decimal] negate() { return this._make(this._digits.negate(), this._places); }
+    func[Decimal] abs() { return this._make(this._digits.abs(), this._places); }
+    func[Bul] isZero() { return this._digits.isZero(); }
+    func[Bul] isNegative() { return this._digits.isNegative(); }
+
+    // -1 if smaller than `other`, 0 if the same, 1 if bigger (1.50 and 1.5 are the same)
+    func[Int] compare(other[Decimal | Int | Str | Dbl]) {
+        var[Decimal] o = this._of(other);
+        var[Int] places = this._places > o._places ? this._places : o._places;
+        return this._at(places).compare(o._at(places));
+    }
+    func[Bul] equals(other[Decimal | Int | Str | Dbl]) { return this.compare(other) == 0; }
+
+    func[Big] toBig() { return this.truncate(0)._digits; }
+    func[Dbl] toDbl() { return Dbl(this.toStr()); }
+
+    func[Str] toStr() {
+        if (this._places == 0) return this._digits.toStr();
+        var[Str] text = this._digits.abs().toStr();
+        if (text.length() <= this._places) text = "0".repeat(this._places - text.length() + 1) + text;
+        var[Int] point = text.length() - this._places;
+        var[Str] sign = this._digits.isNegative() ? "-" : "";
+        return sign + text.substr(0, point) + "." + text.substr(point, this._places);
+    }
+
+    func[Decimal] _add(other[Decimal | Int | Str | Dbl]) { return this.add(other); }
+    func[Decimal] _sub(other[Decimal | Int | Str | Dbl]) { return this.sub(other); }
+    func[Decimal] _mul(other[Decimal | Int | Str | Dbl]) { return this.mul(other); }
+    func[Decimal] _div(other[Decimal | Int | Str | Dbl]) { return this.div(other); }
+    func[Decimal] _neg() { return this.negate(); }
+    func[Bul] _eq(other[Decimal]) { return this.compare(other) == 0; }
+    func[Int] _cmp(other[Decimal]) { return this.compare(other); }
+}
+
+// ============================================================
+// Fraction: exact fractions, of any size
+// ============================================================
+
+//     new Fraction(1, 3) + new Fraction(1, 6)      1/2
+//     new Fraction("24/5").mixed()                 "4 4/5"
+//     new Fraction("0.75")                         3/4
+class Fraction {
+    var[Big] top = new Big(0);
+    var[Big] bottom = new Big(1);      // never negative or 0
+
+    init(top[Big | Int | Str] = 0, bottom[Big | Int] = 1) {
+        var[Big] b = _big(bottom);
+        if (top is Str) {
+            var[Int] slash = top.indexOf("/");
+            if (slash >= 0) {
+                this._set(new Big(top.substr(0, slash)), new Big(top.substr(slash + 1, top.length() - slash - 1)).mul(b));
+            } else {
+                var[Decimal] d = new Decimal(top);
+                this._set(d._digits, new Big(10).pow(d._places).mul(b));
+            }
+        } else {
+            this._set(_big(top), b);
+        }
+    }
+
+    func[Emp] _set(top[Big], bottom[Big]) {
+        if (bottom.isZero()) throw new NumberError("A fraction can't have 0 below the line");
+        var[Big] g = top.gcd(bottom);
+        var[Big] t = g.isZero() ? top : top.div(g);
+        var[Big] b = g.isZero() ? bottom : bottom.div(g);
+        this.top = b.isNegative() ? t.negate() : t;
+        this.bottom = b.abs();
+    }
+
+    func[Fraction] _of(other[Fraction | Int]) {
+        if (other is Fraction) return other;
+        if (other is Int) return new Fraction(other);
+        return new Fraction();
+    }
+
+    func[Fraction] add(other[Fraction | Int]) {
+        var[Fraction] o = this._of(other);
+        return new Fraction(this.top.mul(o.bottom).add(o.top.mul(this.bottom)), this.bottom.mul(o.bottom));
+    }
+    func[Fraction] sub(other[Fraction | Int]) {
+        var[Fraction] o = this._of(other);
+        return new Fraction(this.top.mul(o.bottom).sub(o.top.mul(this.bottom)), this.bottom.mul(o.bottom));
+    }
+    func[Fraction] mul(other[Fraction | Int]) {
+        var[Fraction] o = this._of(other);
+        return new Fraction(this.top.mul(o.top), this.bottom.mul(o.bottom));
+    }
+    func[Fraction] div(other[Fraction | Int]) {
+        var[Fraction] o = this._of(other);
+        if (o.top.isZero()) throw new NumberError("Division by zero");
+        return new Fraction(this.top.mul(o.bottom), this.bottom.mul(o.top));
+    }
+    func[Fraction] pow(exponent[Int]) {
+        if (exponent >= 0) return new Fraction(this.top.pow(exponent), this.bottom.pow(exponent));
+        if (this.top.isZero()) throw new NumberError("Division by zero");
+        return new Fraction(this.bottom.pow(-exponent), this.top.pow(-exponent));
+    }
+    func[Fraction] negate() { return new Fraction(this.top.negate(), this.bottom); }
+    func[Fraction] abs() { return new Fraction(this.top.abs(), this.bottom); }
+    func[Bul] isZero() { return this.top.isZero(); }
+    func[Bul] isWhole() { return this.bottom.equals(1); }
+
+    func[Int] compare(other[Fraction | Int]) {
+        var[Fraction] o = this._of(other);
+        return this.top.mul(o.bottom).compare(o.top.mul(this.bottom));
+    }
+    func[Bul] equals(other[Fraction | Int]) { return this.compare(other) == 0; }
+
+    func[Decimal] toDecimal(places[Int] = 28) { return new Decimal(this.top).div(new Decimal(this.bottom), places); }
+    func[Dbl] toDbl() { return this.toDecimal(30).toDbl(); }
+
+    // "4 4/5" for 24/5, "-3" for -3/1, "1/2" for 1/2
+    func[Str] mixed() {
+        var[Big] whole = this.top.abs().div(this.bottom);
+        var[Big] rest = this.top.abs().mod(this.bottom);
+        var[Str] sign = this.top.isNegative() ? "-" : "";
+        if (rest.isZero()) return sign + whole.toStr();
+        var[Str] part = $"{rest}/{this.bottom}";
+        return whole.isZero() ? sign + part : $"{sign}{whole} {part}";
+    }
+
+    func[Str] toStr() { return this.isWhole() ? this.top.toStr() : $"{this.top}/{this.bottom}"; }
+
+    func[Fraction] _add(other[Fraction | Int]) { return this.add(other); }
+    func[Fraction] _sub(other[Fraction | Int]) { return this.sub(other); }
+    func[Fraction] _mul(other[Fraction | Int]) { return this.mul(other); }
+    func[Fraction] _div(other[Fraction | Int]) { return this.div(other); }
+    func[Fraction] _pow(exponent[Int]) { return this.pow(exponent); }
+    func[Fraction] _neg() { return this.negate(); }
+    func[Bul] _eq(other[Fraction]) { return this.compare(other) == 0; }
+    func[Int] _cmp(other[Fraction]) { return this.compare(other); }
+}
+
+// ============================================================
+// Complex numbers
+// ============================================================
+
+//     new Complex(1, 2) * new Complex(3, 4)      -5+10i
+class Complex {
+    var[Dbl] re = 0;
+    var[Dbl] im = 0;
+
+    init(re[Dbl] = 0, im[Dbl] = 0) {
+        this.re = re;
+        this.im = im;
+    }
+
+    func[Complex] _of(other[Complex | Dbl | Int]) {
+        if (other is Complex) return other;
+        if (other is Dbl) return new Complex(other);
+        if (other is Int) return new Complex(Dbl(other));
+        return new Complex();
+    }
+
+    func[Complex] add(other[Complex | Dbl | Int]) {
+        var[Complex] o = this._of(other);
+        return new Complex(this.re + o.re, this.im + o.im);
+    }
+    func[Complex] sub(other[Complex | Dbl | Int]) {
+        var[Complex] o = this._of(other);
+        return new Complex(this.re - o.re, this.im - o.im);
+    }
+    func[Complex] mul(other[Complex | Dbl | Int]) {
+        var[Complex] o = this._of(other);
+        return new Complex(this.re * o.re - this.im * o.im, this.re * o.im + this.im * o.re);
+    }
+    func[Complex] div(other[Complex | Dbl | Int]) {
+        var[Complex] o = this._of(other);
+        var[Dbl] size = o.re * o.re + o.im * o.im;
+        if (size == 0) throw new NumberError("Division by zero");
+        return new Complex((this.re * o.re + this.im * o.im) / size, (this.im * o.re - this.re * o.im) / size);
+    }
+    func[Dbl] magnitude() { return sqrt(this.re * this.re + this.im * this.im); }
+    func[Dbl] angle() { return atan2(this.im, this.re); }
+    func[Complex] conjugate() { return new Complex(this.re, -this.im); }
+
+    // A whole power
+    func[Complex] pow(exponent[Int]) {
+        if (exponent < 0) return new Complex(1).div(this.pow(-exponent));
+        var[Complex] out = new Complex(1);
+        for (var[Int] i = 0; i < exponent; i++) out = out.mul(this);
+        return out;
+    }
+
+    func[Complex] squareRoot() {
+        var[Dbl] size = this.magnitude();
+        var[Dbl] a = sqrt((size + this.re) / 2);
+        var[Dbl] b = sqrt((size - this.re) / 2);
+        return new Complex(a, this.im < 0 ? -b : b);
+    }
+
+    func[Str] toStr() {
+        return this.im < 0 ? $"{this.re}-{-this.im}i" : $"{this.re}+{this.im}i";
+    }
+
+    func[Complex] _add(other[Complex | Dbl | Int]) { return this.add(other); }
+    func[Complex] _sub(other[Complex | Dbl | Int]) { return this.sub(other); }
+    func[Complex] _mul(other[Complex | Dbl | Int]) { return this.mul(other); }
+    func[Complex] _div(other[Complex | Dbl | Int]) { return this.div(other); }
+    func[Complex] _neg() { return new Complex(-this.re, -this.im); }
+    func[Bul] _eq(other[Complex]) { return this.re == other.re && this.im == other.im; }
+}
+
+// ============================================================
+// NDArray: arrays of numbers, in the manner of NumPy
+// ============================================================
+
+// An array of Dbl with any number of dimensions. Operators work element by
+// element, and shapes are matched by NumPy's rule ("broadcasting"): from the
+// last dimension on, sizes must be equal or 1, so a 2x3 array times a list of 3
+// multiplies each row.
+//
+//     var[NDArray] a = array(<1.0, 2.0, 3.0>);
+//     a + 1                 <2, 3, 4>
+//     a * a                 <1, 4, 9>
+//     a.mean()              2
+//     var[NDArray] m = arange(0, 6).reshape(<2, 3>);
+//     m.sumAlong(0)         sum of each column
+//     m.sumAlong(1)         sum of each row
+//     m.at(1, 2)            5
+//     m.select(m.greater(2))      the elements above 2, as one list
+//
+// Methods give a new array and leave this one as it was; only set changes it.
+class NDArray {
+    var[Int<>] shape = <>;     // the size of each dimension: <2, 3> is 2 rows of 3
+    var[Dbl<>] data = <>;      // the elements in one list, the last dimension changing fastest
+
+    init(shape[Int<>] = <>, data[Dbl<>] = <>) {
+        var[Int] count = 1;
+        for (var[Int] size in shape) {
+            if (size < 0) throw new NumberError("An array's sizes can't be negative");
+            count *= size;
+        }
+        if (count != data.length()) throw new NumberError($"{data.length()} elements don't fit the shape {shape}");
+        this.shape = shape;
+        this.data = data;
+    }
+
+    func[Int] ndim() { return this.shape.length(); }
+    func[Int] size() { return this.data.length(); }
+    func[NDArray] copy() { return new NDArray(this.shape, this.data); }
+
+    // How far apart the elements of each dimension are, in `data`
+    func[Int<>] _strides() {
+        var[Int<>] out = <>;
+        var[Int] step = 1;
+        for (var[Int] i = this.shape.length() - 1; i >= 0; i--) {
+            out.insert(0, step);
+            step *= this.shape<i>;
+        }
+        return out;
+    }
+
+    func[Int] _offset(indices[Int<>]) {
+        if (indices.length() != this.shape.length()) throw new NumberError($"{indices.length()} indexes for an array of {this.shape.length()} dimensions");
+        var[Int] at = 0;
+        var[Int] step = 1;
+        for (var[Int] i = indices.length() - 1; i >= 0; i--) {
+            if (indices<i> < 0 || indices<i> >= this.shape<i>) throw new NumberError($"Index {indices<i>} is out of range for size {this.shape<i>}");
+            at += indices<i> * step;
+            step *= this.shape<i>;
+        }
+        return at;
+    }
+
+    // m.at(1, 2)
+    func[Dbl] at(indices[Int*]) { return this.data<this._offset(indices)>; }
+
+    // m.set(9, 1, 2): the value, then where. Changes this array.
+    func[Emp] set(value[Dbl], indices[Int*]) { this.data<this._offset(indices)> = value; }
+
+    // a<2>: an element, counting through all of `data`
+    func[Dbl] _get(i[Int]) { return this.data<i>; }
+    func[Emp] _set(i[Int], value[Dbl]) { this.data<i> = value; }
+    func[Int] _length() { return this.shape.isEmpty() ? 1 : this.shape<0>; }
+
+    // The same elements in another shape. One size may be -1: worked out from the rest.
+    func[NDArray] reshape(shape[Int<>]) {
+        var[Int<>] wanted = shape.copy();
+        var[Int] known = 1;
+        var[Int] unknown = -1;
+        for (var[Int] i = 0; i < wanted.length(); i++) {
+            if (wanted<i> == -1) {
+                if (unknown >= 0) throw new NumberError("reshape: only one size can be -1");
+                unknown = i;
+            } else {
+                known *= wanted<i>;
+            }
+        }
+        if (unknown >= 0) {
+            if (known == 0 || this.size() % known != 0) throw new NumberError($"{this.size()} elements don't fit the shape {shape}");
+            wanted<unknown> = Int(this.size() / known);
+        }
+        return new NDArray(wanted, this.data);
+    }
+
+    func[NDArray] flatten() { return new NDArray(<this.size()>, this.data); }
+
+    // Rows become columns (the dimensions in reverse order)
+    func[NDArray] transpose() {
+        if (this.ndim() < 2) return this.copy();
+        var[Int<>] shape = <>;
+        for (var[Int] i = this.ndim() - 1; i >= 0; i--) shape.push(this.shape<i>);
+        var[Int<>] strides = this._strides();
+        var[Int<>] reversed = <>;
+        for (var[Int] i = strides.length() - 1; i >= 0; i--) reversed.push(strides<i>);
+        var[Dbl<>] out = <>;
+        var[Int<>] place = <>;
+        for (var[Int] size in shape) place.push(0);
+        for (var[Int] n = 0; n < this.size(); n++) {
+            var[Int] at = 0;
+            for (var[Int] i = 0; i < place.length(); i++) at += place<i> * reversed<i>;
+            out.push(this.data<at>);
+            for (var[Int] i = place.length() - 1; i >= 0; i--) {
+                place<i> += 1;
+                if (place<i> < shape<i>) break;
+                place<i> = 0;
+            }
+        }
+        return new NDArray(shape, out);
+    }
+
+    // One row (or, in general, one item along the first dimension)
+    func[NDArray] row(index[Int]) {
+        if (this.ndim() == 0) throw new NumberError("row: this array has no dimensions");
+        if (index < 0 || index >= this.shape<0>) throw new NumberError($"Index {index} is out of range for size {this.shape<0>}");
+        var[Int] count = this.shape<0> == 0 ? 0 : Int(this.size() / this.shape<0>);
+        return new NDArray(this.shape.slice(1, this.shape.length()), this.data.slice(index * count, index * count + count));
+    }
+
+    // One column of a two-dimensional array
+    func[NDArray] column(index[Int]) {
+        if (this.ndim() != 2) throw new NumberError("column: this needs an array of two dimensions");
+        if (index < 0 || index >= this.shape<1>) throw new NumberError($"Index {index} is out of range for size {this.shape<1>}");
+        var[Dbl<>] out = <>;
+        for (var[Int] r = 0; r < this.shape<0>; r++) out.push(this.data<r * this.shape<1> + index>);
+        return new NDArray(<this.shape<0>>, out);
+    }
+
+    // The same as a list; for an array of many dimensions, its elements in order
+    func[Dbl<>] toList() { return this.data.copy(); }
+
+    // Applies a function to each element
+    func[NDArray] map(f[Func[Dbl, [Dbl]]]) {
+        var[Dbl<>] out = <>;
+        for (var[Dbl] x in this.data) out.push(f(x));
+        return new NDArray(this.shape, out);
+    }
+
+    // Two arrays' shapes, matched by NumPy's rule
+    func[Int<>] _matched(other[NDArray]) {
+        var[Int] count = this.ndim() > other.ndim() ? this.ndim() : other.ndim();
+        var[Int<>] out = <>;
+        for (var[Int] i = 0; i < count; i++) {
+            var[Int] a = i < count - this.ndim() ? 1 : this.shape<i - (count - this.ndim())>;
+            var[Int] b = i < count - other.ndim() ? 1 : other.shape<i - (count - other.ndim())>;
+            if (a != b && a != 1 && b != 1) throw new NumberError($"The shapes {this.shape} and {other.shape} don't match");
+            out.push(a == 1 ? b : a);
+        }
+        return out;
+    }
+
+    // Where each element of the result comes from in this array
+    func[Int<>] _expanded(shape[Int<>]) {
+        var[Int] count = 1;
+        for (var[Int] size in shape) count *= size;
+        var[Int<>] strides = this._strides();
+        var[Int] pad = shape.length() - this.ndim();
+        var[Int<>] out = <>;
+        var[Int<>] place = <>;
+        for (var[Int] size in shape) place.push(0);
+        for (var[Int] n = 0; n < count; n++) {
+            var[Int] at = 0;
+            for (var[Int] i = pad; i < shape.length(); i++) {
+                if (this.shape<i - pad> != 1) at += place<i> * strides<i - pad>;
+            }
+            out.push(at);
+            for (var[Int] i = shape.length() - 1; i >= 0; i--) {
+                place<i> += 1;
+                if (place<i> < shape<i>) break;
+                place<i> = 0;
+            }
+        }
+        return out;
+    }
+
+    func[NDArray] _with(other[NDArray | Dbl | Int], f[Func[Dbl, [Dbl, Dbl]]]) {
+        var[NDArray] o = _arrayOf(other);
+        var[Dbl<>] out = <>;
+        // The usual cases, without working out where each element comes from
+        if (o.size() == 1 && o.ndim() <= this.ndim()) {
+            var[Dbl] x = o.data<0>;
+            for (var[Dbl] a in this.data) out.push(f(a, x));
+            return new NDArray(this.shape, out);
+        }
+        if (this.shape == o.shape) {
+            for (var[Int] i = 0; i < this.data.length(); i++) out.push(f(this.data<i>, o.data<i>));
+            return new NDArray(this.shape, out);
+        }
+        var[Int<>] shape = this._matched(o);
+        var[Int<>] mine = this._expanded(shape);
+        var[Int<>] theirs = o._expanded(shape);
+        for (var[Int] i = 0; i < mine.length(); i++) out.push(f(this.data<mine<i>>, o.data<theirs<i>>));
+        return new NDArray(shape, out);
+    }
+
+    func[NDArray] _add(other[NDArray | Dbl | Int]) { return this._with(other, (a[Dbl], b[Dbl]) := a + b); }
+    func[NDArray] _sub(other[NDArray | Dbl | Int]) { return this._with(other, (a[Dbl], b[Dbl]) := a - b); }
+    func[NDArray] _mul(other[NDArray | Dbl | Int]) { return this._with(other, (a[Dbl], b[Dbl]) := a * b); }
+    func[NDArray] _div(other[NDArray | Dbl | Int]) { return this._with(other, (a[Dbl], b[Dbl]) := a / b); }
+    func[NDArray] _pow(other[NDArray | Dbl | Int]) { return this._with(other, (a[Dbl], b[Dbl]) := pow(a, b)); }
+    func[NDArray] _neg() { return this.map((x[Dbl]) := -x); }
+
+    // Two arrays with the same shape and the same elements
+    func[Bul] _eq(other[NDArray]) { return this.shape == other.shape && this.data == other.data; }
+
+    // Masks: 1 where it holds, 0 where it doesn't (for select and sum)
+    func[NDArray] greater(other[NDArray | Dbl | Int]) { return this._with(other, (a[Dbl], b[Dbl]) := a > b ? 1.0 : 0.0); }
+    func[NDArray] less(other[NDArray | Dbl | Int]) { return this._with(other, (a[Dbl], b[Dbl]) := a < b ? 1.0 : 0.0); }
+    func[NDArray] equal(other[NDArray | Dbl | Int]) { return this._with(other, (a[Dbl], b[Dbl]) := a == b ? 1.0 : 0.0); }
+
+    // The elements where `mask` isn't 0, as a one-dimensional array
+    func[NDArray] select(mask[NDArray]) {
+        if (mask.shape != this.shape) throw new NumberError($"select: the mask's shape {mask.shape} isn't this array's {this.shape}");
+        var[Dbl<>] out = <>;
+        for (var[Int] i = 0; i < this.data.length(); i++) {
+            if (mask.data<i> != 0) out.push(this.data<i>);
+        }
+        return new NDArray(<out.length()>, out);
+    }
+
+    func[NDArray] absolute() { return this.map((x[Dbl]) := x < 0 ? -x : x); }
+    func[NDArray] squareRoot() { return this.map((x[Dbl]) := sqrt(x)); }
+    func[NDArray] exponential() { return this.map((x[Dbl]) := exp(x)); }
+    func[NDArray] logarithm() { return this.map((x[Dbl]) := log(x)); }
+    func[NDArray] sine() { return this.map((x[Dbl]) := sin(x)); }
+    func[NDArray] cosine() { return this.map((x[Dbl]) := cos(x)); }
+    func[NDArray] clip(low[Dbl], high[Dbl]) {
+        if (high < low) throw new NumberError("clip: high is less than low");
+        return this.map((x[Dbl]) := x < low ? low : x > high ? high : x);
+    }
+    // Rounds to `places` digits after the point
+    func[NDArray] rounded(places[Int] = 0) {
+        var[Dbl] scale = pow(10, Dbl(places));
+        return this.map((x[Dbl]) := (x < 0 ? -floor(-x * scale + 0.5) : floor(x * scale + 0.5)) / scale);
+    }
+
+    // Folds along one dimension: the result has that dimension removed
+    func[NDArray] _along(axis[Int], f[Func[Dbl, [Dbl<>]]]) {
+        if (axis < 0 || axis >= this.ndim()) throw new NumberError($"axis {axis} doesn't exist in an array of {this.ndim()} dimensions");
+        var[Int<>] strides = this._strides();
+        var[Int<>] shape = <>;
+        for (var[Int] i = 0; i < this.ndim(); i++) if (i != axis) shape.push(this.shape<i>);
+        var[Int] size = this.shape<axis>;
+        var[Int] step = strides<axis>;
+        var[Dbl<>] out = <>;
+        var[Int] count = size == 0 ? 0 : Int(this.size() / size);
+        var[Int<>] place = <>;
+        for (var[Int] i = 0; i < shape.length(); i++) place.push(0);
+        var[Int<>] others = <>;
+        for (var[Int] i = 0; i < this.ndim(); i++) if (i != axis) others.push(strides<i>);
+        for (var[Int] n = 0; n < count; n++) {
+            var[Int] start = 0;
+            for (var[Int] i = 0; i < place.length(); i++) start += place<i> * others<i>;
+            var[Dbl<>] line = <>;
+            for (var[Int] k = 0; k < size; k++) line.push(this.data<start + k * step>);
+            out.push(f(line));
+            for (var[Int] i = place.length() - 1; i >= 0; i--) {
+                place<i> += 1;
+                if (place<i> < shape<i>) break;
+                place<i> = 0;
+            }
+        }
+        return new NDArray(shape, out);
+    }
+
+    // a.sum(): of everything, a number. a.sumAlong(0): along that dimension, an
+    // array. (NumPy's a.sum(axis=0).) The same for the others.
+    func[Dbl] sum() { return stats.sum(this.data); }
+    func[Dbl] mean() { return stats.mean(this.data); }
+    func[Dbl] std() { return stats.stdev(this.data); }
+    func[Dbl] variance() { return stats.variance(this.data); }
+    func[Dbl] min() { return stats.smallest(this.data); }
+    func[Dbl] max() { return stats.largest(this.data); }
+    func[Dbl] median() { return stats.median(this.data); }
+    func[Dbl] product() { return _productOf(this.data); }
+    func[Dbl] percentile(p[Dbl]) { return stats.percentile(this.data, p); }
+    func[NDArray] sumAlong(axis[Int]) { return this._along(axis, (line[Dbl<>]) := stats.sum(line)); }
+    func[NDArray] meanAlong(axis[Int]) { return this._along(axis, (line[Dbl<>]) := stats.mean(line)); }
+    func[NDArray] stdAlong(axis[Int]) { return this._along(axis, (line[Dbl<>]) := stats.stdev(line)); }
+    func[NDArray] varianceAlong(axis[Int]) { return this._along(axis, (line[Dbl<>]) := stats.variance(line)); }
+    func[NDArray] minAlong(axis[Int]) { return this._along(axis, (line[Dbl<>]) := stats.smallest(line)); }
+    func[NDArray] maxAlong(axis[Int]) { return this._along(axis, (line[Dbl<>]) := stats.largest(line)); }
+    func[NDArray] medianAlong(axis[Int]) { return this._along(axis, (line[Dbl<>]) := stats.median(line)); }
+    func[NDArray] productAlong(axis[Int]) { return this._along(axis, (line[Dbl<>]) := _productOf(line)); }
+
+    // The place (in `data`) of the smallest and the largest element
+    func[Int] argmin() {
+        if (this.data.isEmpty()) throw new NumberError("argmin of an empty array");
+        var[Int] best = 0;
+        for (var[Int] i = 1; i < this.data.length(); i++) if (this.data<i> < this.data<best>) best = i;
+        return best;
+    }
+    func[Int] argmax() {
+        if (this.data.isEmpty()) throw new NumberError("argmax of an empty array");
+        var[Int] best = 0;
+        for (var[Int] i = 1; i < this.data.length(); i++) if (this.data<i> > this.data<best>) best = i;
+        return best;
+    }
+
+    // The running total, through all the elements
+    func[NDArray] cumsum() {
+        var[Dbl<>] out = <>;
+        var[Dbl] total = 0;
+        for (var[Dbl] x in this.data) {
+            total += x;
+            out.push(total);
+        }
+        return new NDArray(<out.length()>, out);
+    }
+
+    func[NDArray] sorted() {
+        var[Dbl<>] out = this.data.copy();
+        out.sort();
+        return new NDArray(<out.length()>, out);
+    }
+
+    // Each different value once, in order
+    func[NDArray] unique() {
+        var[Dbl<>] all = this.data.copy();
+        all.sort();
+        var[Dbl<>] out = <>;
+        for (var[Dbl] x in all) if (out.isEmpty() || out<out.length() - 1> != x) out.push(x);
+        return new NDArray(<out.length()>, out);
+    }
+
+    // The number in an array of one element
+    func[Dbl] item() {
+        if (this.size() != 1) throw new NumberError($"item: this array has {this.size()} elements");
+        return this.data<0>;
+    }
+
+    // The dot product of two lists, a number
+    func[Dbl] inner(other[NDArray]) {
+        if (this.ndim() != 1 || other.ndim() != 1) throw new NumberError("inner: this needs two arrays of one dimension");
+        if (this.size() != other.size()) throw new NumberError($"inner: the sizes {this.size()} and {other.size()} differ");
+        var[Dbl] total = 0;
+        for (var[Int] i = 0; i < this.size(); i++) total += this.data<i> * other.data<i>;
+        return total;
+    }
+
+    // Matrix product. Of two lists: an array of one element (see inner)
+    func[NDArray] dot(other[NDArray]) {
+        if (this.ndim() == 1 && other.ndim() == 1) return new NDArray(<>, <this.inner(other)>);
+        var[NDArray] a = this.ndim() == 1 ? this.reshape(<1, -1>) : this;
+        var[NDArray] b = other.ndim() == 1 ? other.reshape(<-1, 1>) : other;
+        if (a.ndim() != 2 || b.ndim() != 2) throw new NumberError("dot: this needs arrays of one or two dimensions");
+        if (a.shape<1> != b.shape<0>) throw new NumberError($"dot: the shapes {a.shape} and {b.shape} don't fit");
+        var[Int] rows = a.shape<0>;
+        var[Int] cols = b.shape<1>;
+        var[Int] middle = a.shape<1>;
+        var[Dbl<>] out = <>;
+        for (var[Int] r = 0; r < rows; r++) {
+            for (var[Int] c = 0; c < cols; c++) {
+                var[Dbl] total = 0;
+                for (var[Int] k = 0; k < middle; k++) total += a.data<r * middle + k> * b.data<k * cols + c>;
+                out.push(total);
+            }
+        }
+        if (this.ndim() == 1) return new NDArray(<cols>, out);
+        if (other.ndim() == 1) return new NDArray(<rows>, out);
+        return new NDArray(<rows, cols>, out);
+    }
+
+    func[Int] _squareSize(what[Str]) {
+        if (this.ndim() != 2 || this.shape<0> != this.shape<1>) throw new NumberError($"{what}: this needs a square array, not {this.shape}");
+        return this.shape<0>;
+    }
+
+    // The determinant of a square array
+    func[Dbl] det() {
+        var[Int] n = this._squareSize("det");
+        var[Dbl<>] m = this.data.copy();
+        var[Dbl] out = 1;
+        for (var[Int] col = 0; col < n; col++) {
+            var[Int] pivot = col;
+            for (var[Int] r = col + 1; r < n; r++) {
+                if (abs(m<r * n + col>) > abs(m<pivot * n + col>)) pivot = r;
+            }
+            if (m<pivot * n + col> == 0) return 0;
+            if (pivot != col) {
+                for (var[Int] c = 0; c < n; c++) {
+                    var[Dbl] t = m<col * n + c>;
+                    m<col * n + c> = m<pivot * n + c>;
+                    m<pivot * n + c> = t;
+                }
+                out = -out;
+            }
+            out *= m<col * n + col>;
+            for (var[Int] r = col + 1; r < n; r++) {
+                var[Dbl] factor = m<r * n + col> / m<col * n + col>;
+                for (var[Int] c = col; c < n; c++) m<r * n + c> -= factor * m<col * n + c>;
+            }
+        }
+        return out;
+    }
+
+    // Solves this * x = right, for square `this`. Error if it has no one answer.
+    func[NDArray] solve(right[NDArray]) {
+        var[Int] n = this._squareSize("solve");
+        var[Bul] oneColumn = right.ndim() == 1;
+        var[NDArray] b = oneColumn ? right.reshape(<-1, 1>) : right;
+        if (b.ndim() != 2 || b.shape<0> != n) throw new NumberError($"solve: {right.shape} doesn't fit a square array of size {n}");
+        var[Int] cols = b.shape<1>;
+        var[Dbl<>] m = this.data.copy();
+        var[Dbl<>] r = b.data.copy();
+        for (var[Int] col = 0; col < n; col++) {
+            var[Int] pivot = col;
+            for (var[Int] i = col + 1; i < n; i++) {
+                if (abs(m<i * n + col>) > abs(m<pivot * n + col>)) pivot = i;
+            }
+            if (abs(m<pivot * n + col>) < 0.000000000001) throw new NumberError("solve: the array is singular (it has no inverse)");
+            if (pivot != col) {
+                for (var[Int] c = 0; c < n; c++) {
+                    var[Dbl] t = m<col * n + c>;
+                    m<col * n + c> = m<pivot * n + c>;
+                    m<pivot * n + c> = t;
+                }
+                for (var[Int] c = 0; c < cols; c++) {
+                    var[Dbl] t = r<col * cols + c>;
+                    r<col * cols + c> = r<pivot * cols + c>;
+                    r<pivot * cols + c> = t;
+                }
+            }
+            for (var[Int] i = 0; i < n; i++) {
+                if (i == col) continue;
+                var[Dbl] factor = m<i * n + col> / m<col * n + col>;
+                if (factor == 0) continue;
+                for (var[Int] c = col; c < n; c++) m<i * n + c> -= factor * m<col * n + c>;
+                for (var[Int] c = 0; c < cols; c++) r<i * cols + c> -= factor * r<col * cols + c>;
+            }
+        }
+        for (var[Int] i = 0; i < n; i++) {
+            for (var[Int] c = 0; c < cols; c++) r<i * cols + c> /= m<i * n + i>;
+        }
+        return oneColumn ? new NDArray(<n>, r) : new NDArray(<n, cols>, r);
+    }
+
+    func[NDArray] inverse() {
+        return this.solve(eye(this._squareSize("inverse")));
+    }
+
+    // Written out, with lists inside lists
+    func[Str] _text(dimension[Int], start[Int]) {
+        if (this.ndim() == 0) return Str(this.data<0>);
+        var[Int<>] strides = this._strides();
+        var[Str<>] parts = <>;
+        for (var[Int] i = 0; i < this.shape<dimension>; i++) {
+            var[Int] at = start + i * strides<dimension>;
+            parts.push(dimension == this.ndim() - 1 ? Str(this.data<at>) : this._text(dimension + 1, at));
+        }
+        return "<" + parts.join(", ") + ">";
+    }
+    func[Str] toStr() { return this._text(0, 0); }
+}
+
+func[Dbl] _productOf(line[Dbl<>]) {
+    var[Dbl] out = 1;
+    for (var[Dbl] x in line) out *= x;
+    return out;
+}
+
+func[NDArray] _arrayOf(value[NDArray | Dbl | Int]) {
+    if (value is NDArray) return value;
+    if (value is Dbl) return new NDArray(<>, <value>);
+    if (value is Int) return new NDArray(<>, <Dbl(value)>);
+    return new NDArray(<>, <0.0>);
+}
+
+func[Dbl<>] _filled(count[Int], value[Dbl]) {
+    var[Dbl<>] out = <>;
+    for (var[Int] i = 0; i < count; i++) out.push(value);
+    return out;
+}
+
+func[Int] _countOf(shape[Int<>]) {
+    var[Int] count = 1;
+    for (var[Int] size in shape) count *= size;
+    return count;
+}
+
+// array(<1.0, 2.0, 3.0>)
+func[NDArray] array(values[Dbl<>]) { return new NDArray(<values.length()>, values); }
+
+// array2d(<<1.0, 2.0>, <3.0, 4.0>>)
+func[NDArray] array2d(rows[Dbl<><>]) {
+    if (rows.isEmpty()) return new NDArray(<0, 0>, <>);
+    var[Dbl<>] out = <>;
+    var[Int] width = rows<0>.length();
+    for (var[Dbl<>] line in rows) {
+        if (line.length() != width) throw new NumberError("array2d: the rows have different lengths");
+        for (var[Dbl] x in line) out.push(x);
+    }
+    return new NDArray(<rows.length(), width>, out);
+}
+
+func[NDArray] zeros(shape[Int<>]) { return new NDArray(shape, _filled(_countOf(shape), 0)); }
+func[NDArray] ones(shape[Int<>]) { return new NDArray(shape, _filled(_countOf(shape), 1)); }
+func[NDArray] full(shape[Int<>], value[Dbl]) { return new NDArray(shape, _filled(_countOf(shape), value)); }
+
+// The identity: a square array with 1s across its diagonal
+func[NDArray] eye(size[Int]) {
+    var[NDArray] out = zeros(<size, size>);
+    for (var[Int] i = 0; i < size; i++) out.data<i * size + i> = 1;
+    return out;
+}
+
+// arange(0, 5) is <0, 1, 2, 3, 4>: `stop` isn't included
+func[NDArray] arange(start[Dbl], stop[Dbl], step[Dbl] = 1) {
+    if (step == 0) throw new NumberError("arange: the step can't be 0");
+    var[Int] count = ceil((stop - start) / step);
+    var[Dbl<>] out = <>;
+    for (var[Int] i = 0; i < count; i++) out.push(start + i * step);
+    return new NDArray(<out.length()>, out);
+}
+
+// linspace(0, 1, 5) is <0, 0.25, 0.5, 0.75, 1>: `count` numbers, both ends included
+func[NDArray] linspace(start[Dbl], stop[Dbl], count[Int]) {
+    if (count < 0) throw new NumberError("linspace: the count can't be negative");
+    var[Dbl<>] out = <>;
+    for (var[Int] i = 0; i < count; i++) out.push(i == count - 1 ? stop : start + i * (stop - start) / (count - 1));
+    return new NDArray(<out.length()>, out);
+}
+
+// Arrays side by side along an existing dimension
+func[NDArray] concat(parts[NDArray<>], axis[Int] = 0) {
+    if (parts.isEmpty()) throw new NumberError("concat: there's nothing to join");
+    var[Int<>] shape = parts<0>.shape.copy();
+    if (axis < 0 || axis >= shape.length()) throw new NumberError($"axis {axis} doesn't exist in an array of {shape.length()} dimensions");
+    var[Int] total = 0;
+    for (var[NDArray] part in parts) {
+        if (part.ndim() != shape.length()) throw new NumberError("concat: the arrays have different numbers of dimensions");
+        for (var[Int] i = 0; i < shape.length(); i++) {
+            if (i != axis && part.shape<i> != shape<i>) throw new NumberError($"concat: the shapes {shape} and {part.shape} don't fit");
+        }
+        total += part.shape<axis>;
+    }
+    shape<axis> = total;
+    var[NDArray] out = zeros(shape);
+    var[Int<>] strides = out._strides();
+    var[Int] already = 0;
+    for (var[NDArray] part in parts) {
+        var[Int<>] mine = part._strides();
+        var[Int<>] place = <>;
+        for (var[Int] size in part.shape) place.push(0);
+        for (var[Int] n = 0; n < part.size(); n++) {
+            var[Int] at = 0;
+            var[Int] from = 0;
+            for (var[Int] i = 0; i < place.length(); i++) {
+                at += (i == axis ? place<i> + already : place<i>) * strides<i>;
+                from += place<i> * mine<i>;
+            }
+            out.data<at> = part.data<from>;
+            for (var[Int] i = place.length() - 1; i >= 0; i--) {
+                place<i> += 1;
+                if (place<i> < part.shape<i>) break;
+                place<i> = 0;
+            }
+        }
+        already += part.shape<axis>;
     }
     return out;
 }
 
-// "MCMXCIV" -> 1994 (upper or lower case). Error on letters that aren't Roman numerals.
-func[Int] fromRoman(text[Str]) {
-    var[Map[Chr, Int]] value = {'M': 1000, 'D': 500, 'C': 100, 'L': 50, 'X': 10, 'V': 5, 'I': 1};
-    var[Chr<>] letters = text.trim().upper().chars();
-    if (letters.isEmpty()) throw "fromRoman: the text is empty";
-    var[Int] total = 0;
-    var[Int] previous = 0;
-    for (var[Int] i = letters.length() - 1; i >= 0; i--) {
-        var[Chr] c = letters<i>;
-        if (!value.has(c)) throw $"fromRoman: '{c}' is not a Roman numeral";
-        var[Int] v = value<c>;
-        if (v < previous) total -= v;
-        else total += v;
-        previous = v;
+// ============================================================
+// Statistics
+// ============================================================
+
+class RealStatistics {
+    func[Emp] _need(values[Dbl<>], what[Str]) {
+        if (values.isEmpty()) throw new NumberError($"{what} of an empty list");
     }
-    // Only numerals written the standard way: "IIII" or "MMMM" are rejected
-    if (total < 1 || total > 3999 || toRoman(total) != text.trim().upper()) throw $"fromRoman: '{text}' is not a valid Roman numeral";
-    return total;
+    func[Dbl] sum(values[Dbl<>]) {
+        var[Dbl] total = 0;
+        for (var[Dbl] x in values) total += x;
+        return total;
+    }
+    func[Dbl] mean(values[Dbl<>]) {
+        this._need(values, "mean");
+        return this.sum(values) / values.length();
+    }
+    func[Dbl] smallest(values[Dbl<>]) {
+        this._need(values, "smallest");
+        var[Dbl] best = values<0>;
+        for (var[Dbl] x in values) if (x < best) best = x;
+        return best;
+    }
+    func[Dbl] largest(values[Dbl<>]) {
+        this._need(values, "largest");
+        var[Dbl] best = values<0>;
+        for (var[Dbl] x in values) if (x > best) best = x;
+        return best;
+    }
+    func[Dbl] range(values[Dbl<>]) { return this.largest(values) - this.smallest(values); }
+    func[Dbl] median(values[Dbl<>]) { return this.percentile(values, 50); }
+
+    // The value that appears most often (the first one, if several tie)
+    func[Dbl] mode(values[Dbl<>]) {
+        this._need(values, "mode");
+        var[Map[Dbl, Int]] counts = {:};
+        var[Dbl] best = values<0>;
+        for (var[Dbl] x in values) {
+            counts<x> = counts.getOr(x, 0) + 1;
+            if (counts<x> > counts<best>) best = x;
+        }
+        return best;
+    }
+
+    // Of the whole population, as NumPy does. sample: true for a sample (n - 1).
+    func[Dbl] variance(values[Dbl<>], sample[Bul] = false) {
+        this._need(values, "variance");
+        if (sample && values.length() < 2) throw new NumberError("the variance of a sample needs two values");
+        var[Dbl] average = this.mean(values);
+        var[Dbl] total = 0;
+        for (var[Dbl] x in values) total += (x - average) * (x - average);
+        return total / (sample ? values.length() - 1 : values.length());
+    }
+    func[Dbl] stdev(values[Dbl<>], sample[Bul] = false) { return sqrt(this.variance(values, sample)); }
+
+    // percentile(values, 50) is the median; between two values it is worked out
+    // in proportion (as NumPy does)
+    func[Dbl] percentile(values[Dbl<>], p[Dbl]) {
+        this._need(values, "percentile");
+        if (p < 0 || p > 100) throw new NumberError($"percentile: {p} isn't from 0 to 100");
+        var[Dbl<>] sorted = values.copy();
+        sorted.sort();
+        var[Dbl] place = p / 100 * (sorted.length() - 1);
+        var[Int] low = floor(place);
+        var[Int] high = ceil(place);
+        return sorted<low> + (sorted<high> - sorted<low>) * (place - low);
+    }
+
+    func[Dbl] covariance(xs[Dbl<>], ys[Dbl<>]) {
+        if (xs.length() != ys.length()) throw new NumberError("covariance: the lists have different lengths");
+        var[Dbl] mx = this.mean(xs);
+        var[Dbl] my = this.mean(ys);
+        var[Dbl] total = 0;
+        for (var[Int] i = 0; i < xs.length(); i++) total += (xs<i> - mx) * (ys<i> - my);
+        return total / xs.length();
+    }
+
+    // From -1 to 1: how closely two lists move together
+    func[Dbl] correlation(xs[Dbl<>], ys[Dbl<>]) {
+        var[Dbl] spread = this.stdev(xs) * this.stdev(ys);
+        if (spread == 0) throw new NumberError("correlation: a list doesn't vary");
+        return this.covariance(xs, ys) / spread;
+    }
+
+    // How many values fall in each of `bins` equal parts of their range
+    func[Int<>] histogram(values[Dbl<>], bins[Int]) {
+        this._need(values, "histogram");
+        if (bins < 1) throw new NumberError("histogram: it needs at least one bin");
+        var[Dbl] low = this.smallest(values);
+        var[Dbl] width = (this.largest(values) - low) / bins;
+        var[Int<>] counts = <>;
+        for (var[Int] i = 0; i < bins; i++) counts.push(0);
+        for (var[Dbl] x in values) {
+            var[Int] bin = width == 0 ? 0 : floor((x - low) / width);
+            if (bin >= bins) bin = bins - 1;   // the largest value
+            counts<bin> += 1;
+        }
+        return counts;
+    }
+
+    // Each value as how many deviations it is from the mean
+    func[Dbl<>] zscores(values[Dbl<>]) {
+        var[Dbl] average = this.mean(values);
+        var[Dbl] spread = this.stdev(values);
+        if (spread == 0) throw new NumberError("zscores: the values don't vary");
+        return values.map((x[Dbl]) := (x - average) / spread);
+    }
 }
+
+const[RealStatistics] stats = new RealStatistics();
+
+// ============================================================
+// Prime numbers
+// ============================================================
+
+class PrimeNumbers {
+    // Exact up to 3,317,044,064,679,887,385,961,981; above that, wrong only
+    // with a chance too small to matter (not for cryptography)
+    func[Bul] isPrime(number[Big | Int | Str]) {
+        var[Big] n = _big(number);
+        if (n.compare(2) < 0) return false;
+        const[Int<>] small = <2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41>;
+        for (var[Int] p in small) {
+            if (n.equals(p)) return true;
+            if (n.mod(p).isZero()) return false;
+        }
+        var[Big] minusOne = n.sub(1);
+        var[Big] odd = minusOne;
+        var[Int] twos = 0;
+        while (odd.mod(2).isZero()) {
+            odd = odd.div(2);
+            twos++;
+        }
+        for (var[Int] base in small) {
+            var[Big] x = new Big(base).modPow(odd, n);
+            if (x.equals(1) || x.equals(minusOne)) continue;
+            var[Bul] composite = true;
+            for (var[Int] i = 1; i < twos && composite; i++) {
+                x = x.mul(x).mod(n);
+                if (x.equals(minusOne)) composite = false;
+            }
+            if (composite) return false;
+        }
+        return true;
+    }
+
+    // Every prime up to `limit`
+    func[Int<>] upTo(limit[Int]) {
+        var[Int<>] out = <>;
+        if (limit < 2) return out;
+        var[Bul<>] crossed = <>;
+        for (var[Int] i = 0; i <= limit; i++) crossed.push(false);
+        for (var[Int] i = 2; i <= limit; i++) {
+            if (crossed<i>) continue;
+            out.push(i);
+            if (i > limit / i) continue;
+            for (var[Int] k = i * i; k <= limit; k += i) crossed<k> = true;
+        }
+        return out;
+    }
+
+    // The next prime after `number`
+    func[Big] next(number[Big | Int | Str]) {
+        var[Big] n = _big(number).add(1);
+        if (n.compare(2) < 0) return new Big(2);
+        while (!this.isPrime(n)) n = n.add(1);
+        return n;
+    }
+
+    // The prime factors, smallest first: 360 is <2, 2, 2, 3, 3, 5>. Quick for
+    // numbers with small factors; two huge primes multiplied take very long.
+    func[Big<>] factorize(number[Big | Int | Str]) {
+        var[Big] n = _big(number);
+        if (n.compare(1) < 0) throw new NumberError($"factorize: {n} has no prime factors");
+        var[Big<>] out = <>;
+        while (n.mod(2).isZero()) {
+            out.push(new Big(2));
+            n = n.div(2);
+        }
+        var[Big] p = new Big(3);
+        while (p.mul(p).compare(n) <= 0) {
+            if (n.mod(p).isZero()) {
+                out.push(p);
+                n = n.div(p);
+            } else if (this.isPrime(n)) {
+                break;
+            } else {
+                p = p.add(2);
+            }
+        }
+        if (n.compare(1) > 0) out.push(n);
+        return out;
+    }
+}
+
+const[PrimeNumbers] primes = new PrimeNumbers();
 
 // ============================================================
 // Numbers in words (English)
@@ -62,150 +1153,412 @@ func[Int] fromRoman(text[Str]) {
 const[Str<>] _ones = <"zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
                       "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen">;
 const[Str<>] _tens = <"", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety">;
-const[Str<>] _scales = <"", "thousand", "million", "billion", "trillion", "quadrillion", "quintillion">;
+const[Str<>] _firstIllions = <"", "million", "billion", "trillion", "quadrillion", "quintillion", "sextillion", "septillion",
+                              "octillion", "nonillion">;
+// Conway and Wechsler's names, for the rest: each part with the letters that
+// decide how the part before it ends
+const[Str<>] _illionOnes = <"", "un", "duo", "tre", "quattuor", "quin", "se", "septe", "octo", "nove">;
+const[Str<>] _illionTens = <"", "deci", "viginti", "triginta", "quadraginta", "quinquaginta", "sexaginta", "septuaginta", "octoginta", "nonaginta">;
+const[Str<>] _illionTensMarks = <"", "N", "MS", "NS", "NS", "NS", "N", "N", "MX", "">;
+const[Str<>] _illionHundreds = <"", "centi", "ducenti", "trecenti", "quadringenti", "quingenti", "sescenti", "septingenti", "octingenti", "nongenti">;
+const[Str<>] _illionHundredsMarks = <"", "NX", "N", "NS", "NS", "NS", "N", "N", "MX", "">;
 
-// 0 to 999
-func[Str] _underThousand(n[Int]) {
-    var[Str<>] parts = <>;
-    var[Int] rest = n;
-    if (rest >= 100) {
-        parts.push(_ones<Int(rest / 100)> + " hundred");
-        rest = rest % 100;
+class NumberWords {
+    // 10^(3 * (n + 1)): 1 is "million", 21 is "unvigintillion", 100 is "centillion"
+    func[Str] _illion(n[Int]) {
+        if (n < 10) return _firstIllions<n>;
+        var[Int] one = n % 10;
+        var[Int] ten = Int(n / 10) % 10;
+        var[Int] hundred = Int(n / 100);
+        var[Str] marks = ten > 0 ? _illionTensMarks<ten> : _illionHundredsMarks<hundred>;
+        var[Str] first = _illionOnes<one>;
+        if (one == 3 && (marks.includes("S") || marks.includes("X"))) first = "tres";
+        if (one == 6) first = marks.includes("S") ? "ses" : marks.includes("X") ? "sex" : "se";
+        if (one == 7 || one == 9) first += marks.includes("M") ? "m" : marks.includes("N") ? "n" : "";
+        var[Str] whole = first + _illionTens<ten> + _illionHundreds<hundred>;
+        return whole.substr(0, whole.length() - 1) + "illion";
     }
-    if (rest >= 20) {
-        var[Str] tens = _tens<Int(rest / 10)>;
-        parts.push(rest % 10 == 0 ? tens : tens + "-" + _ones<rest % 10>);
-    } else if (rest > 0) {
-        parts.push(_ones<rest>);
-    }
-    return parts.join(" ");
-}
 
-// 78056 -> "seventy-eight thousand fifty-six", -3 -> "minus three"
-func[Str] toWords(number[Int]) {
-    if (number == 0) return "zero";
-    if (number < 0) {
-        if (number == -9223372036854775807 - 1) throw "toWords: the number is too small";
-        return "minus " + toWords(-number);
-    }
-    var[Str<>] groups = <>;
-    var[Int] rest = number;
-    var[Int] scale = 0;
-    while (rest > 0) {
-        var[Int] chunk = rest % 1000;
-        if (chunk > 0) {
-            var[Str] words = _underThousand(chunk);
-            groups.insert(0, _scales<scale>.isEmpty() ? words : words + " " + _scales<scale>);
+    func[Str] _underThousand(n[Int]) {
+        var[Str<>] parts = <>;
+        var[Int] rest = n;
+        if (rest >= 100) {
+            parts.push(_ones<Int(rest / 100)> + " hundred");
+            rest = rest % 100;
         }
-        rest = Int(rest / 1000);
-        scale++;
+        if (rest >= 20) {
+            var[Str] tens = _tens<Int(rest / 10)>;
+            parts.push(rest % 10 == 0 ? tens : tens + "-" + _ones<rest % 10>);
+        } else if (rest > 0) {
+            parts.push(_ones<rest>);
+        }
+        return parts.join(" ");
     }
-    return groups.join(" ");
+
+    // words.of(78056) is "seventy-eight thousand fifty-six". Any whole number
+    // up to about 10^3000: give a big one as text or as a Big.
+    func[Str] of(number[Big | Int | Str]) {
+        var[Big] value = _big(number);
+        if (value.isZero()) return "zero";
+        var[Str] text = value.abs().toStr();
+        var[Str<>] groups = <>;
+        var[Int] end = text.length();
+        var[Int] scale = 0;
+        while (end > 0) {
+            var[Int] start = end >= 3 ? end - 3 : 0;
+            var[Int] chunk = Int(text.substr(start, end - start));
+            if (chunk > 0) {
+                if (scale > 1000) throw new NumberError("words: this number is too big to have a name");
+                var[Str] words = this._underThousand(chunk);
+                if (scale == 1) words += " thousand";
+                else if (scale > 1) words += " " + this._illion(scale - 1);
+                groups.insert(0, words);
+            }
+            end = start;
+            scale++;
+        }
+        return (value.isNegative() ? "minus " : "") + groups.join(" ");
+    }
+
+    // words.parse("two thousand and five") is 2005 ("and" and dashes are fine)
+    func[Big] parse(text[Str]) {
+        var[Map[Str, Int]] small = {:};
+        for (var[Int] i = 0; i < _ones.length(); i++) {
+            var[Str] word = _ones<i>;
+            small<word> = i;
+        }
+        for (var[Int] i = 2; i < _tens.length(); i++) {
+            var[Str] word = _tens<i>;
+            small<word> = i * 10;
+        }
+        var[Big] total = new Big(0);
+        var[Int] current = 0;
+        var[Bul] negative = false;
+        var[Bul] any = false;
+        for (var[Str] raw in text.lower().replaceAll("-", " ").split(" ")) {
+            var[Str] word = raw.trim();
+            if (word.isEmpty() || word == "and") continue;
+            any = true;
+            if (word == "minus" || word == "negative") {
+                negative = true;
+            } else if (small.has(word)) {
+                current += small<word>;
+            } else if (word == "hundred") {
+                current *= 100;
+            } else if (word == "thousand") {
+                total = total.add(new Big(current).mul(1000));
+                current = 0;
+            } else if (word.endsWith("illion")) {
+                var[Int] scale = this._scaleOf(word);
+                if (scale < 0) throw new NumberError($"words: '{word}' is not a number word");
+                total = total.add(new Big(current).mul(new Big(10).pow(3 * (scale + 1))));
+                current = 0;
+            } else {
+                throw new NumberError($"words: '{word}' is not a number word");
+            }
+        }
+        if (!any) throw new NumberError("words: there's no number in the text");
+        total = total.add(current);
+        return negative ? total.negate() : total;
+    }
+
+    func[Int] _scaleOf(word[Str]) {
+        for (var[Int] n = 1; n < 1000; n++) {
+            if (this._illion(n) == word) return n;
+        }
+        return -1;
+    }
 }
 
-// "thirty three thousand eight hundred forty four" -> 33844 ("and" and dashes are fine)
-func[Int] fromWords(text[Str]) {
-    var[Map[Str, Int]] small = {:};
-    for (var[Int] i = 0; i < _ones.length(); i++) {
-        var[Str] word = _ones<i>;
-        small<word> = i;
-    }
-    for (var[Int] i = 2; i < _tens.length(); i++) {
-        var[Str] word = _tens<i>;
-        small<word> = i * 10;
-    }
-    var[Map[Str, Int]] big = {"thousand": 1000, "million": 1000000, "billion": 1000000000, "trillion": 1000000000000};
-    var[Int] total = 0;
-    var[Int] current = 0;
-    var[Bul] negative = false;
-    for (var[Str] raw in text.lower().replaceAll("-", " ").split(" ")) {
-        var[Str] word = raw.trim();
-        if (word.isEmpty() || word == "and") continue;
-        if (word == "minus" || word == "negative") {
-            negative = true;
-        } else if (small.has(word)) {
-            current += small<word>;
-        } else if (word == "hundred") {
-            current *= 100;
-        } else if (big.has(word)) {
-            total += current * big<word>;
-            current = 0;
-        } else {
-            throw $"fromWords: '{word}' is not a number word";
-        }
-    }
-    total += current;
-    return negative ? -total : total;
-}
+const[NumberWords] words = new NumberWords();
 
 // ============================================================
-// Spreadsheet columns
+// Roman numerals
 // ============================================================
 
-// 1 -> "A", 27 -> "AA", 16384 -> "XFD"
-func[Str] excelColumn(number[Int]) {
-    if (number < 1) throw $"excelColumn: {number} is not a column number (they start at 1)";
-    var[Str] out = "";
-    var[Int] n = number;
-    while (n > 0) {
-        n--;
-        out = Str(Chr(65 + n % 26)) + out;
-        n = Int(n / 26);
+class RomanNumerals {
+    // 1 to 3999: roman.of(1994) is "MCMXCIV"
+    func[Str] of(number[Int]) {
+        const[Int<>] values = <1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1>;
+        const[Str<>] symbols = <"M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I">;
+        if (number < 1 || number > 3999) throw new NumberError($"roman: {number} can't be written in Roman numerals (1 to 3999)");
+        var[Str] out = "";
+        var[Int] left = number;
+        for (var[Int] i = 0; i < values.length(); i++) {
+            while (left >= values<i>) {
+                out += symbols<i>;
+                left -= values<i>;
+            }
+        }
+        return out;
     }
-    return out;
+
+    // "MCMXCIV" is 1994 (upper or lower case). Only numerals written the
+    // standard way: "IIII" is refused.
+    func[Int] parse(text[Str]) {
+        var[Map[Chr, Int]] value = {'M': 1000, 'D': 500, 'C': 100, 'L': 50, 'X': 10, 'V': 5, 'I': 1};
+        var[Chr<>] letters = text.trim().upper().chars();
+        if (letters.isEmpty()) throw new NumberError("roman: the text is empty");
+        var[Int] total = 0;
+        var[Int] previous = 0;
+        for (var[Int] i = letters.length() - 1; i >= 0; i--) {
+            var[Chr] c = letters<i>;
+            if (!value.has(c)) throw new NumberError($"roman: '{c}' is not a Roman numeral");
+            var[Int] v = value<c>;
+            if (v < previous) total -= v;
+            else total += v;
+            previous = v;
+        }
+        if (total < 1 || total > 3999 || this.of(total) != text.trim().upper()) throw new NumberError($"roman: '{text}' is not a valid Roman numeral");
+        return total;
+    }
 }
 
-// "A" -> 1, "aa" -> 27, "XFD" -> 16384
-func[Int] excelColumnNumber(column[Str]) {
-    var[Int] total = 0;
-    for (var[Chr] c in column.trim().upper()) {
-        if (c.code() < 65 || c.code() > 90) throw $"excelColumnNumber: '{column}' is not a column label";
-        total = total * 26 + (c.code() - 64);
-    }
-    return total;
-}
+const[RomanNumerals] roman = new RomanNumerals();
 
 // ============================================================
 // Digits
 // ============================================================
 
-func[Int<>] _digits(number[Int]) {
-    var[Int<>] digits = <>;
-    for (var[Chr] c in Str(number < 0 ? -number : number)) digits.push(c.code() - 48);
-    return digits;
+class DigitTools {
+    // 1234 is <1, 2, 3, 4> (the sign is ignored)
+    func[Int<>] of(number[Big | Int | Str]) {
+        var[Int<>] out = <>;
+        for (var[Chr] c in _big(number).abs().toStr()) out.push(c.code() - 48);
+        return out;
+    }
+    func[Int] count(number[Big | Int | Str]) { return this.of(number).length(); }
+    func[Int] sum(number[Big | Int | Str]) {
+        var[Int] total = 0;
+        for (var[Int] d in this.of(number)) total += d;
+        return total;
+    }
+    // Adds the digits again and again until one is left: 9875 is 2
+    func[Int] root(number[Big | Int | Str]) {
+        var[Int] n = this.sum(number);
+        while (n >= 10) n = this.sum(n);
+        return n;
+    }
+    func[Int<>] squares(number[Big | Int | Str]) { return this.of(number).map((d[Int]) := d * d); }
+    func[Big] sorted(number[Big | Int | Str], descending[Bul] = false) {
+        var[Int<>] all = this.of(number);
+        all.sort();
+        if (descending) all.reverse();
+        var[Big] out = new Big(all.join(""));
+        return _big(number).isNegative() ? out.negate() : out;
+    }
+    func[Big] reversed(number[Big | Int | Str]) {
+        var[Int<>] all = this.of(number);
+        all.reverse();
+        var[Big] out = new Big(all.join(""));
+        return _big(number).isNegative() ? out.negate() : out;
+    }
+    func[Bul] isPalindrome(number[Big | Int | Str]) {
+        var[Int<>] all = this.of(number);
+        for (var[Int] i = 0; i < all.length() / 2; i++) {
+            if (all<i> != all<all.length() - 1 - i>) return false;
+        }
+        return true;
+    }
 }
 
-// 1234 -> 10
-func[Int] sumDigits(number[Int]) {
-    var[Int] total = 0;
-    for (var[Int] d in _digits(number)) total += d;
-    return total;
+const[DigitTools] digits = new DigitTools();
+
+// ============================================================
+// Bases
+// ============================================================
+
+class NumberBases {
+    func[Emp] _check(base[Int]) {
+        if (base < 2 || base > 36) throw new NumberError($"radix: base {base} isn't from 2 to 36");
+    }
+    // radix.encode(255, 16) is "ff"
+    func[Str] encode(number[Big | Int | Str], base[Int]) {
+        this._check(base);
+        const[Str] symbols = "0123456789abcdefghijklmnopqrstuvwxyz";
+        var[Big] n = _big(number).abs();
+        if (n.isZero()) return "0";
+        var[Str<>] out = <>;
+        while (!n.isZero()) {
+            out.insert(0, Str(symbols<n.mod(base).toInt()>));
+            n = n.div(base);
+        }
+        return (_big(number).isNegative() ? "-" : "") + out.join("");
+    }
+    // radix.decode("ff", 16) is 255
+    func[Big] decode(text[Str], base[Int]) {
+        this._check(base);
+        var[Str] t = text.trim().lower();
+        var[Bul] negative = t.startsWith("-");
+        if (negative) t = t.substr(1, t.length() - 1);
+        if (t.isEmpty()) throw new NumberError("radix: the text is empty");
+        var[Big] out = new Big(0);
+        for (var[Chr] c in t) {
+            var[Int] code = c.code();
+            var[Int] value = code >= 48 && code <= 57 ? code - 48 : code >= 97 && code <= 122 ? code - 87 : 99;
+            if (value >= base) throw new NumberError($"radix: '{c}' isn't a digit in base {base}");
+            out = out.mul(base).add(value);
+        }
+        return negative ? out.negate() : out;
+    }
 }
 
-// Adds the digits again and again until one is left: 9875 -> 29 -> 11 -> 2
-func[Int] digitalRoot(number[Int]) {
-    var[Int] n = sumDigits(number);
-    while (n >= 10) n = sumDigits(n);
-    return n;
+const[NumberBases] radix = new NumberBases();
+
+// ============================================================
+// Units
+// ============================================================
+
+class UnitConverter {
+    // How much of the group's base unit one of each is
+    var[Map[Str, Map[Str, Dbl]]] _groups = {
+        "length": {"mm": 0.001, "cm": 0.01, "m": 1.0, "km": 1000.0, "in": 0.0254, "ft": 0.3048, "yd": 0.9144, "mi": 1609.344},
+        "mass": {"mg": 0.000001, "g": 0.001, "kg": 1.0, "t": 1000.0, "oz": 0.028349523125, "lb": 0.45359237},
+        "time": {"ms": 0.001, "s": 1.0, "min": 60.0, "h": 3600.0, "day": 86400.0, "week": 604800.0},
+        "area": {"cm2": 0.0001, "m2": 1.0, "km2": 1000000.0, "ha": 10000.0, "acre": 4046.8564224},
+        "volume": {"ml": 0.001, "l": 1.0, "m3": 1000.0, "gal": 3.785411784},
+        "speed": {"m/s": 1.0, "km/h": 0.2777777777777778, "mph": 0.44704},
+        "data": {"b": 1.0, "kb": 1000.0, "mb": 1000000.0, "gb": 1000000000.0, "tb": 1000000000000.0, "kib": 1024.0, "mib": 1048576.0, "gib": 1073741824.0}
+    };
+
+    // units.convert(10, "km", "mi"), units.convert(100, "C", "F")
+    func[Dbl] convert(value[Dbl], from[Str], to[Str]) {
+        var[Str] a = from.lower();
+        var[Str] b = to.lower();
+        if ((a == "c" || a == "f" || a == "k") && (b == "c" || b == "f" || b == "k")) return this._temperature(value, a, b);
+        for (var[Str] group in this._groups) {
+            var[Map[Str, Dbl]] table = this._groups<group>;
+            if (table.has(a) && table.has(b)) return value * table<a> / table<b>;
+            if (table.has(a) || table.has(b)) {
+                if (table.has(a)) throw new NumberError($"units: can't convert {from} (a {group}) to {to}");
+            }
+        }
+        throw new NumberError($"units: unknown unit '{from}' or '{to}'");
+    }
+
+    func[Dbl] _temperature(value[Dbl], from[Str], to[Str]) {
+        var[Dbl] celsius = from == "c" ? value : from == "f" ? (value - 32) * 5 / 9 : value - 273.15;
+        return to == "c" ? celsius : to == "f" ? celsius * 9 / 5 + 32 : celsius + 273.15;
+    }
 }
 
-// 1234 -> <1, 4, 9, 16>
-func[Int<>] squareDigits(number[Int]) {
-    return _digits(number).map((d[Int]) := d * d);
+const[UnitConverter] units = new UnitConverter();
+
+// ============================================================
+// Spreadsheet columns
+// ============================================================
+
+class SpreadsheetColumns {
+    // 1 is "A", 27 is "AA", 16384 is "XFD"
+    func[Str] name(number[Int]) {
+        if (number < 1) throw new NumberError($"columns: {number} is not a column number (they start at 1)");
+        var[Str] out = "";
+        var[Int] n = number;
+        while (n > 0) {
+            n--;
+            out = Str(Chr(65 + n % 26)) + out;
+            n = Int(n / 26);
+        }
+        return out;
+    }
+    // "A" is 1, "aa" is 27
+    func[Int] number(name[Str]) {
+        var[Int] total = 0;
+        for (var[Chr] c in name.trim().upper()) {
+            if (c.code() < 65 || c.code() > 90) throw new NumberError($"columns: '{name}' is not a column label");
+            total = total * 26 + (c.code() - 64);
+        }
+        return total;
+    }
 }
 
-// 8765 -> 5678, or 1234 -> 4321 with descending: true
-func[Int] sortDigits(number[Int], descending[Bul]=false) {
-    var[Int<>] digits = _digits(number);
-    digits.sort();
-    if (descending) digits.reverse();
-    var[Int] out = Int(digits.join(""));
-    return number < 0 ? -out : out;
+const[SpreadsheetColumns] columns = new SpreadsheetColumns();
+
+// ============================================================
+// Showing numbers
+// ============================================================
+
+class NumberFormat {
+    // 1234567.5 is "1,234,567.5"
+    func[Str] commas(number[Big | Int | Str | Dbl], separator[Str] = ",") {
+        var[Str] text = "";
+        if (number is Big) text = number.toStr();
+        else if (number is Int) text = Str(number);
+        else if (number is Str) text = number;
+        else if (number is Dbl) text = Str(number);
+        var[Str] sign = text.startsWith("-") ? "-" : "";
+        if (sign != "") text = text.substr(1, text.length() - 1);
+        var[Int] dot = text.indexOf(".");
+        var[Str] whole = dot >= 0 ? text.substr(0, dot) : text;
+        var[Str] rest = dot >= 0 ? text.substr(dot, text.length() - dot) : "";
+        var[Str] out = "";
+        for (var[Int] i = 0; i < whole.length(); i++) {
+            if (i > 0 && (whole.length() - i) % 3 == 0) out += separator;
+            out += Str(whole<i>);
+        }
+        return sign + out + rest;
+    }
+    // 3 is "3rd", 11 is "11th"
+    func[Str] ordinal(number[Int]) {
+        var[Int] size = number < 0 ? -number : number;
+        var[Int] last = size % 100;
+        var[Str] ending = "th";
+        if (last < 11 || last > 13) {
+            if (size % 10 == 1) ending = "st";
+            else if (size % 10 == 2) ending = "nd";
+            else if (size % 10 == 3) ending = "rd";
+        }
+        return $"{number}{ending}";
+    }
+    // 0.125 is "12.5%"
+    func[Str] percent(fraction[Dbl], places[Int] = 1) {
+        return new Decimal(fraction).mul(100).round(places).trim().toStr() + "%";
+    }
+    // 1500000 is "1.5M"
+    func[Str] compact(number[Dbl], places[Int] = 1) {
+        var[Dbl] size = number < 0 ? -number : number;
+        const[Dbl<>] steps = <1000000000000.0, 1000000000.0, 1000000.0, 1000.0>;
+        const[Str<>] names = <"T", "B", "M", "K">;
+        for (var[Int] i = 0; i < steps.length(); i++) {
+            if (size >= steps<i>) return new Decimal(number / steps<i>).round(places).trim().toStr() + names<i>;
+        }
+        return new Decimal(number).round(places).trim().toStr();
+    }
+    // 1500000 is "1.5 MB" (by 1000; binary: true goes by 1024: "1.4 MiB")
+    func[Str] bytes(count[Dbl], places[Int] = 1, binary[Bul] = false) {
+        var[Dbl] step = binary ? 1024.0 : 1000.0;
+        const[Str<>] names = <"B", "KB", "MB", "GB", "TB", "PB">;
+        const[Str<>] binaryNames = <"B", "KiB", "MiB", "GiB", "TiB", "PiB">;
+        var[Dbl] size = count;
+        var[Int] i = 0;
+        while ((size >= step || size <= -step) && i < 5) {
+            size /= step;
+            i++;
+        }
+        return new Decimal(size).round(places).trim().toStr() + " " + (binary ? binaryNames<i> : names<i>);
+    }
 }
 
-// The number closest to zero (the positive one on a tie): <-4, 2, -1, 7> -> -1
+const[NumberFormat] numformat = new NumberFormat();
+
+// ============================================================
+// The functions of version 1 (use the classes above; these will go)
+// ============================================================
+
+func[Str] toRoman(number[Int]) { return roman.of(number); }
+func[Int] fromRoman(text[Str]) { return roman.parse(text); }
+func[Str] toWords(number[Int]) { return words.of(number); }
+func[Int] fromWords(text[Str]) { return words.parse(text).toInt(); }
+func[Str] excelColumn(number[Int]) { return columns.name(number); }
+func[Int] excelColumnNumber(column[Str]) { return columns.number(column); }
+func[Int] sumDigits(number[Int]) { return digits.sum(number); }
+func[Int] digitalRoot(number[Int]) { return digits.root(number); }
+func[Int<>] squareDigits(number[Int]) { return digits.squares(number); }
+func[Int] sortDigits(number[Int], descending[Bul]=false) { return digits.sorted(number, descending).toInt(); }
+
+// The number closest to zero (the positive one on a tie): <-4, 2, -1, 7> is -1
 func[Int] nearestToZero(numbers[Int<>]) {
-    if (numbers.isEmpty()) throw "nearestToZero: the list is empty";
+    if (numbers.isEmpty()) throw new NumberError("nearestToZero: the list is empty");
     var[Int] best = numbers<0>;
     for (var[Int] n in numbers) {
         var[Int] size = n < 0 ? -n : n;
@@ -215,54 +1568,5 @@ func[Int] nearestToZero(numbers[Int<>]) {
     return best;
 }
 
-// ============================================================
-// Fractions and units
-// ============================================================
-
-func[Int] _gcd(a[Int], b[Int]) {
-    var[Int] x = a < 0 ? -a : a;
-    var[Int] y = b < 0 ? -b : b;
-    while (y != 0) {
-        var[Int] t = x % y;
-        x = y;
-        y = t;
-    }
-    return x;
-}
-
-// "24/5" -> "4 4/5", "-9/3" -> "-3", "2/4" -> "1/2"
-func[Str] mixedFraction(fraction[Str]) {
-    var[Str<>] parts = fraction.trim().split("/");
-    if (parts.length() != 2) throw $"mixedFraction: '{fraction}' is not a fraction like 24/5";
-    var[Int] top = Int(parts<0>.trim());
-    var[Int] bottom = Int(parts<1>.trim());
-    if (bottom == 0) throw "mixedFraction: the denominator can't be zero";
-    var[Str] sign = (top < 0) != (bottom < 0) && top != 0 ? "-" : "";
-    var[Int] t = top < 0 ? -top : top;
-    var[Int] b = bottom < 0 ? -bottom : bottom;
-    var[Int] whole = Int(t / b);
-    var[Int] rest = t % b;
-    if (rest == 0) return sign + Str(whole);
-    var[Int] g = _gcd(rest, b);
-    var[Str] part = $"{Int(rest / g)}/{Int(b / g)}";
-    return whole == 0 ? sign + part : $"{sign}{whole} {part}";
-}
-
-// Between "C" (Celsius), "F" (Fahrenheit) and "K" (Kelvin): convertTemperature(100, "C", "F") is 212.
-func[Dbl] convertTemperature(degrees[Dbl], fromUnit[Str], toUnit[Str]) {
-    var[Str] a = fromUnit.upper();
-    var[Str] b = toUnit.upper();
-    var[Dbl] celsius = 0;
-    switch (a) {
-        case "C" := { celsius = degrees; }
-        case "F" := { celsius = (degrees - 32) * 5 / 9; }
-        case "K" := { celsius = degrees - 273.15; }
-        default := { throw $"convertTemperature: unknown unit '{fromUnit}' (use C, F or K)"; }
-    }
-    switch (b) {
-        case "C" := { return celsius; }
-        case "F" := { return celsius * 9 / 5 + 32; }
-        case "K" := { return celsius + 273.15; }
-        default := { throw $"convertTemperature: unknown unit '{toUnit}' (use C, F or K)"; }
-    }
-}
+func[Str] mixedFraction(fraction[Str]) { return new Fraction(fraction.trim()).mixed(); }
+func[Dbl] convertTemperature(degrees[Dbl], fromUnit[Str], toUnit[Str]) { return units.convert(degrees, fromUnit, toUnit); }

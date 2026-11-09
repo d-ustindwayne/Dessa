@@ -3,5 +3,11 @@
   ok   near
   ok   throws
   FAIL fails: expected "y", got "x"
+  ok   outer > first
+  ok   outer > inner > second
+  FAIL outer > inner > fails, and afterEach still runs: expected 2, got 1
+  ok   outer > third
+  ok   outside
+<"before", "test", "after", "before", "inner before", "test 2", "after", "before", "inner before", "after", "before", "test 3", "after", "alone">
 
-4 passed, 1 failed
+8 passed, 2 failed

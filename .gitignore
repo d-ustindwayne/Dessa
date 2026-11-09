@@ -46,3 +46,6 @@ npm/LICENSE
 
 # Logs
 *.log
+
+# What tests/fuzz.py found
+tests/fuzz-failures/

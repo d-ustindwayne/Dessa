@@ -481,6 +481,7 @@ void Analyser::collectClassMembers(ClassInfo& info) {
         t.ownerClass = key;
         t.classTypes = &method->templateTypes;
         info.methodTemplates[method->name] = static_cast<int>(templates.size());
+        genericMethodNames.insert(method->name);
         templates.push_back(std::move(t));
     }
 
@@ -1422,6 +1423,7 @@ bool Analyser::checkConversion(const SemanticType& target, const Expr* value, co
 // ============================================================
 
 void Analyser::analyseStatement(const Stmt* statement) {
+    inferredArgs.clear();
     if (!statement) return;
 
     switch (statement->kind) {
@@ -1699,7 +1701,9 @@ void Analyser::analyseClassBody(const ClassDeclStmt* statement) {
         if (member->kind == StmtKind::VarDecl) {
             const auto* field = static_cast<const VarDeclStmt*>(member.get());
             if (!field->name) continue;
-            const SemanticType& target = info.fields.at(*field->name).type;
+            const auto known = info.fields.find(*field->name);
+            if (known == info.fields.end()) continue;   // already reported (a name used twice, say)
+            const SemanticType& target = known->second.type;
             if (field->initializer) {
                 SemanticType value = analyseExpression(field->initializer.get());
                 checkConversion(target, field->initializer.get(), value, "in initialiser of field '" + *field->name + "'");

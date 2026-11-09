@@ -36,6 +36,13 @@
       "manifest": "name = request\nversion = 1.4.0\nentry = request.dm\ndescription = HTTP requests (get, post, ...) through curl\n\n[dependencies]\njson = 1.2.0\n",
       "files": 5,
       "bytes": 14534
+    },
+    "1.5.0": {
+      "infohash": "120e17e08b81b7c1bf657d5cc27c04b10067e742",
+      "torrent": "ZDg6YW5ub3VuY2U0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2UxMzphbm5vdW5jZS1saXN0bGw0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2VlbDMzOnVkcDovL29wZW4uc3RlYWx0aC5zaTo4MC9hbm5vdW5jZWVsNDE6dWRwOi8vdHJhY2tlci50b3JyZW50LmV1Lm9yZzo0NTEvYW5ub3VuY2VlbDM3OnVkcDovL2V4b2R1cy5kZXN5bmMuY29tOjY5NjkvYW5ub3VuY2VlZTEwOmNyZWF0ZWQgYnkxMTpyaXYgKERlc3NhKTQ6aW5mb2Q1OmZpbGVzbGQ2Omxlbmd0aGkxMjg3ZTQ6cGF0aGw5OlJFQURNRS5tZGVlZDY6bGVuZ3RoaTgwMjBlNDpwYXRobDk6cmVxdWVzdC5jZWVkNjpsZW5ndGhpNDc3M2U0OnBhdGhsMTA6cmVxdWVzdC5kbWVlZDY6bGVuZ3RoaTQ5MDFlNDpwYXRobDExOnJlcXVlc3QuaHBwZWVkNjpsZW5ndGhpMjU4ZTQ6cGF0aGwxNDpyZXF1ZXN0Lm5hdGl2ZWVlZDY6bGVuZ3RoaTEzN2U0OnBhdGhsNzpyaXYucGtnZWVlNDpuYW1lNzpyZXF1ZXN0MTI6cGllY2UgbGVuZ3RoaTE2Mzg0ZTY6cGllY2VzNDA6jD6DxF2uPHkjt3G4WLgV9eR2JUt/NJylE2ZWoRPyBpoPwqZMu3+MiWU4OnVybC1saXN0bDc4Omh0dHBzOi8vcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbS9kLXVzdGluZHdheW5lL0Rlc3NhL21haW4vdG9vbHMvcml2L3BhY2thZ2VzL2Vl",
+      "manifest": "name = request\nversion = 1.5.0\nentry = request.dm\ndescription = HTTP requests (get, post, ...) through curl\n\n[dependencies]\njson = 1.3.0\n",
+      "files": 6,
+      "bytes": 19376
     }
   }
 }

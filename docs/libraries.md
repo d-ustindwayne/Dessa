@@ -17,8 +17,12 @@ These come with Dessa: `$("name")`.
 ### math
 
 `sqrt`, `cbrt`, `pow`, `abs`, `min`, `max`, `clamp`, `floor`, `ceil`, `round`,
-`sin`, `cos`, `tan`, `atan2`, `log`, `log10`, `exp`, `random`, `randomInt`,
-`PI`, `E`.
+`trunc`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`, `cosh`,
+`tanh`, `log`, `log2`, `log10`, `exp`, `hypot`, `sign`, `gcd`, `lcm`, `random`,
+`randomInt`, `PI`, `E`.
+
+`idiv(a, b)` divides whole numbers exactly. `a / b` goes through a `Dbl`, so past
+2^53 (about 9 quadrillion) it loses digits.
 
 Statistics on a `Dbl<>`: `sum`, `mean`, `median`, `mode`, `stdev`.
 
@@ -29,7 +33,13 @@ $("math") { Big }
 var[Big] f = new Big(1);
 for (var[Int] i = 1; i <= 30; i++) f = f.mul(i);
 print(f, f.sci());        // 265252859812191058636308480000000 2.65E32
+print(f + 1, f * 2, f > new Big(5), new Big(2) ^ 100, f % 7);
 ```
+
+It has `add`, `sub`, `mul`, `div`, `mod`, `pow`, `negate`, `abs`, `gcd`, `lcm`,
+`modPow`, `isqrt`, `compare`, `equals`, `sign`, `isEven`, `isZero`, `isNegative`,
+`length`, `sci`, `toInt`, `toDbl` and `toStr`, and the operators
+`+ - * / % ^ == < >`. For exact decimals and fractions, see `numbers` below.
 
 ### time
 
@@ -52,9 +62,22 @@ HH hh mm ss SSS a Z z`; put other text in quotes (`'at'`).
 
 ### os
 
-Files and the system: `readFile`, `writeFile`, `appendFile`, `fileExists`,
-`isDir`, `listDir`, `makeDir`, `deleteFile`, `deleteAll`, `cwd`, `getEnv`,
-`run(command)`.
+Files and the system: `readFile`, `writeFile`, `appendFile`, `copyFile`,
+`moveFile`, `fileExists`, `isDir`, `fileSize`, `modifiedTime`, `listDir`,
+`makeDir`, `deleteFile`, `deleteAll`, `cwd`, `getEnv`, `setEnv`, and the path
+helpers `joinPath("logs", "a.txt")`, `baseName`, `dirName` and `extension`.
+
+To start a program, use `execute`. No shell is involved, so its arguments can hold
+anything safely:
+
+```dessa
+$("os") { execute, ProcessResult }
+var[ProcessResult] r = execute("git", <"log", "--author", whoever>);
+if (r.ok()) print(r.output);
+```
+
+`run(command)` hands a whole line to the shell. Use it for commands you wrote
+yourself, and never put text from a user, a file or the network in it.
 
 `open(path, mode)` gives a `File` to read or write a piece at a time. The mode
 is `"r"` to read (the default), `"w"` to write (replacing what was there) or
@@ -88,7 +111,7 @@ seed(42);                                      // the same numbers every run
 Also `rand()` (0 to 1), `randDbl(low, high)`, `chance(p)`, `sample(list,
 count)`, `randStr(length)` (letters and digits) and `uuid()`. `pick`,
 `shuffle` and `sample` take any list. A seed gives the same numbers in a native
-program and in JavaScript. For passwords and keys use `dcrypto` instead.
+program and in WebAssembly. For passwords and keys use `dcrypto` instead.
 
 ### dsds
 
@@ -151,10 +174,12 @@ for checksums only.
 
 ### webutils
 
-The web page, for programs that run in a browser. See [web.md](web.md). A
-`<canvas>` is drawn on through `canvas.getContext("2d")` (a `Context2D`, with the
-browser's names: `fillRect`, `arc`, `fillText`, `drawImage`, ...); the
-`canvaslib` package below is the simpler way.
+The web page, for programs that run in a browser: the browser's own objects, and
+utilities on top of them (building elements safely, events, forms, addresses,
+storage, routes, values that update the page). See [web.md](web.md). A `<canvas>`
+is drawn on through `canvas.getContext("2d")` (a `Context2D`, with the browser's
+names: `fillRect`, `arc`, `fillText`, `drawImage`, ...); the `canvaslib` package
+below is the simpler way.
 
 ## Packages
 
@@ -189,6 +214,33 @@ print(toJson(ann));                                      // {"name":"Ann","age":
 Fields that are `Str`, `Int`, `Dbl`, `Flt`, `Bul`, `Json` or lists of `Str`,
 `Int`, `Dbl`, `Bul` are filled; a value that doesn't fit its field is a
 `JsonError` naming the key.
+
+Numbers keep their exact text, so `asInt()` and `asBig()` give every digit back,
+and writing gives the number as it came, however long:
+
+```dessa
+var[Json] doc = parseJson("{\"id\": 9007199254740993, \"user\": {\"tags\": [\"a\"]}}");
+doc.get("id").asInt();             // 9007199254740993
+doc.path("user.tags.0").asStr();   // "a"; a JSON null if any part is missing
+doc.intOr("age", 0);               // a default when the key is missing or null
+base.merge(changes);               // objects, deeply
+doc == other;                      // the same value, in any key order
+```
+
+`parseJsonLines` and `toJsonLines` read and write one value per line. Nesting
+past 512 levels is a `JsonError` (`parseJson(text, maxDepth)` changes that), so
+text from elsewhere can't use up the stack.
+
+`JsonSchema` checks the shape of a value, with this much of JSON Schema: `type`,
+`required`, `properties`, `additionalProperties: false`, `items`, `enum`,
+`minimum`, `maximum`, `minLength`, `maxLength`, `minItems`, `maxItems`:
+
+```dessa
+var[JsonSchema] user = new JsonSchema("""{"type": "object", "required": ["name"],
+    "properties": {"age": {"type": "integer", "minimum": 0}}}""");
+print(user.check(parseJson("{\"age\": -1}")));   // <"name: missing", "age: -1 is below the minimum 0">
+user.require(data);                              // a JsonError with all of them
+```
 
 
 ### sql
@@ -255,7 +307,8 @@ systems have.
 
 ### http
 
-A small web server (native programs; WebAssembly can't open one):
+A small web server (native programs; WebAssembly can't open one). Only this
+computer can reach it unless you say otherwise: `new Server(8080, "0.0.0.0")`.
 
 ```dessa
 $("http") { Server, Request, text, html, json }
@@ -266,12 +319,22 @@ server.post("/echo", (req[Request]) := json(req.body));
 server.listen();
 ```
 
-A `Request` has `method`, `path`, `query`, `headers`, `body`, `params` and
-`form()`. Answers are `text`, `html`, `json`, `redirect` or `new Response(status,
-body, type)`, with `.header(name, value)` to add headers. `*` at the end of a
-route takes the rest of the path. No route: 404; a handler that throws: 500.
-`server.handle(new Request("GET", "/hello/Ann"))` answers without the network,
-for tests. One request at a time.
+A `Request` has `method`, `path`, `query`, `headers`, `body`, `params`, `form()`
+and `cookies()`. Answers are `text`, `html`, `json`, `redirect` or `new
+Response(status, body, type)`, with `.header(name, value)` and `.cookie(name,
+value)` to add to them. `*` at the end of a route takes the rest of the path.
+No route: 404; a handler that throws: 500, with the reason printed on the server
+(`server.debug = true` sends it to the client too, while developing).
+
+`server.files("/assets", "public")` serves a folder, and nothing outside it or
+hidden. `server.use((req[Request]) := ...)` runs before every route, and answers
+in its place when it gives a `Response` (a login check, say).
+
+Clients are read side by side, so a slow one doesn't hold up the others: it has
+`server.timeoutSeconds` (10) to send a request of at most `server.maxBytes` (8 MB).
+Handlers run one at a time. `server.handle(new Request("GET", "/hello/Ann"))`
+answers without the network, for tests. There is no HTTPS: put a reverse proxy
+in front of anything public. See [security.md](security.md).
 
 ### regex
 
@@ -330,6 +393,9 @@ Each test prints `ok` or `FAIL` with what went wrong. `expect(x)` has `toBe`,
 `expectNear` (decimals) and `fail(message)`. `done()` prints the totals and
 exits with code 1 when a test failed.
 
+`group(name, body)` keeps tests together. Inside it, `beforeEach` and `afterEach`
+run around each of its tests, also the failed ones.
+
 `dessa test` runs every `*_test.ds` and `*.test.ds` file under the folder (not
 `riv_modules/` or `build/`) and adds up the results.
 
@@ -377,10 +443,68 @@ On Linux, programs need GTK 3 at run time (`libgtk-3-0` on Debian and Ubuntu,
 
 ### numbers
 
-`toRoman`, `fromRoman`, `toWords` (78056 is "seventy-eight thousand
-fifty-six"), `fromWords`, `excelColumn` (28 is "AB"), `excelColumnNumber`,
-`sumDigits`, `digitalRoot`, `squareDigits`, `sortDigits`, `nearestToZero`,
-`mixedFraction` ("24/5" is "4 4/5"), `convertTemperature(value, "C", "F")`.
+Numbers beyond what `Int` and `Dbl` can do, with each kind of work in its own class.
+
+**Exact numbers of any size.** `Decimal` is for money and anywhere `0.1` must be
+exactly `0.1`; `Fraction` keeps fractions as fractions. Both have the operators
+`+ - * / == <`:
+
+```dessa
+$("numbers") { Decimal, Fraction }
+new Decimal("0.1") + new Decimal("0.2");     // 0.3
+new Decimal("19.99") * 3;                    // 59.97
+new Decimal(1).div(3, 5);                    // 0.33333
+new Decimal("2.675").round(2);               // 2.68
+new Fraction(1, 3) + new Fraction(1, 6);     // 1/2
+new Fraction("24/5").mixed();                // "4 4/5"
+```
+
+`Complex` has `+ - * /`, `magnitude`, `angle`, `conjugate`, `pow` and `squareRoot`.
+
+**`NDArray`** is an array of `Dbl` with any number of dimensions, in the manner of
+NumPy. Operators work element by element, and shapes are matched by NumPy's rule
+("broadcasting"):
+
+```dessa
+$("numbers") { NDArray, array, array2d, arange, zeros, eye }
+var[NDArray] a = array(<1.0, 2.0, 3.0>);
+a * 2;                                  // <2, 4, 6>
+a + a;                                  // <2, 4, 6>
+var[NDArray] m = arange(0, 6).reshape(<2, 3>);
+m.sum();                                // 15
+m.sumAlong(0);                          // <3, 5, 7>: each column
+m.at(1, 2);                             // 5
+m.select(m.greater(2));                 // <3, 4, 5>
+array2d(<<2.0, 1.0>, <1.0, 3.0>>).inverse();
+```
+
+| Part | What it has |
+|---|---|
+| Making | `array`, `array2d`, `zeros`, `ones`, `full`, `eye`, `arange`, `linspace`, `concat` |
+| Shape | `shape`, `ndim`, `size`, `reshape` (one size may be -1), `flatten`, `transpose`, `row`, `column`, `at`, `set`, `item`, `toList` |
+| Element by element | `+ - * / ^`, `absolute`, `squareRoot`, `exponential`, `logarithm`, `sine`, `cosine`, `clip`, `rounded`, `map` |
+| Summing up | `sum`, `mean`, `std`, `variance`, `min`, `max`, `median`, `product`, each also `...Along(axis)`; `percentile`, `argmin`, `argmax`, `cumsum`, `sorted`, `unique` |
+| Masks | `greater`, `less`, `equal`, `select(mask)` |
+| Matrices | `dot`, `inner`, `det`, `inverse`, `solve` |
+
+It's written in Dessa, so large arrays are slower than NumPy, whose loops are in C.
+
+**Ready-made objects**, for work that keeps no state of its own:
+
+| Object | What it has |
+|---|---|
+| `stats` | `sum`, `mean`, `median`, `mode`, `variance`, `stdev`, `smallest`, `largest`, `range`, `percentile`, `covariance`, `correlation`, `histogram`, `zscores` |
+| `primes` | `isPrime`, `upTo`, `next`, `factorize`, for numbers of any size |
+| `words` | `words.of(78056)` is "seventy-eight thousand fifty-six", up to about 10^3000: `words.of("1000000000000000000000")` is "one sextillion". `words.parse(...)` reads them back. |
+| `roman` | `roman.of(1994)`, `roman.parse("MCMXCIV")` |
+| `digits` | `of`, `count`, `sum`, `root`, `squares`, `sorted`, `reversed`, `isPalindrome`, of any size |
+| `radix` | `encode(255, 16)`, `decode("ff", 16)`, any base from 2 to 36, of any size |
+| `units` | `convert(10, "km", "mi")`: length, mass, time, area, volume, speed, data, temperature |
+| `columns` | `name(28)` is "AB", `number("AB")` is 28 |
+| `numformat` | `commas`, `ordinal`, `percent`, `compact` (1.5M), `bytes` (1.5 MB) |
+
+Mistakes are a `NumberError`. The functions of version 1 (`toRoman`, `toWords`,
+`sumDigits`, `excelColumn`, ...) still work; they will go in a later version.
 
 ### codes
 

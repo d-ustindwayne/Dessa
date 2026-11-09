@@ -1,0 +1,9 @@
+// exit: 1
+// stderr: stack overflow
+// A program that recurses forever ends with an error message, not a bare crash.
+func[Int] forever(n[Int]) {
+    return forever(n + 1) + 1;
+}
+
+print("before");
+print(forever(0));

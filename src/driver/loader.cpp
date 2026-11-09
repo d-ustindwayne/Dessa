@@ -4,7 +4,6 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <regex>
 #include <sstream>
 
 #include "builtins.hpp"
@@ -33,17 +32,36 @@ std::string displayPath(const std::string& absolute) {
 } // namespace
 
 Diagnostic diagnosticFromMessage(const std::string& file, const std::string& message) {
-    static const std::regex pattern(R"(^\[line (\d+)(?:, col (\d+))?\] (?:Lex error|Parse error)?:?\s*(.*)$)");
+    // "[line 3, col 7] Parse error: text" (no regex: std::regex recurses on
+    // each character, so a long message would use up the stack)
     Diagnostic d;
     d.file = file;
-    std::smatch m;
-    if (std::regex_match(message, m, pattern)) {
-        d.line = std::stoi(m[1]);
-        d.column = m[2].matched ? std::stoi(m[2]) : 0;
-        d.message = m[3];
-    } else {
-        d.message = message;
+    d.message = message;
+    size_t at = 6;
+    const auto number = [&](int& out) {
+        const size_t start = at;
+        long long value = 0;
+        while (at < message.size() && message[at] >= '0' && message[at] <= '9' && value < 100000000) value = value * 10 + (message[at++] - '0');
+        out = static_cast<int>(value);
+        return at > start;
+    };
+    int line = 0, column = 0;
+    if (message.compare(0, at, "[line ") != 0 || !number(line)) return d;
+    if (message.compare(at, 6, ", col ") == 0) {
+        at += 6;
+        if (!number(column)) return d;
     }
+    if (message.compare(at, 2, "] ") != 0) return d;
+    at += 2;
+    for (const char* kind : {"Lex error", "Parse error"}) {
+        const size_t length = std::string(kind).size();
+        if (message.compare(at, length, kind) == 0) at += length;
+    }
+    if (at < message.size() && message[at] == ':') ++at;
+    while (at < message.size() && (message[at] == ' ' || message[at] == '\t')) ++at;
+    d.line = line;
+    d.column = column;
+    d.message = message.substr(at);
     return d;
 }
 
@@ -196,6 +214,28 @@ fs::path ModuleLoader::libraryFolder(const std::string& dotted, bool includeBuil
     return {};
 }
 
+// Where a file stops being valid UTF-8, as its line number; 0 when it's all valid
+static int invalidUtf8Line(const std::string& text) {
+    int line = 1;
+    for (size_t i = 0; i < text.size();) {
+        const unsigned char c = static_cast<unsigned char>(text[i]);
+        if (c == '\n') ++line;
+        const int extra = c < 0x80 ? 0 : (c >= 0xC2 && c <= 0xDF) ? 1 : (c >= 0xE0 && c <= 0xEF) ? 2 : (c >= 0xF0 && c <= 0xF4) ? 3 : -1;
+        if (extra < 0 || i + static_cast<size_t>(extra) >= text.size() + (extra == 0 ? 1 : 0)) return line;
+        for (int k = 1; k <= extra; ++k) {
+            const unsigned char more = static_cast<unsigned char>(text[i + static_cast<size_t>(k)]);
+            unsigned char low = 0x80, high = 0xBF;
+            if (k == 1 && c == 0xE0) low = 0xA0;      // too long a form
+            if (k == 1 && c == 0xED) high = 0x9F;     // surrogates aren't characters
+            if (k == 1 && c == 0xF0) low = 0x90;      // too long a form
+            if (k == 1 && c == 0xF4) high = 0x8F;     // past the last character
+            if (more < low || more > high) return line;
+        }
+        i += static_cast<size_t>(extra) + 1;
+    }
+    return 0;
+}
+
 int ModuleLoader::visit(Program& program, const std::string& path, const std::string* sourceOverride, State& state,
                         const std::string& fromFile, int fromLine, int fromColumn) {
     // Already loaded?
@@ -228,6 +268,12 @@ int ModuleLoader::visit(Program& program, const std::string& path, const std::st
         std::stringstream buffer;
         buffer << file.rdbuf();
         module->source = buffer.str();
+    }
+
+    // Everything after this may rely on valid text (Str, file names from imports, ...)
+    if (const int line = invalidUtf8Line(module->source)) {
+        addError(module->displayPath, line, 1, "This file isn't valid UTF-8 text here. Save it as UTF-8.");
+        return -1;
     }
 
     Lexer lexer(module->source);

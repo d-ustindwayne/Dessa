@@ -7,6 +7,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Nothing here needs more than to read the code
+permissions:
+  contents: read
+
 jobs:
   test:
     name: ${{ matrix.name }}
@@ -27,11 +31,11 @@ jobs:
         shell: ${{ matrix.os == 'windows-latest' && 'msys2 {0}' || 'bash' }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up MinGW (Windows)
         if: matrix.os == 'windows-latest'
-        uses: msys2/setup-msys2@v2
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
         with:
           msystem: UCRT64
           update: true
@@ -66,7 +70,7 @@ jobs:
         run: |
           python3 - <<'EOF' || true
           import glob, os, tempfile
-          for log in glob.glob(os.path.join(tempfile.gettempdir(), "dessa", "**", "*.log"), recursive=True)[:5]:
+          for log in glob.glob(os.path.join(os.path.expanduser("~/.cache") if os.name != "nt" else tempfile.gettempdir(), "dessa", "**", "*.log"), recursive=True)[:5]:
               print("=====", log)
               print(open(log, errors="replace").read()[-4000:])
           EOF
@@ -85,8 +89,8 @@ jobs:
           - os: macos-latest
             platform: macos-arm64
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
       - name: Build dessa
@@ -102,8 +106,32 @@ jobs:
         run: python3 tests/test.py --wasm
       - name: A page as WebAssembly
         run: node tests/web/wasm_page.js
+      - name: webutils in a real browser
+        run: python3 tests/web/chrome_utils.py
       - name: The npm package (with this dessa)
         run: DESSALANG_DESSA="$PWD/build/dessa" node npm/test.js
       - name: Show the WebAssembly compiler's logs if something failed
         if: failure()
-        run: for f in /tmp/dessa/objects/*.log /tmp/dessa/*.log; do [ -f "$f" ] && { echo "===== $f"; tail -c 4000 "$f"; }; done; true
+        run: for f in ~/.cache/dessa/objects/*.log ~/.cache/dessa/*.log; do [ -f "$f" ] && { echo "===== $f"; tail -c 4000 "$f"; }; done; true
+
+  security:
+    # The checks tests/test.py can't do in a normal build: see docs/security.md
+    name: Memory checkers and fuzzing
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build dessa
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target dessa -j 4
+      - name: The test programs, with AddressSanitizer and UndefinedBehaviorSanitizer
+        run: python3 tests/sanitize.py
+      - name: Damaged programs into the compiler
+        run: python3 tests/fuzz.py --seconds 120 --seed ${{ github.run_number }}
+      - name: Keep what the fuzzer found
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: fuzz-failures
+          path: tests/fuzz-failures/
+          if-no-files-found: ignore

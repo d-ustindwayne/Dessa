@@ -1,0 +1,103 @@
+// The numbers package: exact numbers, arrays and the helper classes.
+// The exact results in numbers_classes.out were compared with Python's decimal,
+// fractions and big integers when this test was written.
+$("numbers");
+$("math") { Big }
+
+func[Str] fails(action[Func[Emp]]) {
+    try {
+        action();
+    } catch (e[NumberError]) {
+        return e.message;
+    }
+    return "no error";
+}
+
+print("--- Decimal");
+print(new Decimal("0.1") + new Decimal("0.2"), 0.1 + 0.2);
+print(new Decimal("19.99") * 3, new Decimal("1.50") - "0.25", new Decimal(1).div(3, 5), new Decimal(2).div(3, 5));
+print(new Decimal("2.675").round(2), new Decimal("-0.5").round(), new Decimal("2.5").round(), new Decimal("1.005").round(2));
+print(new Decimal("1.5e3"), new Decimal("1.5e-3"), new Decimal(0.1), new Decimal("-12.340").trim(), new Decimal(".5"), new Decimal("5."));
+print(new Decimal("123456789012345678901234567890.123456789") * new Decimal("987654321.987654321"));
+print(new Decimal(1) / 7, new Decimal(22) / 7);
+print(new Decimal("1.10").equals("1.1"), new Decimal("1.10") == new Decimal("1.1"), new Decimal("1.1") < new Decimal("1.11"), new Decimal(2).pow(100));
+print(new Decimal("-1.5").abs(), -new Decimal("1.5"), new Decimal("-0.001").isNegative(), new Decimal("9.99").truncate(1), new Decimal("9.99").toBig(), new Decimal("0.5").toDbl());
+print(fails(() := { new Decimal("abc"); }), "|", fails(() := { new Decimal(1).div(0); }), "|", fails(() := { new Decimal("1.2.3"); }));
+
+print("--- Fraction");
+print(new Fraction(1, 3) + new Fraction(1, 6), new Fraction(2, 4), new Fraction(-1, -2), new Fraction(1, -2), new Fraction(6, 3));
+print(new Fraction("24/5").mixed(), new Fraction("-9/3").mixed(), new Fraction("2/4").mixed(), new Fraction("0.75"), new Fraction("-1/3").mixed());
+print(new Fraction(3, 4) * new Fraction(2, 3), new Fraction(3, 4) / 3, new Fraction(3, 4) - 1, new Fraction(2, 3) ^ 3, new Fraction(2, 3).pow(-2));
+print(new Fraction("123456789012345678901234567890/987654321098765432109876543210"));
+print(new Fraction(1, 3).toDecimal(10), new Fraction(1, 4).toDbl(), new Fraction(1, 3) < new Fraction(1, 2), new Fraction(1, 2) == new Fraction(2, 4));
+print(fails(() := { new Fraction(1, 0); }), "|", fails(() := { var[Fraction] f = new Fraction(1) / 0; }));
+
+print("--- Complex");
+print(new Complex(1, 2) * new Complex(3, 4), new Complex(1, 2) + 1, new Complex(1, 2).conjugate(), new Complex(3, 4).magnitude());
+print(new Complex(1, 2) / new Complex(3, 4), new Complex(0, 1).pow(2), new Complex(-4, 0).squareRoot(), new Complex(1, 1) == new Complex(1, 1));
+
+print("--- NDArray");
+var[NDArray] a = array(<1.0, 2.0, 3.0>);
+print(a, a + 1, a * a, a - a, a / 2, a ^ 2, -a, a.shape, a.ndim(), a.size());
+var[NDArray] m = arange(0, 6).reshape(<2, 3>);
+print(m, m.shape, m.at(1, 2), m.transpose(), m.flatten());
+print(m.sum(), m.sumAlong(0), m.sumAlong(1), m.mean(), m.meanAlong(0), m.meanAlong(1));
+print(m.min(), m.max(), m.minAlong(0), m.maxAlong(1), m.argmin(), m.argmax(), m.productAlong(0));
+print(array(<1.0, 2.0, 3.0, 4.0>).std(), array(<1.0, 2.0, 3.0, 4.0>).variance(), array(<1.0, 2.0, 3.0, 4.0>).median());
+print(m * array(<10.0, 20.0, 30.0>), m + array2d(<<100.0>, <200.0>>), array(<1.0, 2.0>).reshape(<2, 1>) * array(<1.0, 2.0, 3.0>));
+print(zeros(<2, 2>), ones(<2>), full(<1, 2>, 7), eye(2), linspace(0, 1, 5), arange(0, 1, 0.25), arange(5, 0, -2));
+print(m.greater(2), m.select(m.greater(2)), m.select(m.equal(3)), m.greater(2).sum());
+print(array(<-1.0, 4.0, 9.0>).absolute(), array(<4.0, 9.0>).squareRoot(), array(<1.5, 2.25>).rounded(1), array(<-5.0, 0.5, 5.0>).clip(0, 1));
+print(array(<1.0, 2.0, 3.0>).cumsum(), array(<3.0, 1.0, 2.0, 1.0>).sorted(), array(<3.0, 1.0, 2.0, 1.0>).unique(), m.row(1), m.column(2));
+var[NDArray] s = array2d(<<2.0, 1.0>, <1.0, 3.0>>);
+print(s.dot(s), a.inner(a), a.dot(a).item(), s.det(), s.inverse().rounded(6), s.dot(s.inverse()).rounded(6), s.solve(array(<3.0, 5.0>)).rounded(6));
+print(array2d(<<0.0, 1.0>, <1.0, 0.0>>).det(), array2d(<<1.0, 2.0>, <2.0, 4.0>>).det(), array2d(<<2.0, 0.0, 0.0>, <0.0, 3.0, 0.0>, <0.0, 0.0, 4.0>>).det());
+print(concat(<m, m>), concat(<m, m>, 1), concat(<a, a>));
+var[NDArray] cube = arange(0, 24).reshape(<2, 3, -1>);
+print(cube.shape, cube.at(1, 2, 3), cube.sumAlong(0).shape, cube.sumAlong(2), cube.transpose().shape, cube.transpose().at(3, 2, 1));
+var[NDArray] changed = m.copy();
+changed.set(99, 0, 0);
+print(changed.at(0, 0), m.at(0, 0), changed<0>, m == m.copy(), m == changed);
+print(fails(() := { m.at(5, 0); }), "|", fails(() := { m.at(0); }), "|", fails(() := { m.reshape(<4, 4>); }));
+print(fails(() := { m + array(<1.0, 2.0>); }), "|", fails(() := { array2d(<<1.0, 2.0>, <2.0, 4.0>>).inverse(); }), "|", fails(() := { m.det(); }), "|", fails(() := { m.sumAlong(5); }));
+
+print("--- stats");
+const[Dbl<>] values = <2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0>;
+print(stats.mean(values), stats.median(values), stats.mode(values), stats.stdev(values), stats.variance(values), stats.range(values));
+print(stats.percentile(values, 25), stats.percentile(values, 90), stats.percentile(<1.0, 2.0, 3.0, 4.0>, 50), stats.histogram(values, 3));
+print(stats.correlation(<1.0, 2.0, 3.0>, <2.0, 4.0, 6.0>), stats.correlation(<1.0, 2.0, 3.0>, <3.0, 2.0, 1.0>), stats.covariance(<1.0, 2.0>, <1.0, 2.0>));
+print(stats.variance(<1.0, 2.0, 3.0>, true), stats.zscores(<1.0, 2.0, 3.0>).length(), fails(() := { stats.mean(<>); }));
+
+print("--- primes");
+print(primes.upTo(30), primes.isPrime(97), primes.isPrime(1), primes.isPrime(91), primes.isPrime("170141183460469231731687303715884105727"));
+print(primes.isPrime("170141183460469231731687303715884105725"), primes.next(100), primes.factorize(360), primes.factorize(97), primes.factorize("1000000007"));
+print(primes.isPrime(561), primes.isPrime(3215031751), primes.factorize("600851475143"));
+
+print("--- words");
+print(words.of(0), words.of(7), words.of(78056), words.of(-3), words.of(1000000), words.of(9223372036854775807));
+print(words.of("1000000000000000000000"), "|", words.of(new Big(10).pow(63)), "|", words.of(new Big(10).pow(66)), "|", words.of(new Big(10).pow(100)));
+print(words.of(new Big(10).pow(303)), "|", words.of(new Big(10).pow(93)), "|", words.of(new Big(10).pow(72)), "|", words.of(new Big(10).pow(81)), "|", words.of(new Big(10).pow(90)));
+print(words.parse("thirty three thousand eight hundred forty four"), words.parse("two thousand and five"), words.parse("minus twenty-one"));
+print(words.parse(words.of("123456789012345678901234567890123456789")));
+print(words.parse("one quadrillion"), words.parse("five centillion").length(), fails(() := { words.parse("banana"); }), fails(() := { words.parse(""); }));
+
+print("--- roman, digits, radix, columns");
+print(roman.of(1994), roman.of(3999), roman.parse("mcmxciv"), fails(() := { roman.of(4000); }), fails(() := { roman.parse("IIII"); }));
+print(digits.of(1234), digits.sum(1234), digits.root(9875), digits.squares(12), digits.sorted(8765), digits.sorted(1234, true), digits.reversed(120), digits.isPalindrome(12321));
+print(digits.sum("99999999999999999999999999"), digits.count("123456789012345678901234567890"));
+print(radix.encode(255, 16), radix.encode(255, 2), radix.encode(-255, 36), radix.decode("ff", 16), radix.decode("-73", 36), radix.encode("340282366920938463463374607431768211456", 16));
+print(radix.decode("100000000000000000000000000000000", 16), fails(() := { radix.decode("g", 16); }), fails(() := { radix.encode(1, 99); }));
+print(columns.name(1), columns.name(28), columns.name(16384), columns.number("aa"), columns.number("XFD"));
+
+print("--- units, numformat");
+print(units.convert(100, "C", "F"), units.convert(212, "F", "C"), units.convert(0, "C", "K"), units.convert(1, "km", "m"), units.convert(1, "mi", "km"), units.convert(1, "gib", "mib"));
+print(units.convert(3600, "s", "h"), units.convert(1, "lb", "g"), fails(() := { units.convert(1, "km", "kg"); }), fails(() := { units.convert(1, "x", "y"); }));
+print(numformat.commas(1234567), numformat.commas(1234567.5), numformat.commas("-1234"), numformat.commas(123), numformat.commas(new Big(10).pow(12), " "));
+print(numformat.ordinal(1), numformat.ordinal(2), numformat.ordinal(3), numformat.ordinal(4), numformat.ordinal(11), numformat.ordinal(12), numformat.ordinal(13), numformat.ordinal(21), numformat.ordinal(112));
+print(numformat.percent(0.125), numformat.percent(1), numformat.compact(1500000), numformat.compact(999), numformat.compact(-2500), numformat.bytes(1500000), numformat.bytes(1048576, 1, true), numformat.bytes(10));
+
+print("--- version 1");
+print(toRoman(2026), fromRoman("XLII"), toWords(78056), fromWords("thirty three thousand eight hundred forty four"), excelColumn(28), excelColumnNumber("XFD"));
+print(sumDigits(1234), digitalRoot(9875), squareDigits(1234), sortDigits(8765), sortDigits(1234, true), nearestToZero(<-4, 2, -1, 7>), nearestToZero(<-2, 2>));
+print(mixedFraction("24/5"), mixedFraction("-9/3"), mixedFraction("2/4"), convertTemperature(100, "C", "F"), convertTemperature(373.15, "K", "C"));
+print(fromWords(toWords(1000000000000000)));

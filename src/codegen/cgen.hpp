@@ -152,6 +152,7 @@ private:
     bool isDynamic(const SemanticType& type) const;
     std::string box(const std::string& code, const SemanticType& type);     // a plain value into a ds_head*
     std::string unbox(const std::string& code, const SemanticType& type);   // and back
+    std::string dynHolds(const std::string& et, const std::string& data, const std::string& count, const SemanticType& element);
     std::string dynIs(const std::string& v, const SemanticType& target);    // `is` on a ds_head*          // Obj, Int | Str and the like: a ds_head* (numbers boxed)
     bool isOptValue(const SemanticType& type) const;         // Int | Nil and the like: a ds_opt_* struct
     std::string cType(const SemanticType& type) const;
@@ -284,6 +285,7 @@ private:
     std::string externTake(const SemanticType& type);
     CV externCall(const std::string& object, const std::string& name, const CallArgs& args,
                   const std::vector<FunctionParameterSymbol>& params, const SemanticType& result);
+    CV externField(const std::string& object, const std::string& name, const SemanticType& type);
     CV externGet(const MemberExpr* e, const SemanticType& type);
     CV externAssign(const AssignExpr* e);
 };

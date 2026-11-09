@@ -22,6 +22,13 @@
       "manifest": "name = textfx\nversion = 0.5.0\nentry = lib.ds\ndescription = Text helpers: boxes, padding, palindromes, anagrams, camelCase, vowel counts\n\n[dependencies]\n",
       "files": 2,
       "bytes": 4179
+    },
+    "0.5.1": {
+      "infohash": "04fe157f64d430e2366d209975b15df4c7f8f6c3",
+      "torrent": "ZDg6YW5ub3VuY2U0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2UxMzphbm5vdW5jZS1saXN0bGw0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2VlbDMzOnVkcDovL29wZW4uc3RlYWx0aC5zaTo4MC9hbm5vdW5jZWVsNDE6dWRwOi8vdHJhY2tlci50b3JyZW50LmV1Lm9yZzo0NTEvYW5ub3VuY2VlbDM3OnVkcDovL2V4b2R1cy5kZXN5bmMuY29tOjY5NjkvYW5ub3VuY2VlZTEwOmNyZWF0ZWQgYnkxMTpyaXYgKERlc3NhKTQ6aW5mb2Q1OmZpbGVzbGQ2Omxlbmd0aGk5NDdlNDpwYXRobDk6UkVBRE1FLm1kZWVkNjpsZW5ndGhpNDAyN2U0OnBhdGhsNjpsaWIuZHNlZWQ2Omxlbmd0aGkxNTJlNDpwYXRobDc6cml2LnBrZ2VlZTQ6bmFtZTY6dGV4dGZ4MTI6cGllY2UgbGVuZ3RoaTE2Mzg0ZTY6cGllY2VzMjA6sw+cASuoJHHu1rGgh+aTeCPbhwNlODp1cmwtbGlzdGw3ODpodHRwczovL3Jhdy5naXRodWJ1c2VyY29udGVudC5jb20vZC11c3RpbmR3YXluZS9EZXNzYS9tYWluL3Rvb2xzL3Jpdi9wYWNrYWdlcy9lZQ==",
+      "manifest": "name = textfx\nversion = 0.5.1\nentry = lib.ds\ndescription = Text helpers: boxes, padding, palindromes, anagrams, camelCase, vowel counts\n\n[dependencies]\n",
+      "files": 3,
+      "bytes": 5126
     }
   }
 }

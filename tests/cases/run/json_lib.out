@@ -5,7 +5,7 @@ true true true
 say "hi"
 
 <"name", "age", "admin", "scores", "address", "nickname", "quote", "pi">
-{"name":"Ann","age":30,"admin":true,"scores":[90,85.5],"address":{"city":"Cebu"},"nickname":null,"quote":"say \"hi\"\n","pi":3.14}
+{"name":"Ann","age":30,"admin":true,"scores":[90,85.5],"address":{"city":"Cebu"},"nickname":null,"quote":"say \"hi\"\n","pi":3.14e0}
 {"name":"Bo","age":30,"tags":["admin","dev","ops"],"manager":null}
 {
   "name": "Bo",

@@ -9,7 +9,7 @@
  *     seed(42);                                 // the same numbers every run
  *
  * Declaration file: documentation only. Bodies are `...`; the real
- * implementation is C++ in random.hpp (and JavaScript in the runtime). Both
+ * implementation is in the C runtime and in random.hpp. Both
  * use the same generator, so seed(n) gives the same numbers in both.
  * Not for passwords or keys: use $("dcrypto") for those.
  */

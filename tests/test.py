@@ -318,6 +318,286 @@ def editor_test():
     return problems
 
 
+def verify_test():
+    """dessa verify-download: what riv update relies on before running an installer."""
+    problems = []
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        good = tmp / "release.bin"
+        # Longer than one SHA-256 block, with line endings and zero bytes kept as they are
+        good.write_bytes(bytes(range(256)) * 300 + b"\r\n\0")
+        import hashlib
+        real = hashlib.sha256(good.read_bytes()).hexdigest()
+        sums = tmp / "SHA256SUMS"
+        check = lambda file: subprocess.run([str(EXE), "verify-download", str(file), str(sums)], capture_output=True, text=True, timeout=60)
+        sums.write_text(f"{'0' * 64}  other.bin\n{real}  release.bin\n", encoding="utf-8")
+        if (r := check(good)).returncode != 0:
+            problems.append("the right file was refused: " + r.stderr)
+        sums.write_text(f"{'0' * 64}  release.bin\n", encoding="utf-8")
+        if (r := check(good)).returncode == 0 or "not the file that was released" not in r.stderr:
+            problems.append("a changed file was accepted: " + r.stderr)
+        sums.write_text(f"{real}  other.bin\n", encoding="utf-8")
+        if (r := check(good)).returncode == 0 or "not in the list" not in r.stderr:
+            problems.append("a file that isn't listed was accepted: " + r.stderr)
+    return problems
+
+
+def limits_test():
+    """Code that is too deep is an error message from `dessa check`, on every
+    platform's stack, and code just under each limit still compiles."""
+    fits = [
+        ("parentheses", "var[Int] x = " + "(" * 190 + "1" + ")" * 190 + ";\n"),
+        ("negations", "var[Bul] x = " + "!" * 190 + "true;\n"),
+        ("operators", "var[Int] x = 1" + " + 1" * 990 + ";\n"),
+        ("calls", "class A { func[A] f() { return this; } }\nvar[A] a = new A();\na" + ".f()" * 450 + ";\n"),
+        ("else ifs", "var[Int] n = 1;\nif (n == 0) { }\n" + "else if (n == 0) { }\n" * 900),
+        ("blocks", "{\n" * 150 + "}\n" * 150),
+        ("templates", "print(" + '$"{' * 50 + "1" + '}"' * 50 + ");\n"),
+        ("generic calls", "func[T] id:T(x[T]) { return x; }\nvar[Int] y = " + "id(" * 100 + "1" + ")" * 100 + ";\n"),
+        ("list types", "var[Int" + "<>" * 30 + "] x = <>;\n"),
+    ]
+    deep = [
+        ("parentheses", "var[Int] x = " + "(" * 200000 + "1" + ")" * 200000 + ";\n"),
+        ("negations", "var[Bul] x = " + "!" * 200000 + "true;\n"),
+        ("operators", "var[Int] x = 1" + " + 1" * 200000 + ";\n"),
+        ("calls", "var[Str] a = \"\";\na" + ".trim()" * 200000 + ";\n"),
+        ("pipes", "var[Int] a = 1" + " |> f" * 200000 + ";\n"),
+        ("else ifs", "var[Int] n = 1;\nif (n == 0) { }\n" + "else if (n == 0) { }\n" * 200000),
+        ("blocks", "{\n" * 200000 + "}\n" * 200000),
+        ("templates", "print(" + '$"{' * 5000 + "1" + '}"' * 5000 + ");\n"),
+        ("list types", "var[Int" + "<>" * 200000 + "] x = <>;\n"),
+        ("union types", "var[Int" + " | Int" * 200000 + "] x = 1;\n"),
+        ("grouped types", "var[" + "(" * 200000 + "Int" + ")" * 200000 + "] x = 1;\n"),
+        # Found by tests/fuzz.py: `<` tried as an index and undone at every level
+        ("unclosed indexes", "class V { init(a[Int], b[Int]) { } }\nvar[Int] s = 0;\nprint(" + "s<new V(0," * 60 + ");\n"),
+        ("a long error", "print(" + '"' + "x" * 200000 + '" "' + "x" * 200000 + '"' + ");\n"),
+    ]
+    # Found by tests/fuzz.py too: what isn't valid text is an error, wherever it is
+    broken = [("in a string", b'print("a\xffb");\n'), ("in an import", b'$("ma\xfeth");\n'), ("in a comment", b'// \xc0\x80\nprint(1);\n'),
+              ("cut short", b'print("\xe2\x82'), ("a surrogate", b'print("\xed\xa0\x80");\n'), ("too high", b'print("\xf4\x90\x80\x80");\n')]
+    problems = []
+    with tempfile.TemporaryDirectory() as tmp:
+        file = Path(tmp) / "limits.ds"
+        for name, source in fits + deep:
+            file.write_text(source, encoding="utf-8")
+            try:
+                # Far more than any of these needs: work that doubles with each level never ends
+                result = subprocess.run([str(EXE), "check", str(file)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
+            except subprocess.TimeoutExpired:
+                problems.append(f"{name}: timed out")
+                continue
+            text = (result.stdout + result.stderr).strip()
+            if (name, source) in fits:
+                if result.returncode != 0:
+                    problems.append(f"{name} under the limit: exit {result.returncode}: {text[:200]}")
+            elif result.returncode != 1 or "error" not in text:
+                problems.append(f"{name} too deep: exit {result.returncode} (a crash is not a message): {text[:200]}")
+        for name, source in broken:
+            file.write_bytes(source)
+            result = subprocess.run([str(EXE), "check", str(file)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
+            if result.returncode != 1 or "UTF-8" not in result.stdout + result.stderr:
+                problems.append(f"invalid text {name}: exit {result.returncode}: {(result.stdout + result.stderr)[:200]}")
+        file.write_bytes('print("é€😀");\n'.encode("utf-8"))
+        result = subprocess.run([str(EXE), "check", str(file)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
+        if result.returncode != 0:
+            problems.append(f"valid text refused: {result.stdout}{result.stderr}")
+    return problems
+
+
+def execute_test():
+    """os.execute: arguments reach the program exactly as given, and nothing in
+    them is ever treated as a command."""
+    problems = []
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        (tmp / "echo.ds").write_text("""
+$("sys") { args, exit }
+for (var[Str] a in args()) print($"[{a}]");
+exit(3);
+""", encoding="utf-8")
+        (tmp / "main.ds").write_text("""
+$("os");
+$("sys") { args };
+var[ProcessResult] r = execute(args()<0>, <"plain", "two words", "quote\\"inside", "back\\\\slash", "trail\\\\", "\\\\\\"", "$(echo x > marker)", "`echo x > marker`", "& echo x> marker", "; echo x > marker", "| echo x> marker", "%PATH%", "">);
+print(r.code, r.ok());
+print(r.output);
+try {
+    execute("this-program-does-not-exist-anywhere");
+} catch (e[Str]) {
+    print(e);
+}
+try { execute("something.BAT"); } catch (e[Str]) { print(e.substr(0, 34)); }
+""", encoding="utf-8")
+        for name in ("echo", "main"):
+            r = subprocess.run([str(EXE), "build", f"{name}.ds", "-o", f"{name}.exe"], cwd=tmp, capture_output=True, text=True, timeout=240)
+            if r.returncode != 0:
+                return [f"could not build {name}: " + r.stdout + r.stderr]
+        r = subprocess.run([str(tmp / "main.exe"), str(tmp / "echo.exe")], cwd=tmp, capture_output=True, text=True, encoding="utf-8", timeout=60)
+        wanted = ["plain", "two words", 'quote"inside', "back\\slash", "trail\\", '\\"', "$(echo x > marker)", "`echo x > marker`",
+                  "& echo x> marker", "; echo x > marker", "| echo x> marker", "%PATH%", ""]
+        lines = r.stdout.replace("\r\n", "\n").split("\n")
+        if lines[0] != "3 false":
+            problems.append(f"exit code: {lines[0]!r}")
+        got = [l[1:-1] for l in lines[1:] if l.startswith("[")]
+        if got != wanted:
+            problems.append(f"arguments changed: {got}")
+        if (tmp / "marker").exists():
+            problems.append("an argument ran as a command")
+        if "could not start this-program-does-not-exist-anywhere" not in r.stdout:
+            problems.append("a missing program: " + r.stdout + r.stderr)
+        if os.name == "nt" and "execute can't run something.BAT" not in r.stdout:
+            problems.append("a batch file wasn't refused: " + r.stdout)
+    return problems
+
+
+def raw_request(port, data, timeout=15):
+    """Sends bytes exactly as given (no client library tidies the path) and returns the answer."""
+    import socket
+    with socket.create_connection(("127.0.0.1", port), timeout=timeout) as s:
+        s.sendall(data)
+        out = b""
+        try:
+            while chunk := s.recv(65536):
+                out += chunk
+        except OSError:
+            pass
+    return out
+
+
+def http_server_test():
+    """The http package over a real socket: what a hostile or slow client can do."""
+    import socket
+    program = """
+$("http") { Server, Request, Response, text, redirect }
+var[Server] server = new Server(0);
+server.quiet = true;
+server.timeoutSeconds = 2;
+server.maxBytes = 1000;
+server.files("/files", "public");
+server.get("/", (req[Request]) := text("home"));
+server.get("/boom", (req[Request]) := text(Str(<1, 2><5>)));
+server.get("/go", (req[Request]) := redirect(req.query<"to">));
+server.get("/cookie", (req[Request]) := text(req.cookies().getOr("a", "none")).cookie("b", "2", 60));
+server.use((req[Request]) := req.path == "/blocked" ? text("no", 403) : nil);
+server.listen();
+"""
+    problems = []
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        (tmp / "public").mkdir()
+        (tmp / "public" / "a.txt").write_text("file a", encoding="utf-8")
+        (tmp / "public" / ".env").write_text("SECRET", encoding="utf-8")
+        (tmp / "public" / "bin.dat").write_bytes(b"\xff\xfe\x00\x80ok")
+        (tmp / "secret.txt").write_text("SECRET", encoding="utf-8")
+        # A free port: the server's own choice isn't visible from here
+        probe = socket.socket()
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+        probe.close()
+        (tmp / "server.ds").write_text(program.replace("new Server(0)", f"new Server({port})"), encoding="utf-8")
+        build = subprocess.run([str(EXE), "build", "server.ds", "-o", "server.exe"], cwd=tmp, capture_output=True, text=True, timeout=240)
+        if build.returncode != 0:
+            return ["could not build the server: " + build.stdout + build.stderr]
+        server = subprocess.Popen([str(tmp / "server.exe")], cwd=tmp, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+        try:
+            for _ in range(100):
+                try:
+                    socket.create_connection(("127.0.0.1", port), timeout=1).close()
+                    break
+                except OSError:
+                    time.sleep(0.1)
+            head = lambda path: f"GET {path} HTTP/1.1\r\nHost: x\r\n\r\n".encode()
+            def expect(what, data, wanted, unwanted=None):
+                answer = raw_request(port, data)
+                if wanted.encode() not in answer or (unwanted and unwanted.encode() in answer):
+                    problems.append(f"{what}: got {answer[:200]!r}")
+            expect("normal", head("/"), "home")
+            # Nothing a handler says about its failure reaches the client
+            expect("error text", head("/boom"), "500 Internal", "IndexError")
+            # One client that sends nothing, and one that sends half, don't hold up the rest
+            idle = socket.create_connection(("127.0.0.1", port))
+            half = socket.create_connection(("127.0.0.1", port))
+            half.sendall(b"GET / HTTP/1.1\r\nHo")
+            time.sleep(0.2)
+            started = time.time()
+            expect("beside idle clients", head("/"), "home")
+            if time.time() - started > 1:
+                problems.append("idle clients held up another one")
+            # ... and they run out of time
+            half.settimeout(6)
+            if b"408" not in half.recv(1000):
+                problems.append("a slow client wasn't told it ran out of time")
+            half.close()
+            idle.close()
+            # Limits, and what is refused
+            expect("too long", b"POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 1001\r\n\r\n", "413")
+            expect("much too long", b"POST / HTTP/1.1\r\nContent-Length: 99999999999999999999999\r\n\r\n", "413")
+            expect("bad length", b"POST / HTTP/1.1\r\nContent-Length: -5\r\n\r\n", "400")
+            expect("two lengths", b"POST / HTTP/1.1\r\nContent-Length: 1\r\nContent-Length: 2\r\n\r\nab", "400")
+            expect("chunked", b"POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n", "501")
+            expect("huge headers", b"GET / HTTP/1.1\r\nX: " + b"a" * 70000, "431")
+            # A value can't start a header of its own
+            expect("header injection", head("/go?to=/x%0d%0aX-Evil:%201"), "Location: /xX-Evil: 1")
+            answer = raw_request(port, head("/go?to=/x%0d%0aX-Evil:%201"))
+            if b"\r\nX-Evil" in answer:
+                problems.append(f"a header was injected: {answer[:200]!r}")
+            # Files: inside the folder only
+            expect("a file", head("/files/a.txt"), "file a")
+            for path in ["/files/../secret.txt", "/files/%2e%2e/secret.txt", "/files/..%2fsecret.txt", "/files/.env", "/files/..%5csecret.txt"]:
+                expect("leaving the folder: " + path, head(path), "404", "SECRET")
+            answer = raw_request(port, head("/files/bin.dat"))
+            if b"Content-Length: 6\r\n" not in answer or not answer.endswith(b"\xff\xfe\x00\x80ok"):
+                problems.append(f"a file that isn't text: {answer!r}")
+            # Cookies and steps before the routes
+            expect("cookies", b"GET /cookie HTTP/1.1\r\nCookie: z=1; a=hello\r\n\r\n", "Set-Cookie: b=2; Path=/; SameSite=Lax; Max-Age=60; HttpOnly")
+            expect("cookie read", b"GET /cookie HTTP/1.1\r\nCookie: z=1; a=hello\r\n\r\n", "hello")
+            expect("use", head("/blocked"), "403")
+        finally:
+            server.kill()
+            server.wait()
+    return problems
+
+
+def serve_test():
+    """dessa serve hands out only what is inside its folder."""
+    import socket
+    problems = []
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        (tmp / "site").mkdir()
+        (tmp / "site-secret").mkdir()
+        (tmp / "site" / "a.txt").write_text("public", encoding="utf-8")
+        (tmp / "site-secret" / "s.txt").write_text("SECRET", encoding="utf-8")
+        (tmp / "outside.txt").write_text("SECRET", encoding="utf-8")
+        probe = socket.socket()
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+        probe.close()
+        server = subprocess.Popen([str(EXE), "serve", "site", "--port", str(port)], cwd=tmp, stdin=subprocess.DEVNULL,
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            for _ in range(100):
+                try:
+                    socket.create_connection(("127.0.0.1", port), timeout=1).close()
+                    break
+                except OSError:
+                    time.sleep(0.1)
+            get = lambda path, host="localhost": raw_request(port, f"GET {path} HTTP/1.1\r\nHost: {host}\r\n\r\n".encode())
+            if b"public" not in get("/a.txt"):
+                problems.append("a file inside the folder wasn't served")
+            for path in ["/../site-secret/s.txt", "/%2e%2e/site-secret/s.txt", "/../outside.txt", "/..%2foutside.txt"]:
+                if b"SECRET" in get(path):
+                    problems.append("served from outside the folder: " + path)
+            if b"public" in get("/a.txt", "evil.example"):
+                problems.append("answered a request for another site's name")
+            if b"public" not in get("/a.txt", f"127.0.0.1:{port}"):
+                problems.append("refused 127.0.0.1")
+        finally:
+            server.kill()
+            server.wait()
+    return problems
+
+
 def riv_test():
     """riv end to end: bundled packages, the index check, and a package that
     travels by torrent from one riv home to another."""
@@ -440,6 +720,40 @@ def main():
         else:
             passed += 1
             print("ok   editor (dessa complete / hover)")
+    if not WASM and (not pattern or pattern in "limits"):
+        problems = limits_test()
+        if problems:
+            failed += 1
+            print("FAIL limits (code that is too deep)")
+            for p in problems:
+                print("     " + p)
+        else:
+            passed += 1
+            print("ok   limits (code that is too deep)")
+    for name, label, check in (("http_server", "http server (hostile and slow clients)", http_server_test),
+                               ("serve", "dessa serve (stays inside its folder)", serve_test),
+                               ("execute", "os.execute (arguments stay arguments)", execute_test)):
+        if WASM or (pattern and pattern not in name):
+            continue
+        problems = check()
+        if problems:
+            failed += 1
+            print(f"FAIL {label}")
+            for p in problems:
+                print("     " + p)
+        else:
+            passed += 1
+            print(f"ok   {label}")
+    if not WASM and (not pattern or pattern in "verify"):
+        problems = verify_test()
+        if problems:
+            failed += 1
+            print("FAIL verify (checking downloads)")
+            for p in problems:
+                print("     " + p)
+        else:
+            passed += 1
+            print("ok   verify (checking downloads)")
     if not WASM and (not pattern or pattern in "riv"):
         problems = riv_test()
         if problems is None:

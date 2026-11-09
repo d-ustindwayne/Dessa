@@ -12,12 +12,13 @@
  *     print(decrypt(secret, "my password"));          // meet at noon
  *
  * Declaration file: documentation only. Bodies are `...`; the real
- * implementation is C++ in dcrypto.hpp (and JavaScript in the runtime). Text
- * made by encrypt in one can be decrypted by the other.
+ * implementation is C in dcrypto.c and C++ in dcrypto.hpp. Text made by
+ * encrypt in one can be decrypted by the other.
  *
  * encrypt uses AES-256-GCM with a key made from the password (PBKDF2-SHA256,
- * 100000 rounds, a new random salt each time), so the same text encrypts
- * differently every time and any change to it is noticed by decrypt.
+ * 600000 rounds, a new random salt each time), so the same text encrypts
+ * differently every time and any change to it is noticed by decrypt. Hashes
+ * and encrypted text made by older versions, with fewer rounds, still open.
  */
 
 // MD5 of the text as hex. Only for checksums: not safe for passwords.

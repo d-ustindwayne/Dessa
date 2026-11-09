@@ -207,7 +207,9 @@ ParseError Parser::error(const Token& token, const std::string& message) {
     if (token.type == TokenType::END_OF_FILE) {
         formattedError += " at end: " + message;
     } else {
-        formattedError += " at '" + token.lexeme + "': " + message;
+        // A token can be a whole long string: quote only its start
+        const size_t shown = 60;
+        formattedError += " at '" + (token.lexeme.size() > shown ? token.lexeme.substr(0, shown) + "..." : token.lexeme) + "': " + message;
     }
     errors.push_back(formattedError);
     return ParseError{};
@@ -658,7 +660,21 @@ StmtPtr Parser::importStatement() {
 // Statements
 // ============================================================
 
+static thread_local int g_nesting = 0;
+
+Parser::Nesting::Nesting(Parser& p) {
+    if (g_nesting >= kMaxNesting) throw p.error(p.peek(), "This code is nested too deeply (more than " + std::to_string(kMaxNesting) + " levels). Split it into smaller pieces.");
+    ++g_nesting;
+}
+
+Parser::Nesting::~Nesting() { --g_nesting; }
+
+void Parser::checkChain(int length, const char* what) {
+    if (length > kMaxChain) throw error(peek(), std::string("This ") + what + " is too long (more than " + std::to_string(kMaxChain) + "). Split it into smaller pieces.");
+}
+
 StmtPtr Parser::statement() {
+    Nesting nesting(*this);
     Token start = peek();
     return place(statementInner(), start);
 }
@@ -680,6 +696,7 @@ StmtPtr Parser::statementInner() {
 
 // Called after '{' has been consumed.
 StmtPtr Parser::blockStatement() {
+    Nesting nesting(*this);
     Token open = previous();
     std::vector<StmtPtr> statements;
     while (!check(TokenType::R_BRACE) && !isAtEnd()) {
@@ -722,7 +739,9 @@ StmtPtr Parser::ifStatement() {
     if (match({TokenType::ELSE})) {
         Token start = peek();
         if (match({TokenType::IF})) {
+            checkChain(++elseIfChain, "chain of else if");
             elseBranch = place(ifStatement(), start);
+            --elseIfChain;
         } else {
             elseBranch = bodyStatement();
         }
@@ -871,10 +890,12 @@ StmtPtr Parser::throwStatement() {
 // ============================================================
 
 TypeNode Parser::parseType() {
+    Nesting nesting(*this);
     TypeNode node = parseTypeBase();
 
     // Collection suffixes nest: Int<> (list), Int{} (set), Int<><> (list of lists)
-    for (;;) {
+    for (int suffixes = 0;; ++suffixes) {
+        if (suffixes > kMaxTypeSuffixes) throw error(peek(), "This type is nested too deeply (more than " + std::to_string(kMaxTypeSuffixes) + " levels).");
         bool list;
         if (match({TokenType::L_ANGLE})) {
             consume(TokenType::R_ANGLE, "Expect '>' after '<' in list type.");
@@ -1014,15 +1035,19 @@ std::vector<Param> Parser::parseParamList() {
 
 ExprPtr Parser::binary(ExprPtr left, Token op, ExprPtr right) {
     int line = left->line, column = left->column;
+    const int chain = std::max(left->chain, right->chain) + 1;
+    checkChain(chain, "expression");
     auto node = std::make_unique<BinaryExpr>(std::move(left), std::move(op), std::move(right));
     node->line = line;
     node->column = column;
+    node->chain = chain;
     return node;
 }
 
 ExprPtr Parser::expression() { return assignment(); }
 
 ExprPtr Parser::assignment() {
+    Nesting nesting(*this);
     ExprPtr expr = ternary();
     if (match({TokenType::EQUAL, TokenType::PLUS_EQUAL, TokenType::MINUS_EQUAL,
                TokenType::MULT_EQUAL, TokenType::DIV_EQUAL, TokenType::EXPONENT_EQUAL,
@@ -1041,7 +1066,8 @@ ExprPtr Parser::assignment() {
 // x |> f(a)  is  f(x, a);   x |> f  is  f(x)
 ExprPtr Parser::pipe() {
     ExprPtr expr = nullishCoalescing();
-    while (match({TokenType::FUNC_PIPE})) {
+    for (int links = 0; match({TokenType::FUNC_PIPE}); ++links) {
+        checkChain(links, "chain of |>");
         Token op = previous();
         int line = expr->line, column = expr->column;
         ExprPtr target = call();
@@ -1204,6 +1230,7 @@ ExprPtr Parser::multiplicative() {
 
 ExprPtr Parser::unary() {
     if (match({TokenType::NOT, TokenType::MINUS, TokenType::BITWISE_NOT})) {
+        Nesting nesting(*this);
         Token op = previous();
         ExprPtr operand = unary();
         return place(std::make_unique<UnaryExpr>(op, std::move(operand)), op);
@@ -1237,7 +1264,8 @@ ExprPtr Parser::postfix() {
 ExprPtr Parser::call() {
     ExprPtr expr = primary();
 
-    for (;;) {
+    for (int links = 0;; ++links) {
+        checkChain(links, "chain of calls");
         int line = expr->line, column = expr->column;
         if (match({TokenType::L_PAREN})) {
             // super(...) is short for super.init(...)
@@ -1288,6 +1316,8 @@ ExprPtr Parser::call() {
 // students<0> vs. a < b: an index is `<` additive-expression `>`. If that
 // shape doesn't match, rewind and let comparison() treat `<` as less-than.
 std::optional<ExprPtr> Parser::tryParseIndex(ExprPtr& object) {
+    const size_t attempt = current * 8 + (inAngleList ? 4 : 0) + (indexDepth > 0 ? 2 : 0) + (colonEnds ? 1 : 0);
+    if (notAnIndex.count(attempt)) return std::nullopt;
     Checkpoint checkpoint = mark();
     advance(); // '<'
 
@@ -1311,6 +1341,7 @@ std::optional<ExprPtr> Parser::tryParseIndex(ExprPtr& object) {
     }
 
     reset(checkpoint);
+    notAnIndex.insert(attempt);
     return std::nullopt;
 }
 
@@ -1464,6 +1495,7 @@ void Parser::splitDoubleAngle(TokenType single) {
     second.column = first.column + 1;
     tokens[current] = first;
     tokens.insert(tokens.begin() + static_cast<std::ptrdiff_t>(current) + 1, second);
+    notAnIndex.clear();   // the positions after this one have moved
 }
 
 ExprPtr Parser::primary() {

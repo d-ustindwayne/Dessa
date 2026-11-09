@@ -95,8 +95,65 @@ var[Str] text = fetchText("data.json");                  // waits for the answer
 | Timers | `setTimeout`, `setInterval`, `clearTimer` |
 | Network | `fetchText(url)` |
 
+More of the browser is there than this table lists: `include/webutils/webutils.dm`
+has every class, and adding a browser method to it is usually all it takes.
+
 An error inside an event listener or a timer is reported like any other Dessa
 error, with its line.
+
+### Utilities
+
+Beyond the browser's own objects, `webutils` has what most pages end up writing
+for themselves.
+
+```dessa
+$("webutils");
+
+// Elements, without checking for nil each time
+must("#save").textContent = "Save";            // a clear error if it's missing
+var[Element | Nil] maybe = find(".note");
+var[Element<>] rows = findAll("li");
+
+// Building elements. Text stays text, so this is safe with what users typed
+var[Element] card = h("div", {"class": "card"},
+    h("h2", {:}, title),
+    h("a", {"href": link}, "Read more"),       // a javascript: link becomes #
+    "Some text");
+must("#app").appendChild(card);
+
+// HTML, when you need it: values are escaped, the template isn't
+must("#who").innerHTML = safeHtml("<b>{}</b> wrote {}", name, comment);
+
+// Events, also on what is added later. The result can stop listening
+var[Listener] clicks = on(must("#list"), "click", "li", (e[Event]) := log("a row"));
+clicks.remove();
+once(must("#ok"), "click", (e[Event]) := log("only the first time"));
+onWindow("resize", (e[Event]) := log("resized"));
+
+// Calling something less often
+var[Func[Emp]] search = debounce(() := runSearch(), 300);     // when the typing pauses
+var[Func[Emp]] track = throttle(() := update(), 100);          // at most every 100 ms
+on(must("#box"), "input", "", (e[Event]) := search());
+
+// The network, without stopping the page
+fetchAsync("data.json", (r[FetchResult]) := {
+    if (r.ok) show(r.text); else log("failed:", r.error);
+});
+postAsync("/save", body, (r[FetchResult]) := log(Str(r.status)));
+```
+
+| Part | What it has |
+|---|---|
+| Addresses | `new Url(text)`, with `protocol`, `host`, `path`, `query`, `hash` and `toStr`; `encodeUri`, `decodeUri`, `safeUrl`, `pushState(url)` |
+| Forms | `formValues(form)` gives a `Map`, `fillForm(form, values)`, and `validate`: `isEmail`, `isUrl`, `isNumber`, `isWhole`, `isFilled`, `lengthBetween` |
+| Keeping things | `store` and `sessionStore`: `get(key, fallback)`, `set`, `setFor(key, value, seconds)`, `has`, `remove`, `clear`. `cookies`: `get`, `set`, `remove`. |
+| Views | `Router`: `add("/users/:id", view)`, `otherwise`, `go`, `start` (by the part of the address after the #) |
+| Values the page follows | `State:T`: `get`, `set`, `update`, `subscribe`, `bindText(element)` |
+| Small things | `toast(message)`, `copyText`, `downloadText(name, content)`, `readChosenFile(input, done)`, `mediaMatches(query)`, `nextFrame(action)`, `nowMs()` |
+
+For structured values, keep JSON text: `store.set("user", stringify(user))` and
+`parseJson(r.text)`, with `$("json")`. See [security.md](security.md) for what to
+keep out of `store`.
 
 ## Libraries in the browser
 

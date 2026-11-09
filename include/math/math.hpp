@@ -23,9 +23,10 @@ template <class A, class B, class C> auto clamp(A x, B low, C high) -> decltype(
     return x < low ? low : (high < x ? high : x);
 }
 
-inline Int floor(Dbl x) { return static_cast<Int>(std::floor(x)); }
-inline Int ceil(Dbl x) { return static_cast<Int>(std::ceil(x)); }
-inline Int round(Dbl x) { return static_cast<Int>(std::llround(x)); }
+inline Int floor(Dbl x) { return dbl_to_int(std::floor(x)); }
+inline Int trunc(Dbl x) { return dbl_to_int(std::trunc(x)); }
+inline Int ceil(Dbl x) { return dbl_to_int(std::ceil(x)); }
+inline Int round(Dbl x) { return dbl_to_int(std::round(x)); }
 
 inline Dbl sin(Dbl x) { return std::sin(x); }
 inline Dbl cos(Dbl x) { return std::cos(x); }
@@ -35,6 +36,46 @@ inline Dbl log(Dbl x) {
     if (x <= 0) fail("log of a number <= 0");
     return std::log(x);
 }
+inline Dbl asin(Dbl x) {
+    if (x < -1 || x > 1) fail("asin of a number outside -1 to 1");
+    return std::asin(x);
+}
+
+inline Dbl acos(Dbl x) {
+    if (x < -1 || x > 1) fail("acos of a number outside -1 to 1");
+    return std::acos(x);
+}
+
+inline Dbl atan(Dbl x) {
+    return std::atan(x);
+}
+
+inline Dbl sinh(Dbl x) {
+    return std::sinh(x);
+}
+
+inline Dbl cosh(Dbl x) {
+    return std::cosh(x);
+}
+
+inline Dbl tanh(Dbl x) {
+    return std::tanh(x);
+}
+
+inline Dbl log2(Dbl x) {
+    if (x <= 0) fail("log2 of a number <= 0");
+    return std::log2(x);
+}
+
+inline Dbl hypot(Dbl a, Dbl b) { return std::hypot(a, b); }
+
+// Exact, unlike / which goes through a Dbl: past 2^53 that loses digits
+inline Int idiv(Int a, Int b) {
+    if (b == 0) fail("Division by zero");
+    if (a == INT64_MIN && b == -1) fail("Integer overflow");
+    return a / b;
+}
+
 inline Dbl log10(Dbl x) {
     if (x <= 0) fail("log10 of a number <= 0");
     return std::log10(x);
@@ -259,6 +300,32 @@ private:
         r.trim();
         return r;
     }
+    // Narrows where a quotient digit can be, from the leading limbs, so finding
+    // it takes a few tries instead of thirty. Checked: if the estimate were ever
+    // off, the search just covers the whole range.
+    static void digitBounds(const BigNumber& divisor, const BigNumber& remainder, uint32_t& low, uint32_t& high) {
+        const int64_t remLen = static_cast<int64_t>(remainder.limbs.size()), divLen = static_cast<int64_t>(divisor.limbs.size());
+        if (remLen < divLen || divLen == 0) {
+            high = 0;
+            return;
+        }
+        double top = 0, bottom = 0;
+        const int64_t topCount = remLen < 3 ? remLen : 3, bottomCount = divLen < 3 ? divLen : 3;
+        for (int64_t k = 1; k <= topCount; ++k) top = top * 1e9 + remainder.limbs[static_cast<size_t>(remLen - k)];
+        for (int64_t k = 1; k <= bottomCount; ++k) bottom = bottom * 1e9 + divisor.limbs[static_cast<size_t>(divLen - k)];
+        int64_t shift = (remLen - topCount) - (divLen - bottomCount);
+        double guess = top / bottom;
+        for (; shift > 0; --shift) guess *= 1e9;
+        for (; shift < 0; ++shift) guess /= 1e9;
+        if (guess >= static_cast<double>(BASE)) return;
+        const uint32_t d = static_cast<uint32_t>(guess);
+        const uint32_t lower = d > 2 ? d - 2 : 0, upper = d + 2 < BASE - 1 ? d + 2 : BASE - 1;
+        if (compareMagnitude(multiplySmall(divisor, lower), remainder) > 0) return;
+        if (upper < BASE - 1 && compareMagnitude(multiplySmall(divisor, upper + 1), remainder) <= 0) return;
+        low = lower;
+        high = upper;
+    }
+
     static std::pair<BigNumber, BigNumber> divide(const BigNumber& a, const BigNumber& b) {
         if (b.isZero()) fail("Division by zero");
         BigNumber divisor = b;
@@ -270,6 +337,7 @@ private:
             remainder.trim();
             // largest q with divisor * q <= remainder
             uint32_t low = 0, high = BASE - 1;
+            digitBounds(divisor, remainder, low, high);
             while (low < high) {
                 uint32_t mid = low + (high - low + 1) / 2;
                 if (compareMagnitude(multiplySmall(divisor, mid), remainder) <= 0) low = mid;

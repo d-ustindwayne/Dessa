@@ -12,17 +12,30 @@
  *
  * A route is a path; `:name` matches one part of it (req.params<"name">) and
  * a `*` at the end matches the rest (req.params<"*">). The first route that
- * fits answers; none fits: 404. A handler that throws: 500 with the message.
+ * fits answers; none fits: 404. A handler that throws: 500 (the client sees
+ * only that; the reason is printed here, and sent too with server.debug = true).
  * Each request is printed: GET /hello/Ann 200.
+ *
+ * Only this computer can reach a server unless you say otherwise:
+ * new Server(8080, "0.0.0.0") listens on every network.
+ *
+ * server.files("/assets", "public") serves a folder. server.use(...) runs
+ * before every route, and answers instead of it when it gives a Response.
+ * req.cookies() reads cookies, response.cookie(name, value) sets one.
+ *
+ * Clients are read side by side, so a slow one doesn't hold up the others:
+ * it has server.timeoutSeconds to send its request, of at most server.maxBytes.
+ * Handlers run one at a time (no threads).
  *
  * server.handle(new Request("GET", "/hello/Ann")) answers without the
  * network, which is handy for tests.
  *
- * One request at a time (no threads). Native programs only: WebAssembly
- * can't open a server. For calling other servers, use $("request").
+ * Native programs only: WebAssembly can't open a server. For calling other
+ * servers, use $("request").
  */
 
-$("http") { _listen, _accept, _read, _write, _close }   // native part (http.hpp / http.c)
+$("http") { _listen, _port, _next, _take, _write, _close, _size }   // native part (http.hpp / http.c)
+$("os") { readFile, fileExists, isDir }
 
 class HttpError(Error) {}
 
@@ -57,6 +70,16 @@ class Request {
     func[Map[Str, Str]] form() {
         return parseQuery(this.body);
     }
+
+    // The cookies the client sent
+    func[Map[Str, Str]] cookies() {
+        var[Map[Str, Str]] out = {:};
+        for (var[Str] pair in this.headers.getOr("cookie", "").split(";")) {
+            var[Int] eq = pair.indexOf("=");
+            if (eq > 0) out<pair.substr(0, eq).trim()> = pair.substr(eq + 1, pair.length() - eq - 1).trim();
+        }
+        return out;
+    }
 }
 
 // What the server answers
@@ -64,6 +87,8 @@ class Response {
     var[Int] status = 200;
     var[Map[Str, Str]] headers = {:};
     var[Str] body = "";
+    var[Str<>] _cookies = <>;
+    var[Str] _problem = "";            // why a handler failed, for the server's own log
 
     init(status[Int] = 200, body[Str] = "", contentType[Str] = "text/plain; charset=utf-8") {
         this.status = status;
@@ -74,6 +99,22 @@ class Response {
     // Adds a header and gives the response back: text("hi").header("Cache-Control", "no-store")
     func[Response] header(name[Str], value[Str]) {
         this.headers<name> = value;
+        return this;
+    }
+
+    // Sets a cookie. By default scripts in the page can't read it, and it isn't
+    // sent along with requests started from other sites. maxAge in seconds
+    // (-1: until the browser closes; 0: delete it).
+    // secure: true sends it over https only: use that on a real site.
+    func[Response] cookie(name[Str], value[Str], maxAge[Int] = -1, path[Str] = "/", httpOnly[Bul] = true, secure[Bul] = false, sameSite[Str] = "Lax") {
+        for (var[Str] part in <name, value, path, sameSite>) {
+            if (part.includes(";") || part.includes("\r") || part.includes("\n")) throw new HttpError($"a cookie can't hold '{part}': ; and line breaks aren't allowed");
+        }
+        var[Str] line = $"{name}={value}; Path={path}; SameSite={sameSite}";
+        if (maxAge >= 0) line += $"; Max-Age={maxAge}";
+        if (httpOnly) line += "; HttpOnly";
+        if (secure) line += "; Secure";
+        this._cookies.push(line);
         return this;
     }
 
@@ -131,12 +172,32 @@ class _Route {
 
 class Server {
     var[Int] port = 8080;
+    var[Str] host = "127.0.0.1";       // "0.0.0.0": every network, not only this computer
     var[Bul] quiet = false;            // true: don't print each request
+    var[Bul] debug = false;            // true: a handler's error goes to the client too (never on a real site)
+    var[Int] timeoutSeconds = 10;      // to send a whole request
+    var[Int] maxBytes = 8388608;       // the largest body taken (8 MB)
     var[_Route<>] _routes = <>;
+    var[Func[Response | Nil, [Request]]<>] _before = <>;
     var[Bul] _stopping = false;
 
-    init(port[Int] = 8080) {
+    // Port 0: the system chooses a free one (server.port tells which, once listening)
+    init(port[Int] = 8080, host[Str] = "127.0.0.1") {
         this.port = port;
+        this.host = host;
+    }
+
+    // Runs before every route, in the order added. A Response answers the
+    // request there and then (a login check, say); nil goes on.
+    func[Emp] use(step[Func[Response | Nil, [Request]]]) {
+        this._before.push(step);
+    }
+
+    // Serves the files of `folder` under `path`. Only what is inside the folder,
+    // and not hidden files like .env. A folder's page is its index.html.
+    func[Emp] files(path[Str], folder[Str]) {
+        var[Str] pattern = path.endsWith("/") ? path + "*" : path + "/*";
+        this.get(pattern, (req[Request]) := _fileResponse(folder, req.params.getOr("*", "")));
     }
 
     func[Emp] get(path[Str], handler[Func[Response, [Request]]]) { this.route("GET", path, handler); }
@@ -149,8 +210,26 @@ class Server {
         this._routes.push(new _Route(method.upper(), path, handler));
     }
 
+    func[Response] _failed(reason[Str]) {
+        var[Response] res = text(this.debug ? reason : "Internal Server Error", 500);
+        res._problem = reason;
+        return res;
+    }
+
     // The answer to one request, without the network
     func[Response] handle(req[Request]) {
+        try {
+            for (var[Func[Response | Nil, [Request]]] step in this._before) {
+                var[Response | Nil] early = step(req);
+                if (early != nil) return early;
+            }
+        } catch (e[Error]) {
+            return this._failed($"{typeof(e)}: {e.message}");
+        } catch (e[Str]) {
+            return this._failed(e);
+        } catch {
+            return this._failed("a value was thrown that isn't an error");
+        }
         var[Bul] pathFits = false;
         for (var[_Route] r in this._routes) {
             var[Map[Str, Str] | Nil] params = r.fits(req.path);
@@ -161,9 +240,11 @@ class Server {
             try {
                 return r.handler(req);
             } catch (e[Error]) {
-                return text($"{typeof(e)}: {e.message}", 500);
+                return this._failed($"{typeof(e)}: {e.message}");
             } catch (e[Str]) {
-                return text(e, 500);
+                return this._failed(e);
+            } catch {
+                return this._failed("a value was thrown that isn't an error");
             }
         }
         return pathFits ? text("Method Not Allowed", 405) : text($"Not Found: {req.path}", 404);
@@ -176,17 +257,14 @@ class Server {
 
     // Answers requests until stop() (or Ctrl+C). `count` > 0: only that many.
     func[Emp] listen(count[Int] = 0) {
-        var[Int] socket = _listen(this.port);
-        if (!this.quiet) print($"Listening on http://localhost:{this.port}");
+        var[Int] socket = _listen(this.port, this.host);
+        this.port = _port(socket);
+        if (!this.quiet) print($"Listening on http://{this.host == "127.0.0.1" ? "localhost" : this.host}:{this.port}");
         var[Int] answered = 0;
         while (!this._stopping && (count <= 0 || answered < count)) {
-            var[Int] conn = _accept(socket);
-            if (conn < 0) continue;
-            var[Str] raw = _read(conn);
-            if (raw == "") {
-                _close(conn);
-                continue;
-            }
+            var[Int] conn = _next(socket, this.timeoutSeconds, this.maxBytes);
+            if (conn < 0) break;
+            var[Str] raw = _take(conn);
             var[Response] res = text("Bad Request", 400);
             var[Request] req = new Request();
             try {
@@ -198,7 +276,7 @@ class Server {
             _write(conn, _serialize(res, req.method == "HEAD"));
             _close(conn);
             answered++;
-            if (!this.quiet) print($"{req.method} {req.path} {res.status}");
+            if (!this.quiet) print(res._problem == "" ? $"{req.method} {req.path} {res.status}" : $"{req.method} {req.path} {res.status} ({res._problem})");
         }
         _close(socket);
     }
@@ -286,20 +364,42 @@ const[Map[Int, Str]] _REASONS = {200: "OK", 201: "Created", 204: "No Content", 3
                                  304: "Not Modified", 400: "Bad Request", 401: "Unauthorized", 403: "Forbidden",
                                  404: "Not Found", 405: "Method Not Allowed", 500: "Internal Server Error"};
 
-// Content-Length counts bytes, not characters
-func[Int] _byteLength(text[Str]) {
-    var[Int] n = 0;
-    for (var[Chr] c in text) {
-        var[Int] code = c.code();
-        n += code < 128 ? 1 : code < 2048 ? 2 : code < 65536 ? 3 : 4;
-    }
-    return n;
+// A value can't start a header or a response of its own: redirect(whatTheUserTyped)
+func[Str] _oneLine(text[Str]) {
+    return text.replaceAll("\r", "").replaceAll("\n", "");
 }
 
 func[Str] _serialize(res[Response], headOnly[Bul]) {
     var[Str] reason = _REASONS.has(res.status) ? _REASONS<res.status> : "Status";
     var[Str] out = $"HTTP/1.1 {res.status} {reason}\r\n";
-    for (var[Str] name in res.headers) out += $"{name}: {res.headers<name>}\r\n";
-    out += $"Content-Length: {_byteLength(res.body)}\r\nConnection: close\r\n\r\n";
+    for (var[Str] name in res.headers) out += $"{_oneLine(name)}: {_oneLine(res.headers<name>)}\r\n";
+    for (var[Str] line in res._cookies) out += $"Set-Cookie: {_oneLine(line)}\r\n";
+    // Browsers go by Content-Type, and don't guess that a text upload is a script
+    if (!res.headers.has("X-Content-Type-Options")) out += "X-Content-Type-Options: nosniff\r\n";
+    out += $"Content-Length: {_size(res.body)}\r\nConnection: close\r\n\r\n";
     return headOnly ? out : out + res.body;
+}
+
+const[Map[Str, Str]] _TYPES = {"html": "text/html; charset=utf-8", "htm": "text/html; charset=utf-8", "css": "text/css; charset=utf-8",
+                               "js": "text/javascript; charset=utf-8", "mjs": "text/javascript; charset=utf-8", "json": "application/json",
+                               "txt": "text/plain; charset=utf-8", "md": "text/plain; charset=utf-8", "csv": "text/csv; charset=utf-8",
+                               "svg": "image/svg+xml", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif",
+                               "webp": "image/webp", "ico": "image/x-icon", "pdf": "application/pdf", "wasm": "application/wasm",
+                               "woff": "font/woff", "woff2": "font/woff2", "mp3": "audio/mpeg", "mp4": "video/mp4", "webm": "video/webm"};
+
+// One file of server.files(). `wanted` comes from the client, already decoded
+func[Response] _fileResponse(folder[Str], wanted[Str]) {
+    var[Response] missing = text("Not Found", 404);
+    if (wanted.includes("\\") || wanted.includes(":")) return missing;
+    var[Str<>] parts = wanted.split("/");
+    for (var[Str] part in parts) {
+        if (part.startsWith(".")) return missing;     // .. leaves the folder; .env and .git are private
+    }
+    var[Str] path = folder;
+    for (var[Str] part in parts) if (part != "") path += "/" + part;
+    if (isDir(path)) path += "/index.html";
+    if (!fileExists(path) || isDir(path)) return missing;
+    var[Str<>] pieces = path.split(".");
+    var[Str] extension = pieces<pieces.length() - 1>.lower();
+    return new Response(200, readFile(path), _TYPES.getOr(extension, "application/octet-stream"));
 }

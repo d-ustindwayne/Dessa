@@ -84,7 +84,7 @@ const highlight = (code: string, lang: string) =>
 // ---- docs
 
 // The order the docs appear in the sidebar
-const DOC_ORDER = ['overview', 'installation', 'language', 'compiler', 'libraries', 'riv', 'web', 'architecture'];
+const DOC_ORDER = ['overview', 'installation', 'language', 'compiler', 'libraries', 'riv', 'web', 'architecture', 'runtime', 'grammar', 'decisions', 'security', 'security-assessment'];
 
 export interface Heading { id: string; text: string }
 export interface Doc { slug: string; title: string; description: string; html: string; headings: Heading[] }

@@ -4,7 +4,12 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <sys/stat.h>
 #include <vector>
+#ifndef _WIN32
+#include <fcntl.h>
+#endif
+#include "os_exec.h"
 
 namespace dessa::os {
 
@@ -80,6 +85,56 @@ inline Opt<Str> getEnv(const Str& name) {
 }
 
 // Runs a shell command and returns its exit code.
+inline void copyFile(const Str& from, const Str& to) {
+    std::ifstream in(from, std::ios::binary);
+    if (!in) fail("Cannot read file '" + from + "'");
+    std::ofstream out(to, std::ios::binary);
+    if (!out) fail("Cannot write file '" + to + "'");
+    out << in.rdbuf();
+}
+
+inline void moveFile(const Str& from, const Str& to) {
+    std::error_code ec;
+    std::filesystem::rename(from, to, ec);
+    if (ec) fail("Cannot move '" + from + "' to '" + to + "': " + ec.message());
+}
+
+inline Int fileSize(const Str& path) {
+    std::error_code ec;
+    auto size = std::filesystem::file_size(path, ec);
+    if (ec) fail("Cannot read file '" + path + "': " + ec.message());
+    return static_cast<Int>(size);
+}
+
+inline Int modifiedTime(const Str& path) {
+    struct stat info;
+    if (stat(path.c_str(), &info) != 0) fail("Cannot read file '" + path + "'");
+    return static_cast<Int>(info.st_mtime);
+}
+
+inline void setEnv(const Str& name, const Str& value) {
+#ifdef _WIN32
+    if (_putenv_s(name.c_str(), value.c_str()) != 0) fail("Cannot set '" + name + "'");
+#else
+    if (setenv(name.c_str(), value.c_str(), 1) != 0) fail("Cannot set '" + name + "'");
+#endif
+}
+
+// [exit code, output], see os_exec.h
+inline List<Str> _execute(const Str& program, const List<Str>& args) {
+    std::cout.flush();
+    std::fflush(stdout);
+    std::vector<const char*> values;
+    for (const Str& a : args) values.push_back(a.c_str());
+    os_exec_buffer output = {nullptr, 0, 0};
+    char error[1200];
+    int code = os_exec_run(program.c_str(), values.data(), values.size(), &output, error, sizeof error);
+    Str text = output.data ? Str(output.data, output.len) : Str();
+    std::free(output.data);
+    if (code < 0) fail(error);
+    return {std::to_string(code), text};
+}
+
 inline Int run(const Str& command) {
     std::cout.flush();
     std::fflush(stdout);

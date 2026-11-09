@@ -536,7 +536,11 @@ static bool same_bytes(const uint8_t* a, size_t alen, const uint8_t* b, size_t b
     return diff == 0;
 }
 
-#define ITERATIONS 100000
+/* PBKDF2 rounds for what is made now (OWASP's figure for HMAC-SHA256). A hash
+ * says its own rounds. Encrypted text says them through its version byte:
+ * version 1 was 100000, and still opens. */
+#define ITERATIONS 600000
+#define ENCRYPT_VERSION 2
 
 /* ============================================================
  * The library
@@ -623,7 +627,7 @@ ds_bul dsx_dcrypto_verifyPassword(ds_str* password, ds_str* stored) {
     return same;
 }
 
-/* base64 of: version (1) | salt (16) | nonce (12) | encrypted text | tag (16) */
+/* base64 of: version (ENCRYPT_VERSION) | salt (16) | nonce (12) | encrypted text | tag (16) */
 ds_str* dsx_dcrypto_encrypt(ds_str* text, ds_str* password) {
     uint8_t salt[16], nonce[12], key[32], tag[16];
     random_bytes(salt, 16);
@@ -636,7 +640,7 @@ ds_str* dsx_dcrypto_encrypt(ds_str* text, ds_str* password) {
     gcm_crypt(&aes, nonce, (const uint8_t*)text->data, len, cipher);
     gcm_tag(&aes, nonce, cipher, len, tag);
     bytes out = {NULL, 0, 0};
-    bytes_byte(&out, 1);
+    bytes_byte(&out, ENCRYPT_VERSION);
     bytes_add(&out, salt, 16);
     bytes_add(&out, nonce, 12);
     bytes_add(&out, cipher, len);
@@ -649,7 +653,7 @@ ds_str* dsx_dcrypto_encrypt(ds_str* text, ds_str* password) {
 
 ds_str* dsx_dcrypto_decrypt(ds_str* data, ds_str* password) {
     bytes all = bytes_of_base64(data->data, (size_t)data->len, "decrypt");
-    if (all.len < 1 + 16 + 12 + 16 || all.data[0] != 1) {
+    if (all.len < 1 + 16 + 12 + 16 || (all.data[0] != 1 && all.data[0] != ENCRYPT_VERSION)) {
         bytes_free(&all);
         ds_fail("decrypt: this isn't text made by encrypt");
     }
@@ -659,7 +663,7 @@ ds_str* dsx_dcrypto_decrypt(ds_str* data, ds_str* password) {
     const size_t len = all.len - 29 - 16;
     const uint8_t* tag = all.data + all.len - 16;
     uint8_t key[32], actual[16];
-    pbkdf2((const uint8_t*)password->data, (size_t)password->len, salt, 16, ITERATIONS, key, 32);
+    pbkdf2((const uint8_t*)password->data, (size_t)password->len, salt, 16, all.data[0] == 1 ? 100000 : ITERATIONS, key, 32);
     aes256 aes;
     aes_init(&aes, key);
     gcm_tag(&aes, nonce, cipher, len, actual);

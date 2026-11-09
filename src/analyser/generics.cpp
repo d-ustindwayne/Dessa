@@ -370,7 +370,9 @@ std::optional<std::vector<SemanticType>> Analyser::inferTypeArgs(const GenericTe
         } else if (!params.empty() && params.back().isVariadic) {
             param = &params.back();
         }
-        SemanticType type = analyseExpression(arg.value.get());
+        const auto known = inferredArgs.find(arg.value.get());
+        SemanticType type = known != inferredArgs.end() ? known->second : analyseExpression(arg.value.get());
+        inferredArgs[arg.value.get()] = type;
         if (!param || arg.isSpread) continue;
         agree = unify(param->type, type, t.params, found) && agree;
     }

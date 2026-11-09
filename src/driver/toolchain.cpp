@@ -16,7 +16,9 @@
 #endif
 #include <windows.h>
 #else
+#include <sys/stat.h>
 #include <sys/wait.h>
+#include <unistd.h>
 #endif
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
@@ -148,10 +150,30 @@ fs::path exeDir(const char* argv0) {
     return p.parent_path();
 }
 
+// Programs are run from here, so nobody else may be able to write in it. On
+// Windows the temporary folder is the user's own; elsewhere it is shared by
+// everyone on the computer, so the cache goes in the user's home.
 fs::path workDir() {
     std::error_code ec;
+#if defined(_WIN32) || defined(__EMSCRIPTEN__)
     fs::path dir = fs::temp_directory_path(ec) / "dessa";
+#else
+    const char* cache = std::getenv("XDG_CACHE_HOME");
+    const char* home = std::getenv("HOME");
+    fs::path dir = cache && *cache ? fs::path(cache) / "dessa"
+                 : home && *home ? fs::path(home) / ".cache" / "dessa"
+                                 : fs::temp_directory_path(ec) / ("dessa-" + std::to_string(getuid()));
+#endif
     fs::create_directories(dir, ec);
+#if !defined(_WIN32) && !defined(__EMSCRIPTEN__)
+    fs::permissions(dir, fs::perms::owner_all, ec);
+    struct stat info;
+    if (lstat(dir.c_str(), &info) != 0 || info.st_uid != getuid() || !S_ISDIR(info.st_mode)) {
+        std::cerr << "dessa: " << dir.string() << " belongs to someone else (or isn't a folder): not compiling there.\n"
+                     "Set XDG_CACHE_HOME to a folder of your own.\n";
+        std::exit(1);
+    }
+#endif
     return dir;
 }
 
@@ -587,7 +609,7 @@ std::string wasmLinkFlags(const WasmTool& tool, bool page) {
         return wasmCompileFlags(tool) + " -sSTANDALONE_WASM -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=8MB" +
                (page ? " --no-entry -sEXPORTED_FUNCTIONS=_dsw_start,_dsw_invoke" : "");
     }
-    return wasmCompileFlags(tool) + " -lsetjmp -Wl,-z,stack-size=8388608" + (page ? " -mexec-model=reactor" : "");
+    return wasmCompileFlags(tool) + " -lsetjmp -Wl,-z,stack-size=8388608 -Wl,--stack-first" + (page ? " -mexec-model=reactor" : "");
 }
 
 // A runtime file compiled for WebAssembly once and kept in the cache

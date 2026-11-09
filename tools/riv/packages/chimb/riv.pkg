@@ -1,5 +1,5 @@
 name = chimb
-version = 1.0.0
+version = 1.1.0
 entry = chimb.dm
 description = Tests: test(), expect(x).toBe(y), expectThrows, done(); run them all with dessa test
 

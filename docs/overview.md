@@ -43,7 +43,7 @@ print($"{cart.length()} items, total {total.toFixed(2)}");
   messages say what to do, and the editor support comes from the compiler
   itself.
 
-## What is there today (version 0.2.9)
+## What is there today
 
 | Part | State |
 |---|---|

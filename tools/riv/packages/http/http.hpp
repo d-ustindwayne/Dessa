@@ -7,27 +7,29 @@
 
 namespace dessa::http {
 
-inline Int _listen(Int port) {
-    char error[200];
-    int64_t s = hs_listen(port, error, sizeof error);
+inline Int _listen(Int port, const Str& host) {
+    char error[300];
+    int64_t s = hs_listen(port, host.c_str(), error, sizeof error);
     if (s < 0) fail(Str("http: ") + error);
     return s;
 }
 
-inline Int _accept(Int server) { return hs_accept(server); }
+inline Int _port(Int server) { return hs_port(server); }
 
-// The whole request, or "" when the other side closed
-inline Str _read(Int conn) {
+inline Int _next(Int server, Int timeoutSeconds, Int maxBytes) { return hs_next(server, timeoutSeconds, maxBytes); }
+
+// The whole request a connection from _next sent
+inline Str _take(Int conn) {
     size_t len = 0;
-    char* data = hs_read(conn, &len);
-    if (!data) return "";
-    Str text(data, len);
-    std::free(data);
-    return text;
+    const char* data = hs_request(conn, &len);
+    return Str(data, len);
 }
 
 inline void _write(Int conn, const Str& data) { hs_write(conn, data.data(), data.size()); }
 
 inline void _close(Int handle) { hs_close(handle); }
+
+// In bytes: a file's content needn't be valid text
+inline Int _size(const Str& text) { return static_cast<Int>(text.size()); }
 
 } // namespace dessa::http

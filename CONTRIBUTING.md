@@ -42,6 +42,9 @@ confusing errors.
 | `python tests/test.py --update` | rewrite the expected `.out` files (check the diff!) |
 | `DESSALANG_DESSA=build/dessa node npm/test.js` | the npm package, with the dessa you built |
 | `python selfhost/check.py` | the Dessa lexer gives the same tokens as the C++ one |
+| `python tests/web/chrome_utils.py` | `webutils`' utilities in real Chrome, with injection attempts (skipped without Chrome) |
+| `python tests/fuzz.py --seconds 60` | damaged programs into the compiler: a crash or a hang is a bug, left in `tests/fuzz-failures/` |
+| `python tests/sanitize.py` | the test programs with AddressSanitizer and UndefinedBehaviorSanitizer (Linux or macOS) |
 | `python tests/bench/run_bench.py` | the benchmark (about 4 minutes; writes `tests/bench/RESULTS.md`) |
 
 There are two kinds of tests in `tests/cases`:
@@ -60,8 +63,13 @@ A run test whose first line is `// exit: N` expects exit code N instead of 0.
 
 A change is ready when the default, `--c`, `--cpp` and `--wasm` runs all pass.
 CI runs the default suite on Windows, Linux and macOS, the WebAssembly suite,
-the page test and the npm package on Linux and macOS, and the selfhost check,
-on every push and pull request.
+the page and browser tests and the npm package on Linux and macOS, the selfhost
+check, the memory checkers and a short fuzzing run, on every push and pull request.
+CodeQL also runs on each push, and a longer fuzzing run each week.
+
+A new feature comes with tests, and a bug fix with a test that fails without it. A
+security fix's test goes at the place the attack comes in: see `tests/cases/run/request_injection.ds`,
+`http_server_test` in `tests/test.py`, and [docs/security.md](docs/security.md).
 
 ## Making a change
 

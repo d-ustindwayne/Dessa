@@ -11,6 +11,7 @@ dessa-wasm-<platform>.tar.gz, with bin/, lib/ and share/ at the top, about a
 fifth of wasi-sdk's size. The Release workflow attaches it to each release.
 """
 
+import hashlib
 import io
 import re
 import sys
@@ -23,6 +24,14 @@ ASSETS = {
     "windows-x64": "x86_64-windows",
     "linux-x64": "x86_64-linux",
     "macos-arm64": "arm64-macos",
+}
+
+# As published on the wasi-sdk release (GitHub's digest for each file). A new
+# WASI_SDK needs new ones: gh api repos/WebAssembly/wasi-sdk/releases/tags/wasi-sdk-34
+SHA256 = {
+    "windows-x64": "cccb5c323a9b34f0349a9b09e8804a0a7632c68c3310f4b5f437ed57d7e71d8f",
+    "linux-x64": "b761e3a0721dbae9c09a0059e5fdb2bf917d1b4a8a7b430fb3b5aafb0984b2c4",
+    "macos-arm64": "9c59398106b417f8f14913380fdf0097a8cc0ff4af9eb3ce0065a859e88d49e9",
 }
 
 KEEP = [
@@ -57,6 +66,11 @@ def main():
         print(f"downloading {url}")
         source = out_dir / asset
         urllib.request.urlretrieve(url, source)
+        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        if digest != SHA256[platform]:
+            source.unlink()
+            print(f"{asset} is not the file that was published: its SHA-256 is {digest}, expected {SHA256[platform]}")
+            return 1
 
     target = out_dir / f"dessa-wasm-{platform}.tar.gz"
     kept = 0

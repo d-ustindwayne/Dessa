@@ -1007,6 +1007,10 @@ std::string Codegen::exprAs(const Expr* e, const SemanticType& target) {
     }
     const SemanticType& source = typeOf(e);
     if (source.isUnknown() || sameType(source, target)) return expr(e);
+    // std::variant has no conversion from another variant
+    if (cppType(source).rfind("std::variant<", 0) == 0 && cppType(target).rfind("std::variant<", 0) == 0) {
+        return "dessa::widen_to<" + cppType(target) + ">(" + expr(e) + ")";
+    }
     return "static_cast<" + cppType(target) + ">(" + expr(e) + ")";
 }
 

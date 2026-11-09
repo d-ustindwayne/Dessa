@@ -69,6 +69,12 @@ riv run
 | [docs/web.md](docs/web.md) | `.dhtml` pages, WebAssembly, `webutils`, npm |
 | [docs/overview.md](docs/overview.md) | Dessa in brief: goals, state, numbers, where help is needed |
 | [docs/architecture.md](docs/architecture.md) | How the compiler, runtimes, riv and the editor work |
+| [docs/runtime.md](docs/runtime.md) | How a program runs: values, memory, errors, the page bridge |
+| [docs/grammar.md](docs/grammar.md) | The syntax, in EBNF |
+| [docs/decisions.md](docs/decisions.md) | Why Dessa is the way it is |
+| [docs/security.md](docs/security.md) | What Dessa protects against, and what it leaves to you |
+| [docs/security-assessment.md](docs/security-assessment.md) | How it compares with NIST SSDF, CWE, SLSA and OpenSSF |
+| [SECURITY.md](SECURITY.md) | Reporting a security problem |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Building, testing and releasing Dessa |
 
 ## Repository layout

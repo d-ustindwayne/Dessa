@@ -1,0 +1,23 @@
+// Deep JSON from elsewhere is an error the program can catch, not a crash.
+$("json") { parseJson, stringify, JsonError }
+
+func[Str] nested(open[Str], close[Str], levels[Int]) {
+    return open.repeat(levels) + close.repeat(levels);
+}
+
+func[Str] attempt(text[Str], maxDepth[Int]=512) {
+    try {
+        parseJson(text, maxDepth);
+        return "parsed";
+    } catch (e[JsonError]) {
+        return e.message.substr(0, 40);
+    }
+}
+
+print(attempt(nested("[", "]", 512)));
+print(attempt(nested("[", "]", 513)));
+print(attempt(nested("[", "]", 200000)));
+print(attempt(nested("{\"a\":", "}", 200000)));
+print(attempt("[[[]]]", 2));
+print(attempt("[[], [], []]", 2));
+print(stringify(parseJson(nested("[", "]", 3))));

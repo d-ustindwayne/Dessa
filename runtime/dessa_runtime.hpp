@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -23,6 +24,10 @@
 #include <utility>
 #include <variant>
 #include <vector>
+#ifndef _WIN32
+#include <signal.h>        // watch_stack
+#include <sys/resource.h>
+#endif
 
 namespace dessa {
 
@@ -510,6 +515,15 @@ To unwrap_to(const std::optional<T>& value) {
     return To(unwrap(value));
 }
 
+// A union going into a wider one: Int | Big into Int | Big | Str.
+template <class To, class... From>
+To widen_to(const std::variant<From...>& value) {
+    return std::visit([](const auto& v) -> To {
+        if constexpr (std::is_constructible_v<To, decltype(v)>) return To(v);
+        else fail("Unexpected value");
+    }, value);
+}
+
 // typeof(value): the compiler passes the static type's name; values whose
 // exact type is only known at run time (unions, nullables, objects) are looked at.
 template <class T>
@@ -913,6 +927,16 @@ inline Str trim_copy(const Str& s) {
     return s.substr(b, e - b + 1);
 }
 
+// A decimal as an Int: what is after the point goes. One that doesn't fit (or
+// isn't a number) is an error, like every other Int overflow.
+inline Int dbl_to_int(double d) {
+    if (d >= -9223372036854775808.0 && d < 9223372036854775808.0) return static_cast<Int>(d);
+    if (d != d) fail("Int overflow: not a number can't be an Int");
+    char text[64];
+    std::snprintf(text, sizeof text, "%g", d);
+    fail(Str("Int overflow: ") + text + " is too big for an Int");
+}
+
 template <class T>
 Int to_int(const T& value) {
     using U = bare<T>;
@@ -922,11 +946,12 @@ Int to_int(const T& value) {
         Str t = trim_copy(value);
         Int result = 0;
         auto [p, ec] = std::from_chars(t.data(), t.data() + t.size(), result);
+        if (ec == std::errc::result_out_of_range) fail("Int overflow: " + t + " is too big for an Int");
         if (t.empty() || ec != std::errc() || p != t.data() + t.size()) {
             // "2.7" is a number, just not a whole one
             char* end = nullptr;
             double d = std::strtod(t.c_str(), &end);
-            if (!t.empty() && end == t.c_str() + t.size()) return static_cast<Int>(d);
+            if (!t.empty() && end == t.c_str() + t.size()) return dbl_to_int(d);
             fail("Cannot convert \"" + value + "\" to Int");
         }
         return result;
@@ -934,8 +959,10 @@ Int to_int(const T& value) {
         return static_cast<Int>(value); // the character's code
     } else if constexpr (std::is_enum_v<U>) {
         return static_cast<Int>(value);
+    } else if constexpr (std::is_floating_point_v<U>) {
+        return dbl_to_int(value); // truncated
     } else {
-        return static_cast<Int>(value); // numbers (truncated) and Bul (0 / 1)
+        return static_cast<Int>(value); // Int and Bul (0 / 1)
     }
 }
 
@@ -1651,7 +1678,7 @@ inline Bul m_isAlpha(Chr c) {
 inline Int m_code(Chr c) { return static_cast<Int>(c); }
 
 // ---- numbers ----
-template <class T, std::enable_if_t<std::is_arithmetic_v<T>, int> = 0> Int m_toInt(T v) { return static_cast<Int>(v); }
+template <class T, std::enable_if_t<std::is_arithmetic_v<T>, int> = 0> Int m_toInt(T v) { if constexpr (std::is_floating_point_v<T>) return dbl_to_int(v); else return static_cast<Int>(v); }
 inline Int m_toInt(Bul b) { return b ? 1 : 0; }
 inline Dbl m_toDbl(Bul b) { return b ? 1 : 0; }
 inline Flt m_toFlt(Bul b) { return b ? 1 : 0; }
@@ -1842,6 +1869,66 @@ inline List<Str>& program_args() {
 
 #ifdef _WIN32
 extern "C" __declspec(dllimport) int __stdcall SetConsoleOutputCP(unsigned int);
+extern "C" __declspec(dllimport) void* __stdcall AddVectoredExceptionHandler(unsigned long, long(__stdcall*)(struct _EXCEPTION_POINTERS*));
+extern "C" __declspec(dllimport) int __stdcall SetThreadStackGuarantee(unsigned long*);
+#endif
+
+// Calls nested too deeply (endless recursion, usually). No program can go on
+// from here, so it isn't an error `catch` sees; it costs nothing until it
+// happens. Say so, with the line, instead of the system's bare crash.
+inline void report_stack_overflow() {
+    std::cout.flush();
+    std::fflush(stdout);
+    std::fputs("Error: stack overflow: too many calls inside each other (a function that never stops calling itself?)", stderr);
+    if (trace_line > 0) std::fprintf(stderr, "\n  at %s:%d", trace_file, trace_line);
+    std::fputs("\n", stderr);
+    std::fflush(stderr);
+    std::_Exit(1);
+}
+
+#ifdef _WIN32
+inline long __stdcall on_exception(struct _EXCEPTION_POINTERS* info) {
+    // The first field is the record, whose first field is the exception's code
+    const unsigned long code = **reinterpret_cast<unsigned long**>(info);
+    if (code == 0xC00000FDul) report_stack_overflow();
+    return 0;   // EXCEPTION_CONTINUE_SEARCH
+}
+
+inline void watch_stack() {
+    unsigned long room = 64 * 1024;   // what the report itself runs on
+    SetThreadStackGuarantee(&room);
+    AddVectoredExceptionHandler(1, on_exception);
+}
+#else
+inline char* stack_top = nullptr;
+inline size_t stack_limit = 0;
+
+inline void on_fault(int number, siginfo_t* info, void*) {
+    char* at = static_cast<char*>(info->si_addr);
+    // Only a fault at the end of the stack: any other crash stays a crash
+    if (at <= stack_top && static_cast<size_t>(stack_top - at) <= stack_limit + 1024 * 1024) report_stack_overflow();
+    signal(number, SIG_DFL);
+}
+
+inline void watch_stack() {
+    static char room[64 * 1024];   // what the report itself runs on
+    char here;
+    stack_top = &here;
+    struct rlimit limit;
+    stack_limit = getrlimit(RLIMIT_STACK, &limit) == 0 && limit.rlim_cur != RLIM_INFINITY ? static_cast<size_t>(limit.rlim_cur) : size_t(8) << 20;
+    stack_t other;
+    other.ss_sp = room;
+    other.ss_size = sizeof room;
+    other.ss_flags = 0;
+    if (sigaltstack(&other, nullptr) != 0) return;
+    struct sigaction action;
+    std::memset(&action, 0, sizeof action);
+    action.sa_sigaction = on_fault;
+    action.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    sigemptyset(&action.sa_mask);
+    sigaction(SIGSEGV, &action, nullptr);
+    sigaction(SIGBUS, &action, nullptr);
+}
 #endif
 
 template <class Body>
@@ -1849,6 +1936,7 @@ int run_main(int argc, char** argv, Body&& body) {
 #ifdef _WIN32
     SetConsoleOutputCP(65001); // UTF-8 console output
 #endif
+    watch_stack();
     for (int i = 1; i < argc; ++i) program_args().emplace_back(argv[i]);
     try {
         body();

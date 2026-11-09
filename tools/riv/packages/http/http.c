@@ -4,38 +4,42 @@
 
 #ifdef __wasm__
 
-ds_int dsx_http__listen(ds_int port) {
+ds_int dsx_http__listen(ds_int port, ds_str* host) {
     (void)port;
+    (void)host;
     ds_fail("http: a server can't run in WebAssembly (run it as a native program)");
 }
-ds_int dsx_http__accept(ds_int server) { (void)server; return -1; }
-ds_str* dsx_http__read(ds_int conn) { (void)conn; return ds_str_cstr(""); }
+ds_int dsx_http__port(ds_int server) { (void)server; return -1; }
+ds_int dsx_http__next(ds_int server, ds_int timeoutSeconds, ds_int maxBytes) { (void)server; (void)timeoutSeconds; (void)maxBytes; return -1; }
+ds_str* dsx_http__take(ds_int conn) { (void)conn; return ds_str_cstr(""); }
 void dsx_http__write(ds_int conn, ds_str* data) { (void)conn; (void)data; }
 void dsx_http__close(ds_int handle) { (void)handle; }
+ds_int dsx_http__size(ds_str* text) { return text->len; }
 
 #else
 
 #include "http_socket.h"
 
-ds_int dsx_http__listen(ds_int port) {
-    char error[200];
-    int64_t s = hs_listen(port, error, sizeof error);
+ds_int dsx_http__listen(ds_int port, ds_str* host) {
+    char error[300];
+    int64_t s = hs_listen(port, host->data, error, sizeof error);
     if (s < 0) ds_fail("http: %s", error);
     return s;
 }
 
-ds_int dsx_http__accept(ds_int server) {
-    return hs_accept(server);
+ds_int dsx_http__port(ds_int server) {
+    return hs_port(server);
 }
 
-/* The whole request, or "" when the other side closed */
-ds_str* dsx_http__read(ds_int conn) {
+ds_int dsx_http__next(ds_int server, ds_int timeoutSeconds, ds_int maxBytes) {
+    return hs_next(server, timeoutSeconds, maxBytes);
+}
+
+/* The whole request a connection from _next sent */
+ds_str* dsx_http__take(ds_int conn) {
     size_t len = 0;
-    char* data = hs_read(conn, &len);
-    if (!data) return ds_str_cstr("");
-    ds_str* text = ds_str_new(data, (int64_t)len);
-    free(data);
-    return text;
+    const char* data = hs_request(conn, &len);
+    return ds_str_new(data, (int64_t)len);
 }
 
 void dsx_http__write(ds_int conn, ds_str* data) {
@@ -44,6 +48,11 @@ void dsx_http__write(ds_int conn, ds_str* data) {
 
 void dsx_http__close(ds_int handle) {
     hs_close(handle);
+}
+
+/* In bytes: a file's content needn't be valid text */
+ds_int dsx_http__size(ds_str* text) {
+    return text->len;
 }
 
 #endif

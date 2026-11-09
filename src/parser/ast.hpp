@@ -144,6 +144,7 @@ struct Expr {
     ExprKind kind;
     int line = 0;   // position of the token that starts the expression,
     int column = 0; // filled in by the parser for diagnostics
+    int chain = 0;  // how many operators deep its tree is (see Parser::checkChain)
     // Set by the analyser when the expression really is a method call:
     // obj<i> on a class with _get becomes obj._get(i), -obj becomes
     // obj._neg(), ... The parts are moved into it, so code that walks

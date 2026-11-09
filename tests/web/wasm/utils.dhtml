@@ -1,0 +1,187 @@
+<!doctype html>
+<html>
+<head><title>webutils utilities</title></head>
+<body>
+<ul id="list"><li id="first">one</li></ul>
+<form id="form">
+    <input name="user" value="ann"><input name="agree" type="checkbox" checked>
+    <input type="radio" name="size" value="s"><input type="radio" name="size" value="m" checked>
+    <select name="color"><option value="red">red</option><option value="blue" selected>blue</option></select>
+    <textarea name="note">hello</textarea><input value="no name">
+</form>
+<div id="target"></div>
+<span id="count"></span>
+<pre id="out"></pre>
+<script>
+$("webutils");
+
+func[Emp] say(line[Str]) {
+    must("#out").textContent += line + "\n";
+}
+
+func[Str] fails(action[Func[Emp]]) {
+    try {
+        action();
+    } catch (e[Str]) {
+        return e;
+    }
+    return "no error";
+}
+
+// ---- finding
+say($"find {find("#first")?.textContent ?? "?"} {find("#none") == nil} {findAll("li").length()}");
+say($"must {must("#first").textContent} | {fails(() := { must("#none"); })}");
+
+// ---- text into HTML: nothing typed becomes a script
+const[Str] evil = "<img src=x onerror=\"document.title='HACKED'\">'&";
+say(escapeHtml(evil));
+must("#target").innerHTML = safeHtml("<b>{}</b> and {}", evil, "ok");
+say($"safeHtml {must("#target").querySelectorAll("img").length()} imgs, {must("#target").querySelectorAll("b").length()} b");
+say(fails(() := { safeHtml("{}", "a", "b"); }));
+for (var[Str] url in <"https://a.com/x", "/local/path", "page.html?x=a:b", "mailto:a@b.c", "javascript:alert(1)", "JaVaScRiPt:alert(1)", " java\tscript:alert(1)", "data:text/html,x", "vbscript:x">) {
+    say($"url {safeUrl(url)}");
+}
+
+// ---- building
+var[Element] card = h("div", {"class": "card", "title": evil},
+    h("h2", {:}, evil),
+    h("a", {"href": "javascript:alert(1)"}, "bad link"),
+    h("a", {"href": "https://ok.example/"}, "good link"),
+    "plain text");
+must("#target").appendChild(card);
+say($"h {card.className} {card.children.length()} {card.querySelectorAll("img").length()} imgs");
+say($"h text {card.querySelector("h2")?.textContent == evil}");
+say($"h links {card.querySelectorAll("a")<0>.getAttribute("href") ?? "?"} {card.querySelectorAll("a")<1>.getAttribute("href") ?? "?"}");
+say(fails(() := { h("div", {"onclick": "x()"}); }));
+
+// ---- events, also on what is added later
+var[Int] rowClicks = 0;
+var[Listener] rows = on(must("#list"), "click", "li", (e[Event]) := { rowClicks += 1; });
+must("#first").click();
+var[Element] later = document.createElement("li");
+must("#list").appendChild(later);
+later.click();
+must("#list").click();
+say($"on {rowClicks}");
+rows.remove();
+later.click();
+say($"removed {rowClicks}");
+var[Int] onceCount = 0;
+once(later, "click", (e[Event]) := { onceCount += 1; });
+later.click();
+later.click();
+say($"once {onceCount}");
+var[Int] direct = 0;
+on(later, "click", "", (e[Event]) := { direct += 1; });
+later.click();
+say($"direct {direct}");
+
+// ---- addresses
+say(encodeUri("a b&c=d/é€😀"));
+say(decodeUri("a%20b%26c%3Dd%2F%C3%A9%E2%82%AC%F0%9F%98%80+x%zz"));
+say(decodeUri(encodeUri("round trip é€😀 &=?#")));
+var[Url] u = new Url("https://example.com:8080/search/a?q=two%20words&empty#top%20x");
+say($"url {u.protocol} {u.host} {u.path} {u.query<"q">} [{u.query<"empty">}] {u.hash}");
+u.query<"page"> = "2";
+u.query<"x y"> = "é";
+say(u.toStr());
+say($"{new Url("/just/a/path")} {new Url("page.html?a=1")} {new Url("https://a.com")}");
+
+// ---- forms
+say($"form {formValues(must("#form"))}");
+fillForm(must("#form"), {"user": "bo", "agree": "false", "size": "s", "color": "red", "note": "n", "other": "x"});
+say($"form {formValues(must("#form"))}");
+say($"check {validate.isEmail("a@b.co")} {validate.isEmail("a@b")} {validate.isEmail("a b@c.de")} {validate.isEmail("@b.co")} {validate.isEmail("a@@b.co")} {validate.isEmail("a@b..co")}");
+say($"check {validate.isUrl("https://a.com")} {validate.isUrl("javascript:x")} {validate.isNumber("1.5")} {validate.isNumber("x")} {validate.isWhole("-12")} {validate.isWhole("1.5")} {validate.isFilled(" ")} {validate.lengthBetween("abc", 1, 3)}");
+
+// ---- keeping things
+store.clear();
+say($"store [{store.get("a")}] {store.get("a", "dflt")} {store.has("a")}");
+store.set("a", "1");
+say($"store {store.get("a")} {store.has("a")}");
+store.setFor("b", "soon|with|bars", 100);
+store.setFor("gone", "x", -1);
+say($"store {store.get("b")} [{store.get("gone")}]");
+store.set("looks", "expires|notnumber|x");
+say($"store {store.get("looks")}");
+store.remove("looks");
+store.remove("a");
+say($"store {store.has("a")}");
+sessionStore.set("s", "x");
+say($"session {sessionStore.get("s")} {window.localStorage.getItem("s") == nil}");
+// ---- cookies (a page opened from a file may have none)
+cookies.set("name one", "value; with=odd");
+var[Str | Nil] cookie = cookies.get("name one");
+say($"cookie {cookie == nil || cookie == "value; with=odd"}");
+cookies.remove("name one");
+
+// ---- state
+var[State:Int] count = new State:Int(0);
+count.bindText(must("#count"));
+var[Int] seen = 0;
+count.subscribe((n[Int]) := { seen += n; });
+count.set(2);
+count.update((n[Int]) := n + 3);
+say($"state {count.get()} {must("#count").textContent} {seen}");
+
+// ---- router
+var[Str<>] visits = <>;
+var[Router] router = new Router();
+router.add("/", (p[Map[Str, Str]]) := { visits.push("home"); });
+router.add("/users/:id", (p[Map[Str, Str]]) := { visits.push($"user {p<"id">}"); });
+router.otherwise((p[Map[Str, Str]]) := { visits.push("missing"); });
+router.show("/");
+router.show("/users/a%20b");
+router.show("/users/1/x");
+say($"router {visits}");
+
+// ---- small things
+var[Element] message = toast("<b>not html</b>", 50);
+say($"toast {message.textContent} {message.querySelectorAll("b").length()}");
+say($"media {mediaMatches("(min-width: 1px)")} {mediaMatches("(max-width: 1px)")}");
+say($"page {document.title} {window.location.protocol != ""}");
+var[Element] before = document.createElement("li");
+before.textContent = "before";
+must("#list").insertBefore(before, must("#first"));
+say($"tree {must("#list").firstElementChild?.textContent ?? "?"} {must("#first").previousElementSibling?.textContent ?? "?"} {must("#first").cloneNode(true).textContent}");
+var[Element] swapped = document.createElement("li");
+swapped.textContent = "swapped";
+before.replaceWith(swapped);
+say($"tree {must("#list").firstElementChild?.textContent ?? "?"}");
+
+// ---- what happens later: debounce, throttle, frames, the network
+var[Int] debounced = 0;
+var[Func[Emp]] d = debounce(() := { debounced += 1; }, 30);
+d(); d(); d();
+var[Int] throttled = 0;
+var[Func[Emp]] t = throttle(() := { throttled += 1; }, 100000);
+t(); t(); t();
+
+var[Int] waiting = 3;
+func[Emp] finished() {
+    waiting -= 1;
+    if (waiting > 0) return;
+    setTimeout(() := {
+        say($"debounce {debounced} throttle {throttled}");
+        say($"toast gone {findAll("[role=status]").length()}");
+        say("done");
+    }, 200);
+}
+var[Str] order = "started";
+fetchAsync("data.txt", (r[FetchResult]) := {
+    say($"fetch {r.ok} {r.status} {r.text.trim()} [{r.error}] after {order}");
+    finished();
+});
+order = "the rest";
+fetchAsync("missing-file.txt", (r[FetchResult]) := {
+    say($"fetch {r.ok} {r.status}");
+    finished();
+});
+postAsync("http://127.0.0.1:1/nothing", "x", (r[FetchResult]) := {
+    say($"post {r.ok} {r.status} {r.error != ""}");
+    finished();
+});
+say("end of script");
+</script>
+</body>
+</html>

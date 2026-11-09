@@ -477,6 +477,14 @@ DS_NORETURN DS_COLD void ds_nil_value(void);
 
 ds_int ds_str_to_int(ds_str* s);      /* Int("42") (decimals cut) */
 ds_int ds_str_to_int_exact(ds_str* s);/* "42".toInt() */
+DS_NORETURN DS_COLD void ds_dbl_too_big(ds_dbl d);
+/* A decimal as an Int: what is after the point goes. One that doesn't fit (or
+ * isn't a number) is an error, like every other Int overflow; in C the cast
+ * alone would be undefined, and differ between native and WebAssembly. */
+static inline ds_int ds_dbl_to_int(ds_dbl d) {
+    if (DS_LIKELY(d >= -9223372036854775808.0 && d < 9223372036854775808.0)) return (ds_int)d;
+    ds_dbl_too_big(d);
+}
 ds_dbl ds_str_to_dbl(ds_str* s, const char* type);
 ds_bul ds_str_to_bul(ds_str* s);
 ds_chr ds_str_to_chr(ds_str* s);

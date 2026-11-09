@@ -1,0 +1,52 @@
+// needs: http
+// Text given to request must never reach a shell. Each attack below would
+// create a marker file if it ran; ordinary odd characters must arrive unchanged.
+$("request") { get, request, Response, RequestError }
+$("os") { getEnv, fileExists, deleteFile }
+
+const[Str] base = getEnv("DESSA_TEST_HTTP") ?? "";
+const[Str] marker = "request_injection_marker.tmp";
+
+func[Emp] attempt(what[Str], action[Func[Emp]]) {
+    try {
+        action();
+    } catch {
+        // Refusing the request is fine; running the text is not
+    }
+    print(what, fileExists(marker) ? "RAN A COMMAND" : "safe");
+    deleteFile(marker);
+}
+
+const[Str<>] attacks = <
+    $"$(echo x > {marker})",
+    $"`echo x > {marker}`",
+    $"\" & echo x> {marker} & \"",
+    $"\"; echo x > {marker}; \"",
+    $"%PATH%\" | echo x> {marker} | \""
+>;
+
+for (var[Str] attack in attacks) {
+    attempt("url", () := { get($"{base}/echo?a={attack}"); });
+    attempt("header", () := { get($"{base}/echo", {"X-Token": attack}); });
+    attempt("method", () := { request(attack, $"{base}/echo"); });
+}
+
+// Odd characters are data, and arrive as they were sent
+const[Str] odd = "a\"b$(c)`d`\\e%PATH%&f|g";
+print(get($"{base}/echo", {"X-Token": odd}).json().get("token").asStr() == odd);
+
+// A value can't add a header of its own
+func[Str] refused(action[Func[Emp]]) {
+    try {
+        action();
+    } catch (e[RequestError]) {
+        return "refused";
+    }
+    return "sent";
+}
+print(refused(() := { get($"{base}/echo", {"X-Token": "a\r\nX-Evil: b"}); }));
+print(refused(() := { get($"{base}/echo", {"@secret.txt": "a"}); }));
+print(refused(() := { request("GET /x", $"{base}/echo"); }));
+
+// Only http and https: not a file on this computer
+print(refused(() := { get("file:///etc/hostname"); }));

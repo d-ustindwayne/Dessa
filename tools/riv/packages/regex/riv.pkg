@@ -1,5 +1,5 @@
 name = regex
-version = 1.0.0
+version = 1.0.1
 entry = regex.dm
 description = Regular expressions: test, find, findAll, replace, split, groups (pure Dessa)
 

@@ -2,11 +2,13 @@
 header http.hpp
 link.windows -lws2_32
 
-func[Int] _listen(port[Int])
-func[Int] _accept(server[Int])
-func[Str] _read(conn[Int])
+func[Int] _listen(port[Int], host[Str])
+func[Int] _port(server[Int])
+func[Int] _next(server[Int], timeoutSeconds[Int], maxBytes[Int])
+func[Str] _take(conn[Int])
 func[Emp] _write(conn[Int], data[Str])
 func[Emp] _close(handle[Int])
+func[Int] _size(text[Str])
 
 // The native part in C, for C programs (in WebAssembly a server can't run)
 c http.c

@@ -16,7 +16,7 @@ dessa test tests/math_test.ds        run one test file
 ```
 
 `dessa run` compiles the program once and keeps the result in your temporary
-folder (`%TEMP%\dessa` or `/tmp/dessa`). It only compiles again when the
+folder (`%TEMP%\dessa` or `~/.cache/dessa`). It only compiles again when the
 program or the libraries it uses change.
 
 A file in the folder (or a subfolder) can import other files with

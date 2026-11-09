@@ -8,8 +8,11 @@
 #include "dessa_rt.h"
 #include <time.h>
 #ifdef _WIN32
+#include <direct.h>
 #include <process.h>
+#define rmdir _rmdir
 #else
+#include <stdlib.h>
 #include <unistd.h>
 #endif
 #endif
@@ -53,58 +56,74 @@ static ds_str* read_all(const char* path) {
     return ds_sb_done(&b);
 }
 
-/* One command-line argument, quoted for the shell */
-static void add_quoted(ds_sb* b, const char* value, int64_t len) {
-    ds_sb_cstr(b, " \"");
+/* One setting of curl's config file. Everything a program gives us goes here
+ * and never on a command line, so no shell ever reads it. */
+static void add_setting(ds_sb* b, const char* name, const char* value, int64_t len) {
+    ds_sb_cstr(b, name);
+    ds_sb_cstr(b, " = \"");
     for (int64_t i = 0; i < len; ++i) {
         char c = value[i];
-        if (c == '\n' || c == '\r') continue;   /* never let a value break the command */
+        if (c == '\n' || c == '\r' || c == '\0') continue;
         if (c == '"' || c == '\\') ds_sb_bytes(b, "\\", 1);
         ds_sb_bytes(b, &c, 1);
     }
+    ds_sb_cstr(b, "\"\n");
+}
+
+static void add_setting_c(ds_sb* b, const char* name, const char* value) {
+    add_setting(b, name, value, (int64_t)strlen(value));
+}
+
+/* For the few paths on the command line: they are our own temporary folder */
+static void add_quoted_path(ds_sb* b, const char* value) {
+    ds_sb_cstr(b, " \"");
+    ds_sb_cstr(b, value);
     ds_sb_cstr(b, "\"");
 }
 
-static void add_quoted_c(ds_sb* b, const char* value) { add_quoted(b, value, (int64_t)strlen(value)); }
+/* A new folder only this user can read: the request's headers pass through it */
+static void make_private_folder(char* out, size_t size) {
+    const char* tmp = getenv("TEMP");
+    if (!tmp) tmp = getenv("TMPDIR");
+    if (!tmp) tmp = "/tmp";
+#ifdef _WIN32
+    static unsigned counter = 0;
+    for (int attempt = 0; attempt < 100; ++attempt) {
+        snprintf(out, size, "%s/dessa-request-%d-%u-%lld", tmp, _getpid(), ++counter, (long long)time(NULL));
+        if (_mkdir(out) == 0) return;
+    }
+#else
+    snprintf(out, size, "%s/dessa-request-XXXXXX", tmp);
+    if (mkdtemp(out)) return;
+#endif
+    ds_fail("request: could not make a temporary folder in %s", tmp);
+}
 
 /* Sends one request. `headers` is "Name: value" lines.
  * Returns [status code, response headers, response body]. */
 ds_list* dsx_request__send(ds_str* method, ds_str* url, ds_str* headers, ds_str* body, ds_int timeoutSeconds) {
-    const char* tmp = getenv("TEMP");
-    if (!tmp) tmp = getenv("TMPDIR");
-    if (!tmp) tmp = "/tmp";
-    static unsigned counter = 0;
-#ifdef _WIN32
-    const int pid = _getpid();
-#else
-    const int pid = getpid();
-#endif
     char base[1024];
-    snprintf(base, sizeof base, "%s/dessa-request-%d-%u-%lld", tmp, pid, ++counter, (long long)time(NULL));
-    char bodyIn[1100], headersOut[1100], bodyOut[1100], errors[1100];
-    snprintf(bodyIn, sizeof bodyIn, "%s.in", base);
-    snprintf(headersOut, sizeof headersOut, "%s.headers", base);
-    snprintf(bodyOut, sizeof bodyOut, "%s.body", base);
-    snprintf(errors, sizeof errors, "%s.err", base);
+    make_private_folder(base, sizeof base);
+    char bodyIn[1100], headersOut[1100], bodyOut[1100], errors[1100], settings[1100];
+    snprintf(bodyIn, sizeof bodyIn, "%s/in", base);
+    snprintf(headersOut, sizeof headersOut, "%s/headers", base);
+    snprintf(bodyOut, sizeof bodyOut, "%s/body", base);
+    snprintf(errors, sizeof errors, "%s/err", base);
+    snprintf(settings, sizeof settings, "%s/curl.cfg", base);
 
-    ds_sb command;
-    ds_sb_init(&command);
-    ds_sb_cstr(&command, "curl -sS -L --max-time ");
-    ds_sb_int(&command, timeoutSeconds > 0 ? timeoutSeconds : 30);
-    ds_sb_cstr(&command, " -X");
-    add_quoted(&command, method->data, method->len);
-    ds_sb_cstr(&command, " -D");
-    add_quoted_c(&command, headersOut);
-    ds_sb_cstr(&command, " -o");
-    add_quoted_c(&command, bodyOut);
-    ds_sb_cstr(&command, " -w \"%{http_code}\"");
+    ds_sb config;
+    ds_sb_init(&config);
+    ds_sb_cstr(&config, "silent\nshow-error\nlocation\nmax-time = ");
+    ds_sb_int(&config, timeoutSeconds > 0 ? timeoutSeconds : 30);
+    /* Only the web, also after a redirect: never file:// and the like */
+    ds_sb_cstr(&config, "\nproto = \"=http,https\"\nproto-redir = \"=http,https\"\nwrite-out = \"%{http_code}\"\n");
+    add_setting(&config, "request", method->data, method->len);
+    add_setting_c(&config, "dump-header", headersOut);
+    add_setting_c(&config, "output", bodyOut);
     for (int64_t start = 0; start < headers->len;) {
         const char* nl = memchr(headers->data + start, '\n', (size_t)(headers->len - start));
         int64_t end = nl ? nl - headers->data : headers->len;
-        if (end > start) {
-            ds_sb_cstr(&command, " -H");
-            add_quoted(&command, headers->data + start, end - start);
-        }
+        if (end > start) add_setting(&config, "header", headers->data + start, end - start);
         start = end + 1;
     }
     const bool sendsBody = body->len > 0 || strcmp(method->data, "POST") == 0 || strcmp(method->data, "PUT") == 0 ||
@@ -117,12 +136,23 @@ ds_list* dsx_request__send(ds_str* method, ds_str* url, ds_str* headers, ds_str*
         }
         char at[1104];
         snprintf(at, sizeof at, "@%s", bodyIn);
-        ds_sb_cstr(&command, " --data-binary");
-        add_quoted_c(&command, at);
+        add_setting_c(&config, "data-binary", at);
     }
-    add_quoted(&command, url->data, url->len);
+    add_setting(&config, "url", url->data, url->len);
+    ds_str* configText = ds_sb_done(&config);
+    FILE* settingsFile = fopen(settings, "wb");
+    if (settingsFile) {
+        fwrite(configText->data, 1, (size_t)configText->len, settingsFile);
+        fclose(settingsFile);
+    }
+    ds_release(configText);
+
+    ds_sb command;
+    ds_sb_init(&command);
+    ds_sb_cstr(&command, "curl -K");
+    add_quoted_path(&command, settings);
     ds_sb_cstr(&command, " 2>");
-    add_quoted_c(&command, errors);
+    add_quoted_path(&command, errors);
     ds_str* line = ds_sb_done(&command);
 
 #ifdef _WIN32
@@ -135,7 +165,12 @@ ds_list* dsx_request__send(ds_str* method, ds_str* url, ds_str* headers, ds_str*
     FILE* pipe = popen(line->data, "r");
 #endif
     ds_release(line);
-    if (!pipe) ds_fail("request: could not start curl (is it installed?)");
+    if (!pipe) {
+        remove(settings);
+        remove(bodyIn);
+        rmdir(base);
+        ds_fail("request: could not start curl (is it installed?)");
+    }
     ds_sb status;
     ds_sb_init(&status);
     char buffer[256];
@@ -153,6 +188,8 @@ ds_list* dsx_request__send(ds_str* method, ds_str* url, ds_str* headers, ds_str*
     remove(headersOut);
     remove(bodyOut);
     remove(errors);
+    remove(settings);
+    rmdir(base);
 
     if (code != 0) {
         ds_str* statusText = ds_sb_done(&status);

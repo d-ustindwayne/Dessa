@@ -8,6 +8,13 @@
       "manifest": "name = regex\nversion = 1.0.0\nentry = regex.dm\ndescription = Regular expressions: test, find, findAll, replace, split, groups (pure Dessa)\n\n[dependencies]\n",
       "files": 2,
       "bytes": 24731
+    },
+    "1.0.1": {
+      "infohash": "6bc8fd59faecdb822ce834441b4e4fcb2deaf95f",
+      "torrent": "ZDg6YW5ub3VuY2U0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2UxMzphbm5vdW5jZS1saXN0bGw0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2VlbDMzOnVkcDovL29wZW4uc3RlYWx0aC5zaTo4MC9hbm5vdW5jZWVsNDE6dWRwOi8vdHJhY2tlci50b3JyZW50LmV1Lm9yZzo0NTEvYW5ub3VuY2VlbDM3OnVkcDovL2V4b2R1cy5kZXN5bmMuY29tOjY5NjkvYW5ub3VuY2VlZTEwOmNyZWF0ZWQgYnkxMTpyaXYgKERlc3NhKTQ6aW5mb2Q1OmZpbGVzbGQ2Omxlbmd0aGkxMjQxZTQ6cGF0aGw5OlJFQURNRS5tZGVlZDY6bGVuZ3RoaTI0NTc3ZTQ6cGF0aGw4OnJlZ2V4LmRtZWVkNjpsZW5ndGhpMTU0ZTQ6cGF0aGw3OnJpdi5wa2dlZWU0Om5hbWU1OnJlZ2V4MTI6cGllY2UgbGVuZ3RoaTE2Mzg0ZTY6cGllY2VzNDA6YdgYZChwozQ/lnN4EkZBf8bkhENhjEU8s8U98xvAizBO8QcybSe4UmU4OnVybC1saXN0bDc4Omh0dHBzOi8vcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbS9kLXVzdGluZHdheW5lL0Rlc3NhL21haW4vdG9vbHMvcml2L3BhY2thZ2VzL2Vl",
+      "manifest": "name = regex\nversion = 1.0.1\nentry = regex.dm\ndescription = Regular expressions: test, find, findAll, replace, split, groups (pure Dessa)\n\n[dependencies]\n",
+      "files": 3,
+      "bytes": 25972
     }
   }
 }

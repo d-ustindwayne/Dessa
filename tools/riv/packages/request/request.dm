@@ -51,10 +51,32 @@ class Response {
     }
 }
 
+// The characters HTTP allows in a method or a header name
+func[Bul] _isToken(text[Str]) {
+    if (text.isEmpty()) return false;
+    const[Str] marks = "!#$%&'*+-.^_`|~";
+    for (var[Chr] c in text) {
+        var[Int] code = c.code();
+        var[Bul] plain = (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+        if (!plain && !marks.includes(Str(c))) return false;
+    }
+    return true;
+}
+
 func[Response] request(method[Str], url[Str], headers[Map[Str, Str]]={}, body[Str]="", timeout[Int]=30) {
+    // Checked here, for every target: a line break in a value would otherwise
+    // start a header of its own
+    if (!_isToken(method)) throw new RequestError($"'{method}' is not an HTTP method");
     var[Str] headerLines = "";
     for (var[Str] name in headers) {
-        headerLines += $"{name}: {headers<name>}\n";
+        if (!_isToken(name)) throw new RequestError($"'{name}' is not a header name");
+        var[Str] value = headers<name>;
+        if (value.includes("\n") || value.includes("\r")) throw new RequestError($"the value of header {name} has a line break");
+        headerLines += $"{name}: {value}\n";
+    }
+    var[Str] address = url.trim().lower();
+    if (!address.startsWith("http://") && !address.startsWith("https://")) {
+        throw new RequestError($"'{url}' is not an http:// or https:// address");
     }
 
     var[Str<>] raw = <>;

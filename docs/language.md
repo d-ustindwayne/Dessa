@@ -2,7 +2,7 @@
 
 Dessa is statically typed: every variable, parameter and function result has a
 type, and mistakes are reported before the program runs. A program is turned
-into C (and from there into a native program) or into JavaScript.
+into C (and from there into a native program) or into WebAssembly.
 
 This page covers the whole language. For the libraries see
 [libraries.md](libraries.md).

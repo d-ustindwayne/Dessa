@@ -5,6 +5,7 @@
 #include <optional>
 #include <initializer_list>
 #include <string>
+#include <unordered_set>
 #include "token.hpp"
 #include "ast.hpp"
 
@@ -49,6 +50,20 @@ private:
         ColonScope(Parser& p, bool value) : parser(p), saved(p.colonEnds) { p.colonEnds = value; }
         ~ColonScope() { parser.colonEnds = saved; }
     };
+    // How deeply code may nest: past this it is an error, not a crash of the
+    // compiler. Template strings parse with a parser of their own, so the
+    // count is shared.
+    static constexpr int kMaxNesting = 200;
+    struct Nesting {
+        Nesting(Parser& p);
+        ~Nesting();
+    };
+    // Long chains take no room here, but make deep trees that the analyser and
+    // the generators walk by recursion: a + b + c + ..., a.b().c()..., else if
+    static constexpr int kMaxChain = 1000;
+    static constexpr int kMaxTypeSuffixes = 32;   // Int<><><>...
+    void checkChain(int length, const char* what);
+    int elseIfChain = 0;
     std::vector<std::string> parseTypeParams();
     std::vector<TypeNode> parseTypeArgs();
     TypeNode parseTypeBase();
@@ -59,6 +74,10 @@ private:
     // comparison (unless it is inside brackets of its own: <(a > b)>)
     bool inAngleList = false;
     int indexDepth = 0;   // inside students<...>: m<xs<0>> closes two at once
+    // Where `<` turned out not to start an index (and in what surroundings): so
+    // it isn't tried again each time an outer attempt is undone, which would
+    // double the work at each level of a<b(c<d(...
+    std::unordered_set<size_t> notAnIndex;
     struct AngleListScope {
         Parser& parser;
         bool saved;

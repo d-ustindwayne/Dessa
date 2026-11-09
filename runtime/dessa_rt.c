@@ -13,6 +13,10 @@
 #include <windows.h>
 #else
 #include <unistd.h>
+#ifndef __wasm__
+#include <signal.h>
+#include <sys/resource.h>
+#endif
 #endif
 
 /* ============================================================
@@ -99,6 +103,72 @@ void ds_report_uncaught(void) {
     fflush(stderr);
     ds_clear_error();
 }
+
+/* Calls nested too deeply (endless recursion, usually). No program can go on
+ * from here, so it isn't an error `catch` sees; it costs nothing until it
+ * happens. Say so, with the line, instead of the system's bare crash. */
+static void report_stack_overflow(void) {
+    fflush(stdout);
+    fputs("Error: stack overflow: too many calls inside each other (a function that never stops calling itself?)", stderr);
+    if (ds_trace_line > 0) fprintf(stderr, "\n  at %s:%d", ds_trace_file, ds_trace_line);
+    fputs("\n", stderr);
+    fflush(stderr);
+}
+
+#ifdef __wasm__
+/* The engine stops the program; the bridge (dessa_wasm.js) then calls this */
+__attribute__((used, export_name("dsw_stack_overflow"))) void dsw_stack_overflow(void) {
+    report_stack_overflow();
+}
+#elif defined(_WIN32)
+static LONG WINAPI on_exception(EXCEPTION_POINTERS* info) {
+    if (info->ExceptionRecord->ExceptionCode == EXCEPTION_STACK_OVERFLOW) {
+        report_stack_overflow();
+        _Exit(1);
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+
+static void watch_stack(void) {
+    ULONG room = 64 * 1024;   /* what the report itself runs on */
+    SetThreadStackGuarantee(&room);
+    AddVectoredExceptionHandler(1, on_exception);
+}
+#else
+static char* stack_top;
+static size_t stack_limit;
+
+static void on_fault(int number, siginfo_t* info, void* context) {
+    (void)context;
+    char* at = (char*)info->si_addr;
+    /* Only a fault at the end of the stack: any other crash stays a crash */
+    if (at <= stack_top && (size_t)(stack_top - at) <= stack_limit + 1024 * 1024) {
+        report_stack_overflow();
+        _Exit(1);
+    }
+    signal(number, SIG_DFL);
+}
+
+static void watch_stack(void) {
+    static char room[64 * 1024];   /* what the report itself runs on */
+    char here;
+    stack_top = &here;
+    struct rlimit limit;
+    stack_limit = getrlimit(RLIMIT_STACK, &limit) == 0 && limit.rlim_cur != RLIM_INFINITY ? (size_t)limit.rlim_cur : (size_t)8 << 20;
+    stack_t other;
+    other.ss_sp = room;
+    other.ss_size = sizeof room;
+    other.ss_flags = 0;
+    if (sigaltstack(&other, NULL) != 0) return;
+    struct sigaction action;
+    memset(&action, 0, sizeof action);
+    action.sa_sigaction = on_fault;
+    action.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    sigemptyset(&action.sa_mask);
+    sigaction(SIGSEGV, &action, NULL);
+    sigaction(SIGBUS, &action, NULL);
+}
+#endif
 
 static DS_NORETURN void uncaught(void) {
     ds_report_uncaught();
@@ -1464,13 +1534,23 @@ static bool parse_dbl(const char* p, int64_t n, double* out) {
     return ok;
 }
 
+void ds_dbl_too_big(ds_dbl d) {
+    if (d != d) ds_fail("Int overflow: not a number can't be an Int");
+    ds_fail("Int overflow: %g is too big for an Int", d);
+}
+
 ds_int ds_str_to_int(ds_str* s) {
     int64_t b, e;
     trimmed(s, &b, &e);
     ds_int v;
     if (parse_int(s->data + b, e - b, &v)) return v;
+    /* Only digits, so it was too long (a Dbl would round it to something that fits) */
+    int64_t at = b < e && (s->data[b] == '-' || s->data[b] == '+') ? b + 1 : b;
+    bool digits = at < e;
+    for (int64_t i = at; digits && i < e; ++i) digits = s->data[i] >= '0' && s->data[i] <= '9';
+    if (digits && s->data[b] != '+') ds_fail("Int overflow: %.*s is too big for an Int", (int)(e - b), s->data + b);
     double d;
-    if (e > b && parse_dbl(s->data + b, e - b, &d)) return (ds_int)d;
+    if (e > b && parse_dbl(s->data + b, e - b, &d)) return ds_dbl_to_int(d);
     ds_fail("Cannot convert \"%.*s\" to Int", (int)s->len, s->data);
 }
 
@@ -1900,9 +1980,9 @@ ds_dbl ds_math_log10(ds_dbl x) {
     if (x <= 0) ds_fail("log10 of a number <= 0");
     return log10(x);
 }
-ds_int ds_math_floor(ds_dbl x) { return (ds_int)floor(x); }
-ds_int ds_math_ceil(ds_dbl x) { return (ds_int)ceil(x); }
-ds_int ds_math_round(ds_dbl x) { return (ds_int)llround(x); }
+ds_int ds_math_floor(ds_dbl x) { return ds_dbl_to_int(floor(x)); }
+ds_int ds_math_ceil(ds_dbl x) { return ds_dbl_to_int(ceil(x)); }
+ds_int ds_math_round(ds_dbl x) { return ds_dbl_to_int(round(x)); }
 
 static uint64_t rng[4];
 static uint64_t rotl(uint64_t x, int k) { return (x << k) | (x >> (64 - k)); }
@@ -2148,6 +2228,9 @@ int ds_main(int argc, char** argv, void (*body)(void)) {
     SetConsoleOutputCP(65001);
 #endif
     setvbuf(stdout, out_buffer, _IOFBF, sizeof out_buffer);
+#ifndef __wasm__
+    watch_stack();
+#endif
 #ifdef __wasi__
     /* WebAssembly in Node: start in the folder it was run from (dessa_wasm.js) */
     if (getenv("DESSA_WASM_CWD")) chdir(getenv("DESSA_WASM_CWD"));

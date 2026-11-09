@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.0
+
+- No changes to the extension (Dessa 0.6.0: security fixes, numbers 2.0, http 2.0, a README for every library)
+
 ## 0.5.6
 
 - The code inside `$"... {expr} ..."` is coloured as code in every theme (it took the string's colour, or grey, before)

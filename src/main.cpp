@@ -33,13 +33,14 @@
 #include "loader.hpp"
 #include "parser.hpp"
 #include "toolchain.hpp"
+#include "verify.hpp"
 
 using namespace dessa;
 namespace fs = std::filesystem;
 
 namespace {
 
-constexpr const char* kVersion = "0.5.6";
+constexpr const char* kVersion = "0.6.0";
 const char* g_argv0 = nullptr; // to find runtime/ and include/ next to the compiler
 
 void printUsage() {
@@ -676,7 +677,10 @@ int cmdSetup(const std::string& what) {
         folder = fs::path(home ? home : ".") / ".dessa" / "wasm";
         fs::create_directories(folder, ec);
     }
-    const fs::path archive = fs::temp_directory_path(ec) / ("dessa-wasm-" + platform + ".tar.gz");
+    // In its own folder, not the shared temporary one: nobody else can swap the
+    // file between checking it and unpacking it
+    const fs::path archive = folder / ("dessa-wasm-" + platform + ".tar.gz");
+    const fs::path sums = folder / "SHA256SUMS";
     std::cout << "Downloading the WebAssembly compiler (about 50 MB)\n  from " << url << "\n  into " << folder.string() << "\n" << std::flush;
     auto shell = [](const std::string& command) {
 #ifdef _WIN32
@@ -688,6 +692,19 @@ int cmdSetup(const std::string& what) {
     if (shell("curl -fL --progress-bar -o \"" + archive.string() + "\" \"" + url + "\"") != 0) {
         std::cerr << "dessa setup: the download failed. Check the internet connection, or install wasi-sdk yourself:\n"
                      "       https://github.com/WebAssembly/wasi-sdk/releases (then set WASI_SDK_PATH to its folder)\n";
+        return 1;
+    }
+    const std::string sumsUrl = "https://github.com/d-ustindwayne/Dessa/releases/download/v" + std::string(kVersion) + "/SHA256SUMS";
+    if (shell("curl -fsSL -o \"" + sums.string() + "\" \"" + sumsUrl + "\"") != 0) {
+        std::cerr << "dessa setup: could not download the checksums from " << sumsUrl << "\n";
+        fs::remove(archive, ec);
+        return 1;
+    }
+    const std::string wrong = verify::check(archive, sums);
+    fs::remove(sums, ec);
+    if (!wrong.empty()) {
+        std::cerr << "dessa setup: not installing it: " << wrong << "\n";
+        fs::remove(archive, ec);
         return 1;
     }
     // On Windows, Windows' own tar: a GNU tar earlier on PATH (Git, MSYS2)
@@ -1173,7 +1190,22 @@ extern "C" __attribute__((used, visibility("default"))) void dessa_flush() {
 }
 #endif
 
+static int dessaMain(int argc, char* argv[]);
+
+// Nothing the compiler is given should get this far; if something does, it still
+// says what happened instead of ending without a word.
 int main(int argc, char* argv[]) {
+    try {
+        return dessaMain(argc, argv);
+    } catch (const std::exception& e) {
+        std::cerr << "dessa: internal compiler error: " << e.what() << "\nThis is a bug in Dessa, not in your code. Please report it.\n";
+    } catch (...) {
+        std::cerr << "dessa: internal compiler error.\nThis is a bug in Dessa, not in your code. Please report it.\n";
+    }
+    return 70;
+}
+
+static int dessaMain(int argc, char* argv[]) {
     g_argv0 = argv[0];
     // every command starts from the defaults (the playground calls main() again and again)
     g_target = "native";
@@ -1187,6 +1219,19 @@ int main(int argc, char* argv[]) {
     }
     if (args[0] == "--version" || args[0] == "version") {
         std::cout << "dessa " << kVersion << "\n";
+        return 0;
+    }
+    // dessa verify-download <file> <SHA256SUMS>: riv update uses it
+    if (args[0] == "verify-download") {
+        if (args.size() != 3) {
+            std::cerr << "usage: dessa verify-download <file> <SHA256SUMS>\n";
+            return 2;
+        }
+        const std::string wrong = verify::check(args[1], args[2]);
+        if (!wrong.empty()) {
+            std::cerr << wrong << "\n";
+            return 1;
+        }
         return 0;
     }
     if (args[0] == "home") {

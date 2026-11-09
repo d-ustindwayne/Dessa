@@ -253,6 +253,11 @@ private:
         const std::vector<std::pair<std::string, TypeNode>>* classTypes = nullptr;
     };
     std::vector<GenericTemplate> templates;
+    std::unordered_set<std::string> genericMethodNames;   // of every class: see analyseCall
+    // What inferTypeArgs saw an argument as, within one statement: an argument
+    // is analysed to infer and again to check, which for id(id(id(...))) would
+    // double the work at each level
+    std::unordered_map<const Expr*, SemanticType> inferredArgs;
     std::unordered_map<std::string, SemanticType> classInstanceByKey;   // "template|types" -> Box$1
     std::unordered_map<std::string, std::pair<int, std::vector<SemanticType>>> classInstances;   // Box$1's key -> template, types
     std::unordered_map<std::string, Symbol> functionInstances;         // "template|types" -> first$1

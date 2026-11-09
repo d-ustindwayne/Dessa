@@ -140,8 +140,12 @@ CCodegen::CV CCodegen::convert(CV v, const SemanticType& from, const SemanticTyp
     }
     // numbers, Chr, Bul, enums
     const SemanticType f = withoutNil(from);
-    if (isOptValue(from)) return {"((" + cType(to) + ")DS_UNWRAP(" + v.code + "))", false};
+    if (isOptValue(from)) {
+        if (to.is(SemanticTypeKind::Int) && (f.is(SemanticTypeKind::Dbl) || f.is(SemanticTypeKind::Flt))) return {"ds_dbl_to_int(DS_UNWRAP(" + v.code + "))", false};
+        return {"((" + cType(to) + ")DS_UNWRAP(" + v.code + "))", false};
+    }
     if (cType(f) == cType(to)) return v;
+    if (to.is(SemanticTypeKind::Int) && (f.is(SemanticTypeKind::Dbl) || f.is(SemanticTypeKind::Flt))) return {"ds_dbl_to_int(" + v.code + ")", false};
     return {"((" + cType(to) + ")(" + v.code + "))", false};
 }
 
@@ -847,8 +851,8 @@ CCodegen::CV CCodegen::assign(const AssignExpr* e) {
         case TokenType::MULT_EQUAL: return {store(ints ? "ds_mul(" + current + ", " + value + ")" : "(" + ct + ")(" + current + " * " + value + ")"), false};
         case TokenType::DIV_EQUAL:
             if (now.isInteger()) {
-                if (vt.isInteger()) return {store("(ds_int)ds_div(" + current + ", " + value + ")"), false};
-                return {store("(ds_int)(" + current + " / " + value + ")"), false};
+                if (vt.isInteger()) return {store("ds_dbl_to_int(ds_div(" + current + ", " + value + "))"), false};
+                return {store("ds_dbl_to_int(" + current + " / " + value + ")"), false};
             }
             return {store("(" + ct + ")(" + current + " / " + value + ")"), false};
         case TokenType::MOD_EQUAL:
@@ -1447,7 +1451,10 @@ CCodegen::CV CCodegen::builtinMethod(const CallExpr* e, const MemberExpr* m, con
         std::string r = receiver();
         if (rt.is(SemanticTypeKind::Bul) && name != "toStr") r = "DS_T(" + r + ")";
         if (name == "toStr") return {toText({r, false}, rt), true};
-        if (name == "toInt") return {"((ds_int)" + r + ")", false};
+        if (name == "toInt") {
+            if (rt.is(SemanticTypeKind::Dbl) || rt.is(SemanticTypeKind::Flt)) return {"ds_dbl_to_int(" + r + ")", false};
+            return {"((ds_int)" + r + ")", false};
+        }
         if (name == "toDbl") return {"((ds_dbl)" + r + ")", false};
         if (name == "toFlt") return {"((ds_flt)" + r + ")", false};
         if (name == "toChr") return {"ds_int_to_chr(" + r + ")", false};
@@ -1735,8 +1742,14 @@ CCodegen::CV CCodegen::optionalChain(const MemberExpr* m, const CallExpr* callEx
     }
     if (!callExpr) {
         const SemanticType& ft = symbol->type;
-        CV value{o + "->" + mangle(m->name.lexeme), false};
         if (result.isVoidLike()) unsupported("this ?.");
+        if (isExtern(ot)) {
+            // el?.textContent: a field of a page object is read through the bridge
+            CV converted = convert(externField(o, m->name.lexeme, ft), ft, result);
+            if (isCounted(result)) return {head + cType(result) + " " + r + " = " + o + " ? " + own(converted, result) + " : NULL; " + r + "; })", true};
+            return {head + cType(result) + " " + r + " = " + o + " ? " + converted.code + " : (" + cType(result) + "){0}; " + r + "; })", false};
+        }
+        CV value{o + "->" + mangle(m->name.lexeme), false};
         CV converted = convert(value, ft, result);
         if (isCounted(result)) {
             return {head + cType(result) + " " + r + " = " + o + " ? (" + cType(result) + ")ds_retain(" + converted.code + ") : NULL; " + r + "; })", true};
@@ -2083,6 +2096,7 @@ CCodegen::CV CCodegen::convertExpr(const ConvertExpr* e) {
     if (f.is(SemanticTypeKind::Bul) && to != "Bul") x = "DS_T(" + x + ")";
     if (to == "Int") {
         if (text) return {"ds_str_to_int(" + x + ")", false};
+        if (f.is(SemanticTypeKind::Dbl) || f.is(SemanticTypeKind::Flt)) return {"ds_dbl_to_int(" + x + ")", false};
         return {"((ds_int)(" + x + "))", false};
     }
     if (to == "Dbl") {
@@ -2106,6 +2120,34 @@ CCodegen::CV CCodegen::convertExpr(const ConvertExpr* e) {
     return v;
 }
 
+// Whether a collection's items (`count` of them at `data`, described by `et`)
+// are `element`s. Plain values and text are told by the description; anything
+// else is held as a counted pointer, so each one is looked at. An empty
+// collection of pointers holds nothing to tell it by, and fits any such type:
+// it has nothing in it to be read as the wrong thing. "" when it can't be told.
+std::string CCodegen::dynHolds(const std::string& et, const std::string& data, const std::string& count, const SemanticType& element) {
+    const auto kindIs = [&](const std::string& kind) { return "(" + et + "->kind == " + kind + ")"; };
+    switch (element.kind) {
+        case SemanticTypeKind::Int: return "(" + et + "->kind == DS_E_INT || " + et + "->kind == DS_E_RADIX)";
+        case SemanticTypeKind::Dbl: return kindIs("DS_E_DBL");
+        case SemanticTypeKind::Flt: return kindIs("DS_E_FLT");
+        case SemanticTypeKind::Bul: return kindIs("DS_E_BUL");
+        case SemanticTypeKind::Chr: return kindIs("DS_E_CHR");
+        case SemanticTypeKind::Str: return kindIs("DS_E_STR");
+        case SemanticTypeKind::Obj: return kindIs("DS_E_REF");
+        default: break;
+    }
+    if (element.kind == SemanticTypeKind::UserDefined && element.isEnum()) return "(" + et + " == " + elem(element) + ")";
+    if (withoutNil(element).is(SemanticTypeKind::Str)) return kindIs("DS_E_STR");
+    const std::string item = "ds_item" + std::to_string(tempCounter++);
+    const std::string fits = "ds_fits" + std::to_string(tempCounter++);
+    const std::string i = "ds_i" + std::to_string(tempCounter++);
+    const std::string one = dynIs(item, element);
+    if (one.empty()) return "";
+    return "(" + kindIs("DS_E_REF") + " && ({ bool " + fits + " = true; for (int64_t " + i + " = 0; " + fits + " && " + i + " < " + count + "; ++" + i +
+           ") { ds_head* " + item + " = ((ds_head**)" + data + ")[" + i + "]; " + fits + " = " + one + "; } " + fits + "; }))";
+}
+
 // Whether the dynamic value `v` (a ds_head*, evaluated more than once) is a
 // `target`; "" when that can't be told
 std::string CCodegen::dynIs(const std::string& v, const SemanticType& target) {
@@ -2116,9 +2158,21 @@ std::string CCodegen::dynIs(const std::string& v, const SemanticType& target) {
         case SemanticTypeKind::Bul: return "ds_dyn_is_elem(" + v + ", DS_E_BUL)";
         case SemanticTypeKind::Chr: return "ds_dyn_is_elem(" + v + ", DS_E_CHR)";
         case SemanticTypeKind::Str: return "ds_dyn_is_kind(" + v + ", DS_K_STR)";
-        case SemanticTypeKind::List: return "ds_dyn_is_kind(" + v + ", DS_K_LIST)";
-        case SemanticTypeKind::Set: return "ds_dyn_is_kind(" + v + ", DS_K_SET)";
-        case SemanticTypeKind::Map: return "ds_dyn_is_kind(" + v + ", DS_K_MAP)";
+        case SemanticTypeKind::List:
+        case SemanticTypeKind::Set: {
+            const std::string list = "((ds_list*)(" + v + "))";
+            const std::string kind = target.is(SemanticTypeKind::List) ? "DS_K_LIST" : "DS_K_SET";
+            const std::string held = target.elementType ? dynHolds(list + "->et", list + "->data", list + "->len", *target.elementType) : "true";
+            if (held.empty()) return "";
+            return "(ds_dyn_is_kind(" + v + ", " + kind + ") && " + held + ")";
+        }
+        case SemanticTypeKind::Map: {
+            const std::string map = "((ds_map*)(" + v + "))";
+            const std::string keys = target.keyType ? dynHolds(map + "->kt", map + "->keys", map + "->len", *target.keyType) : "true";
+            const std::string values = target.elementType ? dynHolds(map + "->vt", map + "->values", map + "->len", *target.elementType) : "true";
+            if (keys.empty() || values.empty()) return "";
+            return "(ds_dyn_is_kind(" + v + ", DS_K_MAP) && " + keys + " && " + values + ")";
+        }
         case SemanticTypeKind::Function: return "ds_dyn_is_kind(" + v + ", DS_K_FN)";
         case SemanticTypeKind::Nil: return "((" + v + ") == NULL)";
         case SemanticTypeKind::Obj: return "((" + v + ") != NULL)";

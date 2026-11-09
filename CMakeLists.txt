@@ -86,8 +86,9 @@ if(MSVC)
 else()
     target_compile_options(dessa PRIVATE -Wall -Wextra)
     if(WIN32)
-        # Self-contained dessa.exe (no MinGW DLLs needed at runtime)
-        target_link_options(dessa PRIVATE -static)
+        # Self-contained dessa.exe (no MinGW DLLs needed at runtime). 8 MB of
+        # stack, as on Linux and macOS: the parser's limits are sized for that
+        target_link_options(dessa PRIVATE -static -Wl,--stack,8388608)
     elseif(NOT APPLE)
         # Prebuilt Linux binaries must not need a newer libstdc++ than the user's
         target_link_options(dessa PRIVATE -static-libstdc++ -static-libgcc)

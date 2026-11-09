@@ -4,6 +4,51 @@
  * functions (sqrt, floor, ...) are in the runtime. */
 #include "dessa_rt.h"
 #include <ctype.h>
+#include <math.h>
+
+ds_dbl dsx_math_asin(ds_dbl x) {
+    if (x < -1 || x > 1) ds_fail("asin of a number outside -1 to 1");
+    return asin(x);
+}
+
+ds_dbl dsx_math_acos(ds_dbl x) {
+    if (x < -1 || x > 1) ds_fail("acos of a number outside -1 to 1");
+    return acos(x);
+}
+
+ds_dbl dsx_math_atan(ds_dbl x) {
+    return atan(x);
+}
+
+ds_dbl dsx_math_sinh(ds_dbl x) {
+    return sinh(x);
+}
+
+ds_dbl dsx_math_cosh(ds_dbl x) {
+    return cosh(x);
+}
+
+ds_dbl dsx_math_tanh(ds_dbl x) {
+    return tanh(x);
+}
+
+ds_dbl dsx_math_log2(ds_dbl x) {
+    if (x <= 0) ds_fail("log2 of a number <= 0");
+    return log2(x);
+}
+
+ds_dbl dsx_math_hypot(ds_dbl a, ds_dbl b) { return hypot(a, b); }
+
+ds_int dsx_math_trunc(ds_dbl x) {
+    return x < 0 ? -ds_math_floor(-x) : ds_math_floor(x);
+}
+
+/* Exact, unlike / which goes through a Dbl: past 2^53 that loses digits */
+ds_int dsx_math_idiv(ds_int a, ds_int b) {
+    if (b == 0) ds_fail("Division by zero");
+    if (a == INT64_MIN && b == -1) ds_fail("Integer overflow");
+    return a / b;
+}
 
 #define BASE 1000000000u
 
@@ -182,6 +227,39 @@ static big multiply_small(const big* a, uint32_t m) {
     return r;
 }
 
+/* Is divisor * d <= rem? */
+static bool digit_fits(const big* divisor, const big* rem, uint32_t d) {
+    big product = multiply_small(divisor, d);
+    int c = compare_magnitude(&product, rem);
+    big_free(&product);
+    return c <= 0;
+}
+
+/* Narrows where a quotient digit can be, from the leading limbs, so finding it
+ * takes a few tries instead of thirty. Checked: if the estimate were ever off,
+ * the search just covers the whole range. */
+static void digit_bounds(const big* divisor, const big* rem, uint32_t* low, uint32_t* high) {
+    if (rem->len < divisor->len || divisor->len == 0) {
+        *high = 0;
+        return;
+    }
+    double top = 0, bottom = 0;
+    const int64_t topCount = rem->len < 3 ? rem->len : 3, bottomCount = divisor->len < 3 ? divisor->len : 3;
+    for (int64_t k = 1; k <= topCount; ++k) top = top * 1e9 + rem->limbs[rem->len - k];
+    for (int64_t k = 1; k <= bottomCount; ++k) bottom = bottom * 1e9 + divisor->limbs[divisor->len - k];
+    int64_t shift = (rem->len - topCount) - (divisor->len - bottomCount);
+    double guess = top / bottom;
+    for (; shift > 0; --shift) guess *= 1e9;
+    for (; shift < 0; ++shift) guess /= 1e9;
+    if (guess >= (double)BASE) return;
+    const uint32_t d = (uint32_t)guess;
+    const uint32_t lower = d > 2 ? d - 2 : 0, upper = d + 2 < BASE - 1 ? d + 2 : BASE - 1;
+    if (!digit_fits(divisor, rem, lower)) return;
+    if (upper < BASE - 1 && digit_fits(divisor, rem, upper + 1)) return;
+    *low = lower;
+    *high = upper;
+}
+
 /* Whole-number division rounding toward zero: quotient and remainder */
 static void big_divide(const big* a, const big* b, big* quotient, big* remainder) {
     if (b->len == 0) ds_fail("Division by zero");
@@ -197,6 +275,7 @@ static void big_divide(const big* a, const big* b, big* quotient, big* remainder
         big_trim(&rem);
         /* largest digit d with divisor * d <= rem */
         uint32_t low = 0, high = BASE - 1;
+        digit_bounds(&divisor, &rem, &low, &high);
         while (low < high) {
             uint32_t mid = low + (high - low + 1) / 2;
             big product = multiply_small(&divisor, mid);

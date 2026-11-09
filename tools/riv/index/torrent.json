@@ -22,6 +22,13 @@
       "manifest": "name = torrent\nversion = 1.2.0\nentry = torrent.dm\ndescription = Share folders with the BitTorrent protocol (trackers, local network, web seeds)\n\n[dependencies]\n",
       "files": 5,
       "bytes": 56315
+    },
+    "1.2.1": {
+      "infohash": "28447d855639010f795299677e24367a08d933f8",
+      "torrent": "ZDg6YW5ub3VuY2U0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2UxMzphbm5vdW5jZS1saXN0bGw0Mjp1ZHA6Ly90cmFja2VyLm9wZW50cmFja3Iub3JnOjEzMzcvYW5ub3VuY2VlbDMzOnVkcDovL29wZW4uc3RlYWx0aC5zaTo4MC9hbm5vdW5jZWVsNDE6dWRwOi8vdHJhY2tlci50b3JyZW50LmV1Lm9yZzo0NTEvYW5ub3VuY2VlbDM3OnVkcDovL2V4b2R1cy5kZXN5bmMuY29tOjY5NjkvYW5ub3VuY2VlZTEwOmNyZWF0ZWQgYnkxMTpyaXYgKERlc3NhKTQ6aW5mb2Q1OmZpbGVzbGQ2Omxlbmd0aGkxMDEzZTQ6cGF0aGw5OlJFQURNRS5tZGVlZDY6bGVuZ3RoaTE0NGU0OnBhdGhsNzpyaXYucGtnZWVkNjpsZW5ndGhpNTE0MjdlNDpwYXRobDExOnRvcnJlbnQuY3BwZWVkNjpsZW5ndGhpMjk2MGU0OnBhdGhsMTA6dG9ycmVudC5kbWVlZDY6bGVuZ3RoaTEzMDZlNDpwYXRobDExOnRvcnJlbnQuaHBwZWVkNjpsZW5ndGhpNDc4ZTQ6cGF0aGwxNDp0b3JyZW50Lm5hdGl2ZWVlZTQ6bmFtZTc6dG9ycmVudDEyOnBpZWNlIGxlbmd0aGkxNjM4NGU2OnBpZWNlczgwOgMwof23ZZTTyIMVxSedO44pSbMNtg6QLnXdumUAC7IMx11VtrWQxYu2/2RZvbdmfQxeDC3CSBZEH/HPdT1BjvzoWHHup4+shIZDhfMNezwvZTg6dXJsLWxpc3RsNzg6aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2QtdXN0aW5kd2F5bmUvRGVzc2EvbWFpbi90b29scy9yaXYvcGFja2FnZXMvZWU=",
+      "manifest": "name = torrent\nversion = 1.2.1\nentry = torrent.dm\ndescription = Share folders with the BitTorrent protocol (trackers, local network, web seeds)\n\n[dependencies]\n",
+      "files": 6,
+      "bytes": 57328
     }
   }
 }

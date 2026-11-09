@@ -1,0 +1,71 @@
+// `is` on a collection looks at what it holds, so what it says can be relied on:
+// narrowing to the wrong kind of list would read memory as the wrong thing.
+class Cat { var[Str] name = "cat"; }
+class Dog { var[Str] name = "dog"; }
+enum Color { RED }
+enum Size { BIG }
+
+func[Str] kinds(v[Obj]) {
+    var[Str<>] out = <>;
+    if (v is Int<>) out.push("Int<>");
+    if (v is Dbl<>) out.push("Dbl<>");
+    if (v is Str<>) out.push("Str<>");
+    if (v is Bul<>) out.push("Bul<>");
+    if (v is Chr<>) out.push("Chr<>");
+    if (v is Cat<>) out.push("Cat<>");
+    if (v is Dog<>) out.push("Dog<>");
+    if (v is Int<><>) out.push("Int<><>");
+    if (v is Str<><>) out.push("Str<><>");
+    if (v is Int{}) out.push("Int{}");
+    if (v is Str{}) out.push("Str{}");
+    if (v is Color<>) out.push("Color<>");
+    if (v is Size<>) out.push("Size<>");
+    if (v is Map[Str, Int]) out.push("Map[Str, Int]");
+    if (v is Map[Str, Str]) out.push("Map[Str, Str]");
+    if (v is Map[Int, Int]) out.push("Map[Int, Int]");
+    if (v is Map[Str, Cat]) out.push("Map[Str, Cat]");
+    if (v is Map[Str, Dog]) out.push("Map[Str, Dog]");
+    return out.join(" ");
+}
+
+print(1, kinds(<1, 2>));
+print(2, kinds(<1.5>));
+print(3, kinds(<"a">));
+print(4, kinds(<true>));
+print(5, kinds(<'x'>));
+print(6, kinds(<new Cat()>));
+print(7, kinds(<new Dog()>));
+print(9, kinds(<<1>, <2>>));
+print(10, kinds(<<"a">>));
+var[Int{}] numbers = {1, 2};
+var[Str{}] texts = {"a"};
+print(11, kinds(numbers));
+print(12, kinds(texts));
+print(13, kinds(<Color.RED>));
+print(14, kinds(<Size.BIG>));
+print(15, kinds({"a": 1}));
+print(16, kinds({"a": "b"}));
+print(17, kinds({1: 1}));
+print(18, kinds({"a": new Cat()}));
+print(19, kinds({"a": new Dog()}));
+print(20, kinds(1));
+print(21, kinds("a"));
+print(22, kinds(new Cat()));
+
+// Narrowed lists are safe to read
+func[Str] total(v[Obj]) {
+    if (v is Int<>) {
+        var[Int] sum = 0;
+        for (var[Int] n in v) sum += n;
+        return Str(sum);
+    }
+    if (v is Str<>) return v.join("+");
+    if (v is Dbl<>) return Str(v.length());
+    if (v is Cat<>) return v<0>.name;
+    return "other";
+}
+print(total(<1, 2>), total(<"a", "b">), total(<1.5>), total(<new Cat()>), total(<new Dog()>), total(<<1>>));
+
+var[Int<>] empty = <>;
+var[Str<>] emptyText = <>;
+print(total(empty), total(emptyText));

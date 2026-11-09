@@ -1,0 +1,72 @@
+--- Decimal
+0.3 0.30000000000000004
+59.97 1.25 0.33333 0.66667
+2.68 -1 3 1.01
+1500 0.0015 0.1 -12.34 0.5 5
+121932631246761163237311385323731138532.360920590112635269
+0.1428571428571428571428571429 3.1428571428571428571428571429
+true true true 1267650600228229401496703205376
+1.5 -1.5 true 9.9 9 0.5
+'abc' is not a number | Division by zero | '1.2.3' is not a number
+--- Fraction
+1/2 1/2 1/2 -1/2 2
+4 4/5 -3 1/2 3/4 -1/3
+1/2 1/4 -1/4 8/27 9/4
+13717421/109739369
+0.3333333333 0.25 true true
+A fraction can't have 0 below the line | Division by zero
+--- Complex
+-5+10i 2+2i 1-2i 5
+0.44+0.08i -1+0i 0+2i true
+--- NDArray
+<1, 2, 3> <2, 3, 4> <1, 4, 9> <0, 0, 0> <0.5, 1, 1.5> <1, 4, 9> <-1, -2, -3> <3> 1 3
+<<0, 1, 2>, <3, 4, 5>> <2, 3> 5 <<0, 3>, <1, 4>, <2, 5>> <0, 1, 2, 3, 4, 5>
+15 <3, 5, 7> <3, 12> 2.5 <1.5, 2.5, 3.5> <1, 4>
+0 5 <0, 1, 2> <2, 5> 0 5 <0, 4, 10>
+1.118033988749895 1.25 2.5
+<<0, 20, 60>, <30, 80, 150>> <<100, 101, 102>, <203, 204, 205>> <<1, 2, 3>, <2, 4, 6>>
+<<0, 0>, <0, 0>> <1, 1> <<7, 7>> <<1, 0>, <0, 1>> <0, 0.25, 0.5, 0.75, 1> <0, 0.25, 0.5, 0.75> <5, 3, 1>
+<<0, 0, 0>, <1, 1, 1>> <3, 4, 5> <3> 3
+<1, 4, 9> <2, 3> <1.5, 2.3> <0, 0.5, 1>
+<1, 3, 6> <1, 1, 2, 3> <1, 2, 3> <3, 4, 5> <2, 5>
+<<5, 5>, <5, 10>> 14 14 5 <<0.6, -0.2>, <-0.2, 0.4>> <<1, 0>, <0, 1>> <0.8, 1.4>
+-1 0 24
+<<0, 1, 2>, <3, 4, 5>, <0, 1, 2>, <3, 4, 5>> <<0, 1, 2, 0, 1, 2>, <3, 4, 5, 3, 4, 5>> <1, 2, 3, 1, 2, 3>
+<2, 3, 4> 23 <3, 4> <<6, 22, 38>, <54, 70, 86>> <4, 3, 2> 23
+99 0 99 true false
+Index 5 is out of range for size 2 | 1 indexes for an array of 2 dimensions | 6 elements don't fit the shape <4, 4>
+The shapes <2, 3> and <2> don't match | solve: the array is singular (it has no inverse) | det: this needs a square array, not <2, 3> | axis 5 doesn't exist in an array of 2 dimensions
+--- stats
+5 4.5 4 2 4 7
+4 7.6 2.5 <4, 2, 2>
+1 -1 0.25
+1 3 mean of an empty list
+--- primes
+<2, 3, 5, 7, 11, 13, 17, 19, 23, 29> true false false true
+false 101 <2, 2, 2, 3, 3, 5> <97> <1000000007>
+false false <71, 839, 1471, 6857>
+--- words
+zero seven seventy-eight thousand fifty-six minus three one million nine quintillion two hundred twenty-three quadrillion three hundred seventy-two trillion thirty-six billion eight hundred fifty-four million seven hundred seventy-five thousand eight hundred seven
+one sextillion | one vigintillion | one unvigintillion | ten duotrigintillion
+one centillion | one trigintillion | one tresvigintillion | one sesvigintillion | one novemvigintillion
+33844 2005 -21
+123456789012345678901234567890123456789
+1000000000000000 304 words: 'banana' is not a number word words: there's no number in the text
+--- roman, digits, radix, columns
+MCMXCIV MMMCMXCIX 1994 roman: 4000 can't be written in Roman numerals (1 to 3999) roman: 'IIII' is not a valid Roman numeral
+<1, 2, 3, 4> 10 2 <1, 4> 5678 4321 21 true
+234 30
+ff 11111111 -73 255 -255 100000000000000000000000000000000
+340282366920938463463374607431768211456 radix: 'g' isn't a digit in base 16 radix: base 99 isn't from 2 to 36
+A AB XFD 27 16384
+--- units, numformat
+212 100 273.15 1000 1.609344 1024
+1 453.59237 units: can't convert km (a length) to kg units: unknown unit 'x' or 'y'
+1,234,567 1,234,567.5 -1,234 123 1 000 000 000 000
+1st 2nd 3rd 4th 11th 12th 13th 21st 112th
+12.5% 100% 1.5M 999 -2.5K 1.5 MB 1 MiB 10 B
+--- version 1
+MMXXVI 42 seventy-eight thousand fifty-six 33844 AB 16384
+10 2 <1, 4, 9, 16> 5678 4321 -1 2
+4 4/5 -3 1/2 212 100
+1000000000000000

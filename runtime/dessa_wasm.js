@@ -182,6 +182,50 @@
                 if (request.status >= 400 || request.status === 0) throw new Error(`Could not download ${url} (HTTP ${request.status})`);
                 return request.responseText;
             },
+            nowMs: () => Date.now(),
+            nextFrame: (f) => { need("nextFrame()"); return window.requestAnimationFrame(() => f()); },
+            clearFrame: (id) => { if (browser) window.cancelAnimationFrame(id); },
+            copyText: (t) => {
+                need("copyText()");
+                if (navigator.clipboard) navigator.clipboard.writeText(t).catch(() => {});
+            },
+            downloadText: (name, content, type) => {
+                need("downloadText()");
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(new Blob([content], { type }));
+                link.download = name;
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+            },
+            _on: (target, type, f, once) => {
+                need("on()");
+                target.addEventListener(type, f, { once });
+                return { remove: () => target.removeEventListener(type, f) };
+            },
+            _onWindow: (type, f) => {
+                need("onWindow()");
+                window.addEventListener(type, f);
+                return { remove: () => window.removeEventListener(type, f) };
+            },
+            _pushState: (url) => { need("pushState"); window.history.pushState(null, "", url); },
+            // Doesn't stop the page while it waits; `done` gets a FetchResult
+            _fetch: (method, url, body, contentType, done) => {
+                need("fetchAsync()");
+                const options = { method };
+                if (method !== "GET" && method !== "HEAD") {
+                    options.body = body;
+                    if (contentType) options.headers = { "Content-Type": contentType };
+                }
+                fetch(url, options).then(async (r) => done({ ok: r.ok, status: r.status, text: await r.text(), error: "" }))
+                    .catch((e) => done({ ok: false, status: 0, text: "", error: String(e && e.message ? e.message : e) }));
+            },
+            _readFile: (input, done) => {
+                need("readChosenFile()");
+                const file = input.files && input.files[0];
+                if (!file) return done({ name: "", size: 0, text: "", error: "no file was chosen" });
+                file.text().then((text) => done({ name: file.name, size: file.size, text, error: "" }))
+                    .catch((e) => done({ name: file.name, size: file.size, text: "", error: String(e && e.message ? e.message : e) }));
+            },
             // $("request") (request.c): one HTTP request, waited for. The answer's three parts
             // (status, headers, body) are read with _httpPart
             _http: (method, url, headers, body, timeout) => {
@@ -255,7 +299,7 @@
             try {
                 instance.exports.dsw_invoke(f, kind, kind === 1 ? keep(event) : 0, arg);
             } catch (e) {
-                if (!(e instanceof Exit)) console.error(e);
+                if (!(e instanceof Exit) && !reportStackOverflow(e, instance)) console.error(e);
             }
         };
         const take = () => {
@@ -339,11 +383,29 @@
                     }
                 } catch (x) {
                     if (x instanceof Exit) return x.code;
+                    if (reportStackOverflow(x, instance)) return 1;
                     throw x;
                 }
                 return 0;
             },
         };
+    }
+
+    // Calls nested too deeply: the engine stops the program with an error of
+    // its own (its call stack is full), or a memory error (WebAssembly's stack
+    // is at the start of memory, so running off it hits the end of memory; the
+    // runtime checks every other access). Says so like a native program does.
+    function reportStackOverflow(error, instance) {
+        const text = String(error && error.message);
+        const engine = /call stack|recursion/i.test(text);
+        if (!engine && !(error instanceof WebAssembly.RuntimeError && /out of bounds/i.test(text))) return false;
+        try {
+            instance.exports.dsw_stack_overflow();
+        } catch (e) {
+            // No room left even for that
+            console.error("Error: stack overflow: too many calls inside each other (a function that never stops calling itself?)");
+        }
+        return true;
     }
 
     function start(bytes, options) {
@@ -408,7 +470,12 @@
                 imports.wasi_snapshot_preview1 = typeof wasi.getImportObject === "function" ? wasi.getImportObject().wasi_snapshot_preview1 : wasi.wasiImport;
                 const instance = new WebAssembly.Instance(module, imports);
                 env.attach(instance);
-                return wasi.start(instance);
+                try {
+                    return wasi.start(instance);
+                } catch (e) {
+                    if (reportStackOverflow(e, instance)) return 1;
+                    throw e;
+                }
             }
             process.emitWarning = warn;
             const out = { 1: [], 2: [] };

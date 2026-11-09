@@ -1,0 +1,12 @@
+# Proposes updates. GitHub Actions are pinned to exact commits, and Dependabot
+# keeps those pins moving with their releases.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: bun
+    directory: /website
+    schedule:
+      interval: weekly

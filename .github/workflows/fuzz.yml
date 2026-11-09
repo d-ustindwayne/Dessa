@@ -1,0 +1,29 @@
+# A longer run of tests/fuzz.py than each push can spare.
+name: Fuzz
+
+on:
+  schedule:
+    - cron: "41 4 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build dessa
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target dessa -j 4
+      - run: python3 tests/fuzz.py --seconds 1800 --seed ${{ github.run_number }}
+      - name: Keep what it found
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: fuzz-failures
+          path: tests/fuzz-failures/
+          if-no-files-found: ignore

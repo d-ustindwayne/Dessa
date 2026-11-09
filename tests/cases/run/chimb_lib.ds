@@ -1,6 +1,6 @@
 // exit: 1
 // The chimb package: passing and failing tests, done() exits with 1 when one failed
-$("chimb") { test, expect, expectTrue, expectThrows, expectNear, done }
+$("chimb") { test, expect, expectTrue, expectThrows, expectNear, done, group, beforeEach, afterEach }
 
 test("adds", () := { expect(2 + 3).toBe(5); });
 test("lists and text", () := {
@@ -10,4 +10,20 @@ test("lists and text", () := {
 test("near", () := { expectNear(0.1 + 0.2, 0.3); });
 test("throws", () := { expectTrue(expectThrows(() := { var[Int<>] e = <>; print(e<1>); }).includes("out of range")); });
 test("fails", () := { expect("x").toBe("y"); });
+
+// Groups, and what runs around each test
+var[Str<>] order = <>;
+group("outer", () := {
+    beforeEach(() := { order.push("before"); });
+    afterEach(() := { order.push("after"); });
+    test("first", () := { order.push("test"); });
+    group("inner", () := {
+        beforeEach(() := { order.push("inner before"); });
+        test("second", () := { order.push("test 2"); });
+        test("fails, and afterEach still runs", () := { expect(1).toBe(2); });
+    });
+    test("third", () := { order.push("test 3"); });
+});
+test("outside", () := { order.push("alone"); });
+print(order);
 done();

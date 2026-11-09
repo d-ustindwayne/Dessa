@@ -1,0 +1,70 @@
+// Exact numbers, paths, defaults, merging, lines and schemas in $("json").
+$("json");
+$("math") { Big }
+
+func[Str] fails(action[Func[Emp]]) {
+    try {
+        action();
+    } catch (e[JsonError]) {
+        return e.message;
+    }
+    return "no error";
+}
+
+// Numbers keep all their digits
+var[Json] data = parseJson("{\"id\": 9007199254740993, \"big\": 123456789012345678901234567890, \"neg\": -12, \"pi\": 3.14, \"e\": 1e3, \"z\": 0}");
+print(data.get("id").asInt(), data.get("big").asBig(), data.get("big").asBig() + 1, data.get("neg").asInt(), data.get("pi").asDbl(), data.get("e").asInt());
+print(data);
+print(parseJson(data.toStr()) == data, stringify(parseJson("[1.50, 1E2, -0, 0.0]")));
+print(fails(() := { data.get("big").asInt(); }), "|", fails(() := { data.get("pi").asBig(); }));
+print(jsonInt(9007199254740993), jsonBig(new Big(2).pow(70)), toJson(<9007199254740993>), toJson(new Big(2).pow(70)), jsonNum(1.5));
+print(parseJson("1e999999").toStr(), parseJson("123456789012345678901234567890e5").toStr());
+
+// Only numbers as JSON writes them
+for (var[Str] bad in <"01", "1.", ".5", "+1", "-", "1e", "1e+", "1.2.3", "--1", "0x10", "1-2", "NaN", "Infinity">) {
+    print(bad, fails(() := { parseJson(bad); }).substr(0, 24));
+}
+print(fails(() := { jsonNum(1.0 / 0.0).toStr(); }));
+
+// Paths and defaults
+var[Json] doc = parseJson("{\"user\": {\"name\": \"Ann\", \"tags\": [\"a\", \"b\"], \"age\": 31}}");
+print(doc.path("user.name").asStr(), doc.path("user.tags.1").asStr(), doc.path("user.nope.x").isNull(), doc.path("user.tags.9").isNull(), doc.path("user.tags.-1").isNull(), doc.path("user.name.x").isNull());
+print(doc.get("user").strOr("name", "?"), doc.get("user").strOr("nick", "?"), doc.get("user").intOr("age", 0), doc.get("user").intOr("x", 7), doc.get("user").dblOr("x", 1.5), doc.get("user").bulOr("x", true));
+print(fails(() := { doc.get("user").intOr("name", 0); }));
+
+// Comparing, copying, merging
+print(parseJson("{\"a\":1,\"b\":[1,{\"c\":null}]}") == parseJson("{\"b\":[1,{\"c\":null}],\"a\":1.0}"), parseJson("[1,2]") == parseJson("[2,1]"), parseJson("1") == parseJson("\"1\""));
+var[Json] base = parseJson("{\"a\":1,\"o\":{\"x\":1,\"y\":2},\"l\":[1]}");
+var[Json] other = parseJson("{\"b\":2,\"o\":{\"y\":9,\"z\":3},\"l\":[2]}");
+print(base.merge(other));
+var[Json] copied = base.copy();
+copied.get("o").set("x", jsonInt(100));
+print(base.path("o.x"), copied.path("o.x"));
+other.get("l").push(jsonInt(5));
+print(base.get("l"));
+
+// One value per line
+var[Json<>] lines = parseJsonLines("{\"a\":1}\n\n[2]\r\n3\n");
+print(lines.length(), toJsonLines(lines).replaceAll("\n", "|"));
+print(fails(() := { parseJsonLines("1\n2\n{oops\n"); }).substr(0, 7));
+
+// Schemas
+var[JsonSchema] user = new JsonSchema("""{
+    "type": "object",
+    "required": ["name", "age"],
+    "additionalProperties": false,
+    "properties": {
+        "name": {"type": "string", "minLength": 2, "maxLength": 5},
+        "age": {"type": "integer", "minimum": 0, "maximum": 150},
+        "role": {"enum": ["admin", "user"]},
+        "tags": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 2},
+        "home": {"type": ["object", "null"], "required": ["city"]}
+    }
+}""");
+print(user.check(parseJson("{\"name\":\"Ann\",\"age\":31,\"role\":\"user\",\"tags\":[\"a\"],\"home\":null}")), user.isValid(parseJson("{\"name\":\"Ann\",\"age\":31.0}")));
+for (var[Str] bad in <"5", "{}", "{\"name\":\"A\",\"age\":-1}", "{\"name\":\"Annabel\",\"age\":200}", "{\"name\":\"Ann\",\"age\":1.5}", "{\"name\":\"Ann\",\"age\":1,\"x\":1}",
+                      "{\"name\":\"Ann\",\"age\":1,\"role\":\"cat\"}", "{\"name\":\"Ann\",\"age\":1,\"tags\":[]}", "{\"name\":\"Ann\",\"age\":1,\"tags\":[\"a\",1,\"c\"]}", "{\"name\":\"Ann\",\"age\":1,\"home\":{}}">) {
+    print(user.check(parseJson(bad)));
+}
+print(fails(() := { user.require(parseJson("{}")); }));
+print(fails(() := { new JsonSchema("[]"); }));

@@ -70,9 +70,9 @@ know:
   on the unsaved text with a placeholder at the cursor and report what is in
   scope there.
 
-### The three generators
+### The generators
 
-Both must give the same output for the same program. The differences are
+The C and C++ generators must give the same output for the same program. The differences are
 in how values are represented:
 
 | | C, also WebAssembly (`runtime/dessa_rt.c/.h`) | C++ (`runtime/dessa_runtime.hpp`) |
@@ -135,7 +135,7 @@ running `fetch` in Node).
 
 `toolchain.cpp` decides which compiler to use (`DESSA_CC`, else a MinGW clang
 when there is one, else gcc; `DESSA_CXX` or g++ for C++), compiles, and keeps
-the results in the temporary folder (`%TEMP%\dessa` or `/tmp/dessa`), keyed by
+the results in the temporary folder (`%TEMP%\dessa` or `~/.cache/dessa`), keyed by
 a hash of the generated code and of the runtime:
 
 - the C runtime object and the precompiled C++ runtime header,
@@ -203,7 +203,7 @@ is in `selfhost/PLAN.md`.
 | Change | Where |
 |---|---|
 | A new builtin method (`"x".something()`) | `Analyser::builtinMethod` in `analyser_expr.cpp`, then each runtime and generator, then the editor's `METHODS` list in `extension.js` |
-| A new statement or expression | `ast.hpp`, `parser.cpp`, the analyser, all three generators, the selfhost lexer if there is a new token |
+| A new statement or expression | `ast.hpp`, `parser.cpp`, the analyser, the generators, the selfhost lexer if there is a new token |
 | A new core library function | `include/<lib>/` (Dessa, or a native part in C++ and C), `builtins.cpp` for a native part |
 | A new error message | the analyser; add a case to `tests/cases/errors/` |
 | A runtime behaviour | all three runtimes; a test in `tests/cases/run/` checks they agree |

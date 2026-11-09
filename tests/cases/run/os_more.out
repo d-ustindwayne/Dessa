@@ -1,0 +1,9 @@
+<"a.txt", "c.txt"> hello 5 true
+<"a.txt", "c.txt"> other
+copy failed
+move failed
+size failed
+set
+a/b/c.txt a/b b 
+a.txt a.txt y.txt logs/2026  /
+.gz   

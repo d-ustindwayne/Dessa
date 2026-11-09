@@ -1,0 +1,42 @@
+9007199254740993 123456789012345678901234567890 123456789012345678901234567891 -12 3.14 1000
+{"id":9007199254740993,"big":123456789012345678901234567890,"neg":-12,"pi":3.14,"e":1e3,"z":0}
+true [1.50,1E2,-0,0.0]
+123456789012345678901234567890 is too big for an Int (use asBig) | 3.14 is not a whole number
+9007199254740993 1180591620717411303424 [9007199254740993] 1180591620717411303424 1.5
+1e999999 123456789012345678901234567890e5
+01 '01' is not a valid numb
+1. '1.' is not a valid numb
+.5 unexpected character '.'
++1 unexpected character '+'
+- '-' is not a valid numbe
+1e '1e' is not a valid numb
+1e+ '1e+' is not a valid num
+1.2.3 '1.2.3' is not a valid n
+--1 '--1' is not a valid num
+0x10 unexpected text after th
+1-2 '1-2' is not a valid num
+NaN unexpected character 'N'
+Infinity unexpected character 'I'
+JSON can't hold the number inf
+Ann b true true true true
+Ann ? 31 7 1.5 true
+expected a number, found string
+true false false
+{"a":1,"o":{"x":1,"y":9,"z":3},"l":[2],"b":2}
+1 100
+[2]
+3 {"a":1}|[2]|3|
+line 3:
+<> true
+<"the value: expected object, found number">
+<"name: missing", "age: missing">
+<"name: shorter than 2 characters", "age: -1 is below the minimum 0">
+<"name: longer than 5 characters", "age: 200 is above the maximum 150">
+<"age: expected integer, found number">
+<"x: not allowed here">
+<"role: \"cat\" is not one of [\"admin\",\"user\"]">
+<"tags: fewer than 1 items">
+<"tags: more than 2 items", "tags.1: expected string, found number">
+<"home.city: missing">
+name: missing; age: missing
+expected a schema object, found array
