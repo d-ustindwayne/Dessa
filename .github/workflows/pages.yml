@@ -48,7 +48,7 @@ jobs:
           emcmake cmake -S . -B build-playground -DCMAKE_BUILD_TYPE=Release
           cmake --build build-playground -j 4
       # The runtime and libraries compiled for the playground (SQLite takes minutes)
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: website/public/playground/objects
           key: playground-objects-${{ hashFiles('runtime/dessa_rt.*', 'runtime/dessa_web.*', 'include/**/*.c', 'tools/riv/packages/**/*.c', 'tools/riv/packages/**/*.h', 'tools/riv/packages/**/*.native', 'website/bun.lock') }}
