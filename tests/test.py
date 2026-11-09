@@ -383,6 +383,9 @@ def limits_test():
         ("blocks", "{\n" * 150 + "}\n" * 150),
         ("templates", "print(" + '$"{' * 50 + "1" + '}"' * 50 + ");\n"),
         ("generic calls", "func[T] id:T(x[T]) { return x; }\nvar[Int] y = " + "id(" * 100 + "1" + ")" * 100 + ";\n"),
+        # Found by tests/fuzz.py: the receiver of a generic method was analysed again at every link
+        ("generic method calls", "class A { func[A] to:T() { return this; } }\nvar[A] a = new A();\na" + ".to:Int()" * 100 + ";\n"),
+        ("inferred generic method calls", "class A { func[A] put:T(x[T]) { return this; } }\nvar[A] a = new A();\na" + ".put(1)" * 100 + ";\n"),
         ("list types", "var[Int" + "<>" * 30 + "] x = <>;\n"),
     ]
     deep = [

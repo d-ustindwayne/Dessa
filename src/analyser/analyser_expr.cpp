@@ -48,6 +48,15 @@ std::string calleeName(const Expr* callee) {
 
 SemanticType Analyser::analyseExpression(const Expr* expression, bool allowTypeName) {
     if (!expression) return SemanticType::unknown();
+    if (!lookedAtReceivers.empty()) {
+        if (auto seen = lookedAtReceivers.find(expression); seen != lookedAtReceivers.end()) {
+            SemanticType type = std::move(seen->second.type);
+            diagnostics.insert(diagnostics.end(), seen->second.diagnostics.begin(), seen->second.diagnostics.end());
+            lookedAtReceivers.erase(seen);
+            exprTypes[expression] = type;
+            return type;
+        }
+    }
     // already rewritten into a method call (an earlier pass over the same code)
     SemanticType type = expression->lowered ? analyseExpression(expression->lowered.get(), allowTypeName)
                                             : analyseExpressionInner(expression, allowTypeName);
@@ -1824,12 +1833,20 @@ SemanticType Analyser::analyseCall(const CallExpr* expression) {
         // the filled-in method (all$1), for the code generators too. This looks
         // at the receiver, and analyseExpression(callee) below does again, so
         // only when it can matter: doing it on every call doubles the work at
-        // each link of a.b().c().d()...
+        // each link of a.b().c().d()... A receiver that isn't a plain name is
+        // kept (lookedAtReceivers) for that second look, or the same doubling
+        // happens along a.to:A().to:B()...
+        const Expr* looked = member->object.get();
         if (member->name.type == TokenType::IDENTIFIER && member->name.lexeme.find('$') == std::string::npos &&
             (!member->typeArgs.empty() || genericMethodNames.count(member->name.lexeme))) {
             const size_t diagnosticCount = diagnostics.size();
-            const SemanticType objectType = withoutNil(analyseExpression(member->object.get()));
+            const SemanticType receiverType = analyseExpression(looked);
+            if (looked->kind != ExprKind::Identifier) {
+                lookedAtReceivers[looked] = {receiverType, std::vector<Diagnostic>(diagnostics.begin() + static_cast<std::ptrdiff_t>(diagnosticCount),
+                                                                                       diagnostics.end())};
+            }
             diagnostics.resize(diagnosticCount);
+            const SemanticType objectType = withoutNil(receiverType);
             int templateId = -1;
             for (const ClassInfo* k = objectType.isClass() ? findClass(objectType) : nullptr; k && templateId < 0;
                  k = k->parent ? findClass(*k->parent) : nullptr) {
@@ -1843,6 +1860,7 @@ SemanticType Analyser::analyseCall(const CallExpr* expression) {
                 else types = inferTypeArgs(t, decl->params, expression->args, &decl->returnType, expression, member->name.lexeme);
                 const Symbol* instance = types ? instantiateMethod(templateId, *types, member->line, member->column) : nullptr;
                 if (!instance) {
+                    lookedAtReceivers.erase(looked);
                     for (const auto& a : expression->args) analyseExpression(a.value.get());
                     return SemanticType::unknown();
                 }
@@ -1852,6 +1870,7 @@ SemanticType Analyser::analyseCall(const CallExpr* expression) {
             }
         }
         SemanticType memberType = analyseExpression(callee);
+        lookedAtReceivers.erase(looked);   // when analyseMember didn't get to it (m.f with $("x" as m))
         const Symbol* symbol = memberOf(callee);
         if (!symbol) {
             if (dynamicMembers.count(callee)) {

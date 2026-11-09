@@ -258,6 +258,11 @@ private:
     // is analysed to infer and again to check, which for id(id(id(...))) would
     // double the work at each level
     std::unordered_map<const Expr*, SemanticType> inferredArgs;
+    // The receiver of a generic method call (a.b().to:User()), looked at to
+    // find the method: its type and what it said, given back when the call is
+    // analysed for real, so a.to:A().to:B()... isn't redone at every link
+    struct LookedAt { SemanticType type; std::vector<Diagnostic> diagnostics; };
+    std::unordered_map<const Expr*, LookedAt> lookedAtReceivers;
     std::unordered_map<std::string, SemanticType> classInstanceByKey;   // "template|types" -> Box$1
     std::unordered_map<std::string, std::pair<int, std::vector<SemanticType>>> classInstances;   // Box$1's key -> template, types
     std::unordered_map<std::string, Symbol> functionInstances;         // "template|types" -> first$1

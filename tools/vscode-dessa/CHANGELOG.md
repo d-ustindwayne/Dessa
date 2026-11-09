@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1
+
+- No changes to the extension (Dessa 0.7.1: `dessa check` no longer slows down on long chains of generic method calls, found by the CI fuzzer)
+
 ## 0.7.0
 
 - `.xds`, `.xdz` and `.xdx` files: highlighting for `comp` and `@(...)` markup
