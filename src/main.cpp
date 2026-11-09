@@ -7,7 +7,7 @@
 //   dessa symbols <file.ds>                 JSON symbol table for editors
 //   dessa complete|hover <file.ds> --at L:C completion / hover info for editors
 //   dessa tokens  <file.ds>                 debug: token stream
-//   dessa ast     <file.ds>                 debug: top-level statements
+//   dessa ast     <file.ds>                 debug: the parser's whole tree
 #include <algorithm>
 #include <cstdlib>
 #include <ctime>
@@ -32,6 +32,8 @@
 #include "lexer.hpp"
 #include "loader.hpp"
 #include "parser.hpp"
+#include "ast_dump.hpp"
+#include "source_text.hpp"
 #include "toolchain.hpp"
 #include "verify.hpp"
 
@@ -40,7 +42,7 @@ namespace fs = std::filesystem;
 
 namespace {
 
-constexpr const char* kVersion = "0.7.1";
+constexpr const char* kVersion = "0.7.5";
 const char* g_argv0 = nullptr; // to find runtime/ and include/ next to the compiler
 
 void printUsage() {
@@ -64,7 +66,7 @@ void printUsage() {
         "  dessa context [library]                      what a coding agent needs to know, for this version (--init: AGENTS.md here)\n"
         "  dessa components <file.xds> [--stdin]        the components of a file as JSON (for editors)\n"
         "  dessa tokens  <file.ds>                      debug: print tokens\n"
-        "  dessa ast     <file.ds>                      debug: print top-level statements\n"
+        "  dessa ast     <file.ds>                      debug: print the parser's whole tree\n"
         "\n"
         "Environment: DESSA_CC (C compiler, default gcc), DESSA_CXX (C++ compiler, default g++),\n"
         "             DESSA_HOME (folder containing runtime/), DESSA_VERBOSE=1 (say when a program is built from C++)\n";
@@ -269,12 +271,31 @@ int cmdComponents(const std::string& path, bool fromStdin) {
     return 0;
 }
 
-int cmdTokens(const std::string& path) {
-    std::ifstream file(path);
-    if (!file) { std::cerr << "Could not open file: " << path << "\n"; return 1; }
+// A file for `dessa tokens` and `dessa ast`, read as the loader reads it: as
+// it is (no text mode), as UTF-8 whatever it was saved in, and only if it is
+// valid text. False: it has said why.
+bool readDebugSource(const std::string& path, std::string& source) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file) { std::cerr << "Could not open file: " << path << "\n"; return false; }
     std::stringstream buffer;
     buffer << file.rdbuf();
-    Lexer lexer(buffer.str(), isComponentFile(path));
+    source = buffer.str();
+    std::string problem;
+    if (!sourceToUtf8(source, problem)) {
+        std::cout << "This file can't be read: " << problem << ".\n";
+        return false;
+    }
+    if (const int line = invalidUtf8Line(source)) {
+        std::cout << "[line " << line << ", col 1] This file isn't valid UTF-8 text here. Save it as UTF-8.\n";
+        return false;
+    }
+    return true;
+}
+
+int cmdTokens(const std::string& path) {
+    std::string source;
+    if (!readDebugSource(path, source)) return 1;
+    Lexer lexer(source, isComponentFile(path));
     for (const auto& t : lexer.scanTokens()) {
         if (t.type == TokenType::END_OF_FILE) continue;
         std::cout << t.line << ":" << t.column << "\t" << static_cast<int>(t.type) << "\t" << t.lexeme << "\n";
@@ -283,44 +304,24 @@ int cmdTokens(const std::string& path) {
     return lexer.hasErrors() ? 1 : 0;
 }
 
-const char* stmtName(StmtKind kind) {
-    switch (kind) {
-        case StmtKind::Expression: return "Expression";
-        case StmtKind::VarDecl: return "VarDecl";
-        case StmtKind::FuncDecl: return "FuncDecl";
-        case StmtKind::ClassDecl: return "ClassDecl";
-        case StmtKind::EnumDecl: return "EnumDecl";
-        case StmtKind::InterfaceDecl: return "InterfaceDecl";
-        case StmtKind::Import: return "Import";
-        case StmtKind::If: return "If";
-        case StmtKind::Switch: return "Switch";
-        case StmtKind::For: return "For";
-        case StmtKind::ForIn: return "ForIn";
-        case StmtKind::While: return "While";
-        case StmtKind::Loop: return "Loop";
-        case StmtKind::Break: return "Break";
-        case StmtKind::Continue: return "Continue";
-        case StmtKind::Return: return "Return";
-        case StmtKind::Block: return "Block";
-        case StmtKind::Try: return "Try";
-        case StmtKind::Throw: return "Throw";
-    }
-    return "Unknown";
-}
-
+// The whole tree of one file, as the parser builds it (no imports are loaded),
+// then what the lexer and the parser said. selfhost/check.py compares it with
+// the parser written in Dessa.
 int cmdAst(const std::string& path) {
-    std::vector<Diagnostic> diagnostics;
-    ModuleLoader loader(diagnostics);
-    loader.setIncludeDir(toolchain::includeDir(g_argv0));
-    Program program = loader.load(path);
-    for (const auto& module : program.modules) {
-        std::cout << "== " << module->displayPath << " (" << module->ast.size() << " statements)\n";
-        for (const auto& s : module->ast) {
-            if (s) std::cout << "  " << s->line << ":" << s->column << "  " << stmtName(s->kind) << "\n";
-        }
-    }
-    printDiagnostics(diagnostics, false, std::cerr);
-    return hasError(diagnostics) ? 1 : 0;
+    std::string source;
+    if (!readDebugSource(path, source)) return 1;
+    const bool componentFile = isComponentFile(path);
+    Lexer lexer(source, componentFile);
+    std::vector<Token> tokens = lexer.scanTokens();
+    if (lexer.stopped()) tokens.erase(tokens.begin(), tokens.end() - 1);   // like the loader
+    Parser parser(std::move(tokens));
+    parser.setComponentFile(componentFile);
+    std::vector<StmtPtr> program = parser.parseProgram();
+    std::vector<StmtPtr> templates = parser.takeTemplates();
+    std::cout << dumpAst(program, templates);
+    for (const auto& e : lexer.getErrors()) std::cout << e << "\n";
+    for (const auto& e : parser.getErrors()) std::cout << e << "\n";
+    return lexer.hasErrors() || parser.hasErrors() ? 1 : 0;
 }
 
 // dessa fix app.ds: rewrites the old list literals [1, 2] as <1, 2> and the old

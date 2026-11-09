@@ -198,10 +198,12 @@ typing helpers and quick fixes. There are no snippets, on purpose.
 ## The self-hosted compiler (`selfhost/`)
 
 The compiler is being rewritten in Dessa, one stage at a time, each stage
-giving exactly the same output as its C++ twin. The lexer is done
-(`selfhost/lexer.dm`); `python selfhost/check.py` compares its tokens with
-`dessa tokens` on every Dessa file in the repository, and CI runs it. The
-parser comes next.
+giving exactly the same output as its C++ twin. The lexer and the parser are
+done (`selfhost/lexer.dm`, `selfhost/parser.dm`, the tree in `selfhost/ast.dm`).
+`python selfhost/check.py` compares their tokens with `dessa tokens` and their
+tree with `dessa ast` (the whole tree, one node per line) on every Dessa file
+in the repository, and on some of them saved in other encodings. CI runs it.
+The module loader comes next.
 
 ## Where to start for common changes
 

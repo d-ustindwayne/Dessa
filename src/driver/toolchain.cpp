@@ -426,7 +426,8 @@ bool compile(const std::string& cpp, const std::string& outputExe, const char* a
                   " -o " + quoteArg(outputExe) + extra;
     }
 #ifdef _WIN32
-    command += " -static";
+    // An 8 MB stack, as programs get on Linux, macOS and WebAssembly (Windows gives 1 MB)
+    command += " -static -Wl,--stack,8388608";
 #endif
     command += " > " + quoteArg(log.string()) + " 2>&1";
 
@@ -466,7 +467,8 @@ bool compileCached(const std::string& cpp, const char* argv0, std::string& exe, 
     std::string runtime = runtimeDir(argv0);
     // Include the runtime headers in the key so editing them rebuilds.
     std::uint64_t key = fnv1a(cpp);
-    key = fnv1a(compiler() + cCompiler(), key);
+    // ... and how it is linked (programs built before Windows got an 8 MB stack are built again)
+    key = fnv1a(compiler() + cCompiler() + " stack=8MB", key);
     std::error_code ec;
     if (!runtime.empty()) {
         std::vector<std::string> folders = {runtime, includeDir(argv0)};

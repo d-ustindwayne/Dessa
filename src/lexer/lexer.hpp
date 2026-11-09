@@ -18,6 +18,13 @@ namespace dessa {
 //   std::vector<Token> tokens = lexer.scanTokens();
 //   if (lexer.hasErrors()) { ... lexer.getErrors() ... }
 // ============================================================
+// \xHH: the character U+00HH, as UTF-8 ("\xe9" is "é", like JavaScript's)
+inline std::string hexEscape(const std::string& twoDigits) {
+    const unsigned code = static_cast<unsigned>(std::stoi(twoDigits, nullptr, 16));
+    if (code < 0x80) return std::string(1, static_cast<char>(code));
+    return {static_cast<char>(0xC0 | (code >> 6)), static_cast<char>(0x80 | (code & 0x3F))};
+}
+
 class Lexer {
 public:
     // componentFile: an .xds file, where @(<...>) is one MARKUP token
@@ -75,7 +82,7 @@ private:
     void scanNumber();             // 20 / 9.23 / 0b1001 / 0o32 / 0xf8
     void scanIdentifierOrKeyword();
     void scanChar();               // 'A'
-    char translateEscape(char escape); // the char after a backslash
+    std::string translateEscape(char escape); // what the char after a backslash stands for
 
     // ---- Error reporting (internal) ----
     std::vector<std::string> errors;

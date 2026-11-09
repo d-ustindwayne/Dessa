@@ -249,7 +249,12 @@ void Lexer::scanToken() {
             } else if (std::isalpha(static_cast<unsigned char>(c)) || c == '_') {
                 scanIdentifierOrKeyword();
             } else {
-                error(std::string("unexpected character '") + c + "'");
+                // A character beyond ASCII is said once, all of its bytes
+                std::string text(1, c);
+                if (static_cast<unsigned char>(c) >= 0xC0) {
+                    while (!isAtEnd() && (static_cast<unsigned char>(peek()) & 0xC0) == 0x80) text += advance();
+                }
+                error("unexpected character '" + text + "'");
             }
             break;
     }
@@ -391,30 +396,30 @@ bool Lexer::scanMarkup() {
     return true;
 }
 
-char Lexer::translateEscape(char escape) {
+std::string Lexer::translateEscape(char escape) {
     switch (escape) {
-        case 'n':  return '\n';
-        case 't':  return '\t';
-        case 'r':  return '\r';
-        case '0':  return '\0';
-        case '\\': return '\\';
-        case '"':  return '"';
-        case '\'': return '\'';
-        case '{':  return '{';
-        case '}':  return '}';
+        case 'n':  return "\n";
+        case 't':  return "\t";
+        case 'r':  return "\r";
+        case '0':  return std::string(1, '\0');
+        case '\\': return "\\";
+        case '"':  return "\"";
+        case '\'': return "'";
+        case '{':  return "{";
+        case '}':  return "}";
         case 'x': {
             // \x1b -- a character by its two-digit hex code
             std::string digits;
             while (digits.size() < 2 && std::isxdigit(static_cast<unsigned char>(peek()))) digits += advance();
             if (digits.size() != 2) {
                 error("\\x needs two hex digits, e.g. \\x1b");
-                return 'x';
+                return "x";
             }
-            return static_cast<char>(std::stoi(digits, nullptr, 16));
+            return hexEscape(digits);
         }
         default:
             error(std::string("unknown escape sequence '\\") + escape + "'.");
-            return escape;
+            return std::string(1, escape);
     }
 }
 
@@ -439,7 +444,7 @@ std::string unescapeRaw(const std::string& raw) {
             case 'x':
                 if (i + 3 < raw.size() && std::isxdigit(static_cast<unsigned char>(raw[i + 2])) &&
                     std::isxdigit(static_cast<unsigned char>(raw[i + 3]))) {
-                    out += static_cast<char>(std::stoi(raw.substr(i + 2, 2), nullptr, 16));
+                    out += hexEscape(raw.substr(i + 2, 2));
                     i += 3;
                     break;
                 }

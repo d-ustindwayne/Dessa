@@ -36,7 +36,7 @@ std::string unescape(const std::string& raw) {
             case 'x':
                 if (i + 2 < raw.size() && std::isxdigit(static_cast<unsigned char>(raw[i + 1])) &&
                     std::isxdigit(static_cast<unsigned char>(raw[i + 2]))) {
-                    out += static_cast<char>(std::stoi(raw.substr(i + 1, 2), nullptr, 16));
+                    out += hexEscape(raw.substr(i + 1, 2));
                     i += 2;
                 } else {
                     out += 'x';

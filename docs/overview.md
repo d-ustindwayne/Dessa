@@ -55,7 +55,7 @@ print($"{cart.length()} items, total {total.toFixed(2)}");
 | Package manager | `riv`, written in Dessa: version ranges, lock file, packages shared over BitTorrent with a GitHub web seed |
 | Editor | VS Code extension: errors as you type, completion from the real types, hover, go to definition, quick fixes, typing helpers |
 | Distribution | Installers for Windows, Linux and macOS; GitHub releases; npm package `dessalang` (Dessa to WebAssembly from Node) |
-| Self-hosting | The lexer is rewritten in Dessa and checked against the C++ one in CI; the parser is next |
+| Self-hosting | The lexer and the parser are rewritten in Dessa and checked against the C++ ones in CI; the module loader is next |
 
 ## Performance
 

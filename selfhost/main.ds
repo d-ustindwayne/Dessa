@@ -1,20 +1,98 @@
-// The Dessa compiler written in Dessa (work in progress, see PLAN.md).
+// The Dessa compiler written in Dessa (work in progress: the lexer and the parser).
 //
 //     dessa run selfhost/main.ds tokens file.ds     the tokens, like `dessa tokens file.ds`
+//     dessa run selfhost/main.ds ast file.ds        the tree, like `dessa ast file.ds`
 
-$("lexer") { Lexer, Token, TokenType }
-$("os") { readFile }
+$("lexer") { Lexer, Token, TokenType, isComponentFile }
+$("parser") { Parser }
+$("astdump") { dumpAst }
+$("os") { readBytes }
 $("sys") { args, exit }
 
 var[Str<>] given = args();
-if (given.length() != 2 || given<0> != "tokens") {
-    print("usage: dessa run selfhost/main.ds tokens <file.ds>");
+if (given.length() != 2 || (given<0> != "tokens" && given<0> != "ast")) {
+    print("usage: dessa run selfhost/main.ds tokens|ast <file.ds>");
     exit(2);
 }
 
-var[Lexer] lexer = new Lexer(readFile(given<1>));
-for (var[Token] token in lexer.scanTokens()) {
-    if (token.type != TokenType.END_OF_FILE) print(token);
+// Where bytes stop being valid UTF-8, as a line number; 0 when they're all valid
+// (invalidUtf8Line in the C++ compiler)
+func[Int] invalidUtf8Line(bytes[Int<>]) {
+    var[Int] line = 1;
+    var[Int] n = bytes.length();
+    var[Int] i = 0;
+    while (i < n) {
+        var[Int] c = bytes<i>;
+        if (c == 10) line++;
+        var[Int] extra = c < 0x80 ? 0 : (c >= 0xC2 && c <= 0xDF) ? 1 : (c >= 0xE0 && c <= 0xEF) ? 2 : (c >= 0xF0 && c <= 0xF4) ? 3 : -1;
+        if (extra < 0 || i + extra >= n + (extra == 0 ? 1 : 0)) return line;
+        var[Int] k = 1;
+        while (k <= extra) {
+            var[Int] more = bytes<i + k>;
+            var[Int] low = 0x80;
+            var[Int] high = 0xBF;
+            if (k == 1 && c == 0xE0) low = 0xA0;    // too long a form
+            if (k == 1 && c == 0xED) high = 0x9F;   // surrogates aren't characters
+            if (k == 1 && c == 0xF0) low = 0x90;    // too long a form
+            if (k == 1 && c == 0xF4) high = 0x8F;   // past the last character
+            if (more < low || more > high) return line;
+            k++;
+        }
+        i += extra + 1;
+    }
+    return 0;
 }
-for (var[Str] e in lexer.errors) print(e);
-if (!lexer.errors.isEmpty()) exit(1);
+
+// A source file as the C++ compiler's loader reads it: as it is, as UTF-8
+// whatever it was saved in (a BOM says UTF-8, UTF-16 or UTF-32), and only if it
+// is valid text. Nil: it has said why.
+func[Str | Nil] readSource(path[Str]) {
+    var[Int<>] bytes = readBytes(path);
+    var[Int] n = bytes.length();
+    var[Int] b0 = n > 0 ? bytes<0> : -1;
+    var[Int] b1 = n > 1 ? bytes<1> : -1;
+    var[Int] b2 = n > 2 ? bytes<2> : -1;
+    var[Int] b3 = n > 3 ? bytes<3> : -1;
+    if ((b0 == 0xFF && b1 == 0xFE) || (b0 == 0xFE && b1 == 0xFF) || (b0 == 0 && b1 == 0 && b2 == 0xFE && b3 == 0xFF)) {
+        try {
+            return bytes.decode("auto");   // UTF-16 or UTF-32: always valid once decoded
+        } catch (e[Str]) {
+            // "Can't decode this as auto: <why>"
+            var[Int] at = e.indexOf(": ") + 2;
+            print($"This file can't be read: {e.substr(at, e.length() - at)}.");
+            return nil;
+        }
+    }
+    if (b0 == 0xEF && b1 == 0xBB && b2 == 0xBF) bytes = bytes.slice(3, n);
+    var[Int] bad = invalidUtf8Line(bytes);
+    if (bad > 0) {
+        print($"[line {bad}, col 1] This file isn't valid UTF-8 text here. Save it as UTF-8.");
+        return nil;
+    }
+    return bytes.decode("utf-8");
+}
+
+var[Str] path = given<1>;
+var[Str | Nil] read = readSource(path);
+if (read == nil) exit(1);
+var[Str] source = read ?? "";
+var[Bul] componentFile = isComponentFile(path);
+var[Lexer] lexer = new Lexer(source, componentFile);
+var[Token<>] tokens = lexer.scanTokens();
+if (given<0> == "tokens") {
+    for (var[Token] token in tokens) {
+        if (token.type != TokenType.END_OF_FILE) print(token);
+    }
+    for (var[Str] e in lexer.errors) print(e);
+    if (!lexer.errors.isEmpty()) exit(1);
+    exit(0);
+}
+
+// ast: after a lexer error that took the rest of the file, only the end is parsed (like the loader)
+if (lexer.stopped) tokens = <tokens.last()>;
+var[Parser] parser = new Parser(tokens, componentFile);
+var[Str<>] lines = dumpAst(parser.parseProgram(), parser.templates);
+for (var[Str] e in lexer.errors) lines.push(e);
+for (var[Str] e in parser.errors) lines.push(e);
+if (!lines.isEmpty()) print(lines.join("\n"));
+if (!lexer.errors.isEmpty() || !parser.errors.isEmpty()) exit(1);

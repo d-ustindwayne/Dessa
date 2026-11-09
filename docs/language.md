@@ -105,7 +105,7 @@ var[Int] a = b = c = 0;      // three variables, all 0
 ```dessa
 var[Str] who = "world";
 print($"Hello, {who}! 2 + 2 = {2 + 2}");      // template string
-print("tab\there, quote \", unicode \x41");
+print("tab\there, quote \", \x41 is A, \xe9 is é");   // \xHH: the character U+00HH
 var[Str] sql = """
     SELECT name
     FROM users

@@ -25,7 +25,8 @@ enum TokenType {
     BITWISE_AND, BITWISE_OR, BITWISE_XOR, LEFT_SHIFT, RIGHT_SHIFT, BITWISE_NOT,
     QUESTION_QUESTION, QUESTION_DOT, QUESTION, COLON_EQUAL, ELLIPSIS,
     QUESTION_EQUAL, QUESTION_BANG, AT, FUNC_PIPE, WITH, IS,
-    END_OF_FILE
+    END_OF_FILE,
+    MARKUP   // @(<div>...</div>) in an .xds file, as one raw block (last, so the numbers above don't move)
 }
 
 class Token {
@@ -64,6 +65,17 @@ func[Bul] isDigit(c[Chr]) { return c >= '0' && c <= '9'; }
 func[Bul] isAsciiAlpha(c[Chr]) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); }
 func[Bul] isAlnum(c[Chr]) { return isDigit(c) || isAsciiAlpha(c); }
 func[Bul] isHexDigit(c[Chr]) { return isDigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); }
+// What C's isspace says: ' ', \t, \n, \v, \f, \r
+func[Bul] isSpace(c[Chr]) { return c == ' ' || (c.code() >= 9 && c.code() <= 13); }
+func[Bul] isMarkupName(c[Chr]) { return isAlnum(c) || c == '_' || c == '-' || c == ':' || c == '.'; }
+
+const[Int] MAX_MARKUP_DEPTH = 200;
+
+// A component file (.xds, .xdz, .xdx): @(<...>) is one MARKUP token there
+func[Bul] isComponentFile(path[Str]) {
+    var[Str] lower = path.lower();
+    return lower.endsWith(".xds") || lower.endsWith(".xdz") || lower.endsWith(".xdx");
+}
 
 // How many bytes a character takes in UTF-8 (columns count bytes, like the C++ lexer)
 func[Int] utf8Size(c[Chr]) {
@@ -81,9 +93,13 @@ class Lexer {
     var[Int] _column = 1;
     var[Int] _startLine = 1;
     var[Int] _startColumn = 1;
+    var[Bul] _componentFile = false;
+    // The rest of the file went with an error: parsing it would only add noise
+    var[Bul] stopped = false;
 
-    init(source[Str]) {
+    init(source[Str], componentFile[Bul] = false) {
         this._source = source.chars();
+        this._componentFile = componentFile;
     }
 
     func[Token<>] scanTokens() {
@@ -100,7 +116,8 @@ class Lexer {
     func[Bul] _isAtEnd() { return this._current >= this._source.length(); }
 
     func[Chr] _advance() {
-        var[Chr] c = this._source<this._current>;
+        // Past the end: '\0', as C++'s std::string gives (a file ending in '\)
+        var[Chr] c = this._current < this._source.length() ? this._source<this._current> : '\0';
         this._current++;
         if (c == '\n') {
             this._line++;
@@ -178,7 +195,9 @@ class Lexer {
                     this._add(TokenType.DOT);
                 }
             }
-            case '@' := { this._add(TokenType.AT); }
+            case '@' := {
+                if (!this._componentFile || !this._scanMarkup()) this._add(TokenType.AT);
+            }
             case '$' := {
                 if (this._peek() == '"' && this._peekNext() == '"' && this._peekAt(2) == '"') {
                     this._advance();
@@ -262,6 +281,149 @@ class Lexer {
                 }
             }
         }
+    }
+
+    // ---- Markup in an .xds file ----
+    // @(<div>don't</div>) is lexed as one block, so text in it can't break the
+    // lexer (an apostrophe isn't a character literal there). The parser reads
+    // the block itself.
+
+    // After `@`: does `( <name` follow? Where the < is, or -1
+    func[Int] _markupAhead() {
+        var[Int] n = this._source.length();
+        var[Int] i = this._current;
+        while (i < n && isSpace(this._source<i>)) i++;
+        if (i >= n || this._source<i> != '(') return -1;
+        i++;
+        while (i < n && isSpace(this._source<i>)) i++;
+        if (i + 1 >= n || this._source<i> != '<' || !isAsciiAlpha(this._source<i + 1>)) return -1;
+        return i;
+    }
+
+    // Where "-->" starts, from `from` on, or -1
+    func[Int] _commentEnd(from[Int]) {
+        var[Int] i = from;
+        while (i + 2 < this._source.length()) {
+            if (this._source<i> == '-' && this._source<i + 1> == '-' && this._source<i + 2> == '>') return i;
+            i++;
+        }
+        return -1;
+    }
+
+    // Past `{ ... }` (the cursor is on the {): strings, comments and markup inside are skipped whole
+    func[Bul] _skipMarkupExpression(depth[Int]) {
+        var[Int] braces = 0;
+        while (!this._isAtEnd()) {
+            var[Chr] c = this._peek();
+            if (c == '"' || c == '\'') {
+                this._advance();
+                while (!this._isAtEnd() && this._peek() != c) {
+                    if (this._peek() == '\\') this._advance();
+                    if (!this._isAtEnd()) this._advance();
+                }
+                if (this._isAtEnd()) return false;
+                this._advance();
+            } else if (c == '/' && this._peekNext() == '/') {
+                while (!this._isAtEnd() && this._peek() != '\n') this._advance();
+            } else if (c == '/' && this._peekNext() == '*') {
+                while (!this._isAtEnd() && !(this._peek() == '*' && this._peekNext() == '/')) this._advance();
+                if (this._isAtEnd()) return false;
+                this._advance();
+                this._advance();
+            } else if (c == '@') {
+                this._advance();
+                var[Int] at = this._markupAhead();
+                if (at >= 0) {
+                    while (this._current < at) this._advance();
+                    if (!this._skipMarkupElement(depth + 1)) return false;
+                }
+            } else {
+                if (c == '{') braces++;
+                this._advance();
+                if (c == '}') {
+                    braces--;
+                    if (braces == 0) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    // Past one element (the cursor is on its <). What's wrong in it, the parser says.
+    func[Bul] _skipMarkupElement(depth[Int]) {
+        if (depth > MAX_MARKUP_DEPTH) return false;
+        var[Int] open = 0;
+        while (!this._isAtEnd()) {
+            var[Chr] c = this._peek();
+            if (c == '{') {
+                if (!this._skipMarkupExpression(depth + 1)) return false;
+            } else if (c != '<') {
+                this._advance();
+            } else if (this._peekNext() == '!' && this._peekAt(2) == '-' && this._peekAt(3) == '-') {
+                var[Int] end = this._commentEnd(this._current + 4);
+                if (end < 0) return false;
+                while (this._current < end + 3) this._advance();
+            } else if (this._peekNext() == '/') {
+                while (!this._isAtEnd() && this._peek() != '>') this._advance();
+                if (this._isAtEnd()) return false;
+                this._advance();
+                open--;
+                if (open <= 0) return true;
+            } else if (!isAsciiAlpha(this._peekNext())) {
+                this._advance();   // a < in the text
+            } else {
+                this._advance();
+                while (isMarkupName(this._peek())) this._advance();
+                var[Bul] selfClosed = false;
+                while (!this._isAtEnd() && this._peek() != '>') {
+                    var[Chr] a = this._peek();
+                    if (a == '"' || a == '\'') {
+                        this._advance();
+                        while (!this._isAtEnd() && this._peek() != a) this._advance();
+                        if (this._isAtEnd()) return false;
+                        this._advance();
+                    } else if (a == '{') {
+                        if (!this._skipMarkupExpression(depth + 1)) return false;
+                    } else {
+                        selfClosed = a == '/' && this._peekNext() == '>';
+                        this._advance();
+                    }
+                }
+                if (this._isAtEnd()) return false;
+                this._advance();
+                if (selfClosed) {
+                    if (open == 0) return true;
+                } else {
+                    open++;
+                }
+            }
+        }
+        return false;
+    }
+
+    // The `@` has been read. False when no markup follows (a decorator).
+    func[Bul] _scanMarkup() {
+        var[Int] at = this._markupAhead();
+        if (at < 0) return false;
+        while (this._current < at) this._advance();
+        this._startLine = this._line;
+        this._startColumn = this._column;
+        var[Int] from = this._current;
+        if (!this._skipMarkupElement(0)) {
+            this._error("This markup never ends. Every tag needs its closing tag, or /> at the end: <br />");
+            this.stopped = true;
+            this._current = this._source.length();
+            return true;
+        }
+        var[Str] raw = this._source.slice(from, this._current).join("");
+        while (isSpace(this._peek())) this._advance();
+        if (this._peek() != ')') {
+            this._error("@(...) holds one element, and ')' comes right after it. Put several inside one element.");
+            while (!this._isAtEnd() && this._peek() != ')') this._advance();
+        }
+        if (!this._isAtEnd()) this._advance();
+        this._addWith(TokenType.MARKUP, raw);
+        return true;
     }
 
     func[Str] _translateEscape(escape[Chr]) {

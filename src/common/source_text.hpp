@@ -30,4 +30,26 @@ inline bool sourceToUtf8(std::string& text, std::string& message) {
     return true;
 }
 
+// Where a file stops being valid UTF-8, as its line number; 0 when it's all valid
+inline int invalidUtf8Line(const std::string& text) {
+    int line = 1;
+    for (size_t i = 0; i < text.size();) {
+        const unsigned char c = static_cast<unsigned char>(text[i]);
+        if (c == '\n') ++line;
+        const int extra = c < 0x80 ? 0 : (c >= 0xC2 && c <= 0xDF) ? 1 : (c >= 0xE0 && c <= 0xEF) ? 2 : (c >= 0xF0 && c <= 0xF4) ? 3 : -1;
+        if (extra < 0 || i + static_cast<size_t>(extra) >= text.size() + (extra == 0 ? 1 : 0)) return line;
+        for (int k = 1; k <= extra; ++k) {
+            const unsigned char more = static_cast<unsigned char>(text[i + static_cast<size_t>(k)]);
+            unsigned char low = 0x80, high = 0xBF;
+            if (k == 1 && c == 0xE0) low = 0xA0;      // too long a form
+            if (k == 1 && c == 0xED) high = 0x9F;     // surrogates aren't characters
+            if (k == 1 && c == 0xF0) low = 0x90;      // too long a form
+            if (k == 1 && c == 0xF4) high = 0x8F;     // past the last character
+            if (more < low || more > high) return line;
+        }
+        i += static_cast<size_t>(extra) + 1;
+    }
+    return 0;
+}
+
 } // namespace dessa

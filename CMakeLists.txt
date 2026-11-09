@@ -13,6 +13,7 @@ endif()
 set(DESSA_FRONTEND
     src/lexer/lexer.cpp
     src/parser/parser.cpp
+    src/parser/ast_dump.cpp
     src/analyser/analyser.cpp
     src/analyser/analyser_expr.cpp
     src/analyser/analyser_markup.cpp

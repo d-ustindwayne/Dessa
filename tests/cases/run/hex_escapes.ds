@@ -1,0 +1,5 @@
+// \xHH is the character U+00HH in every kind of string: "\xe9" is "é"
+var[Str] word = "caf\xe9";
+print(word, word.length(), word == "café");
+print($"[\xe9{1 + 1}]", """\xff""", '\xe9', '\xe9' == 'é');
+print("\x41\x7e", "\x1b[0m".length());

@@ -93,7 +93,7 @@ For coding agents: `dessa context` prints what they need to know, for your versi
 | `npm/` | the npm package: Dessa to WebAssembly from Node |
 | `website/` | the website, https://dessa.dustindwayn.ee/ (Angular) |
 | `tests/` | the test suite |
-| `selfhost/` | the compiler being rewritten in Dessa (the lexer is done; see `docs/architecture.md`) |
+| `selfhost/` | the compiler being rewritten in Dessa (the lexer and the parser are done; see `docs/architecture.md`) |
 
 ## Working on Dessa
 
