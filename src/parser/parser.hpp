@@ -175,7 +175,7 @@ private:
     std::vector<Argument> parseArguments();
     ExprPtr finishCall(ExprPtr callee);
     std::optional<ExprPtr> tryParseIndex(ExprPtr& object);
-    ExprPtr parseLambdaOrGrouping(const Token& openParen);
+    ExprPtr parseLambdaOrGrouping(Token openParen);   // by value: splitting >> moves the tokens
     ExprPtr parseTemplateString(const Token& token);
 };
 

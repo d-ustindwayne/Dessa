@@ -1,0 +1,8 @@
+// >> splits into two tokens, which moves the list of tokens: the parser used to
+// keep a reference into it while reading a lambda or a parameter
+const[Int] count = (x[Int]) := {
+    var[Int<><>] rows = <<x>, <x, x>>;
+    return rows<1>.length();
+};
+func[Int] total(rows[Int<><>], extra[Map[Str, Int<>]] = {}) { return rows.length() + extra.length(); }
+print(count(1), total(<<1>>));

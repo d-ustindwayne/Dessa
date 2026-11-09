@@ -610,7 +610,7 @@ std::vector<ImportName> Parser::parseImportNames() {
         do {
             if (check(TokenType::R_BRACE)) break;   // trailing comma
             ImportName item;
-            const Token& nameToken = consume(TokenType::IDENTIFIER, "Expect imported name.");
+            Token nameToken = consume(TokenType::IDENTIFIER, "Expect imported name.");
             item.name = nameToken.lexeme;
             item.line = nameToken.line;
             item.column = nameToken.column;
@@ -1014,7 +1014,7 @@ std::vector<Param> Parser::parseParamList() {
     if (!check(TokenType::R_PAREN)) {
         do {
             Param param;
-            const Token& nameToken = consume(TokenType::IDENTIFIER, "Expect parameter name.");
+            Token nameToken = consume(TokenType::IDENTIFIER, "Expect parameter name.");
             param.name = nameToken.lexeme;
             param.line = nameToken.line;
             param.column = nameToken.column;
@@ -1375,7 +1375,7 @@ ExprPtr Parser::finishCall(ExprPtr callee) {
 }
 
 // Called after '(' has been consumed.
-ExprPtr Parser::parseLambdaOrGrouping(const Token& openParen) {
+ExprPtr Parser::parseLambdaOrGrouping(Token openParen) {
     AngleListScope scope(*this, false);
     ColonScope colons(*this, false);
     bool isLambda = (check(TokenType::R_PAREN) && checkNext(TokenType::COLON_EQUAL)) ||

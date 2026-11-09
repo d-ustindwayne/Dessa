@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.1
+
+- No changes to the extension (Dessa 0.6.1: fixes a compiler crash on broken input and the website build)
+
 ## 0.6.0
 
 - No changes to the extension (Dessa 0.6.0: security fixes, numbers 2.0, http 2.0, a README for every library)

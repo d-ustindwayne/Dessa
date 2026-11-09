@@ -25,6 +25,7 @@ using socket_t = SOCKET;
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <termios.h>
 #include <unistd.h>
 using socket_t = int;
