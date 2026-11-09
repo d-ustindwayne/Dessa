@@ -1,5 +1,5 @@
-// A failed Task nobody awaited ends the program with its error
 // exit: 1
+// A failed Task nobody awaited ends the program with its error
 // stderr: nobody caught this
 async func[Emp] boom() {
     await delay(1);
