@@ -200,8 +200,8 @@ typing helpers and quick fixes. There are no snippets, on purpose.
 The compiler is being rewritten in Dessa, one stage at a time, each stage
 giving exactly the same output as its C++ twin. The lexer is done
 (`selfhost/lexer.dm`); `python selfhost/check.py` compares its tokens with
-`dessa tokens` on every Dessa file in the repository, and CI runs it. The plan
-is in `selfhost/PLAN.md`.
+`dessa tokens` on every Dessa file in the repository, and CI runs it. The
+parser comes next.
 
 ## Where to start for common changes
 
