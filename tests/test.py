@@ -318,6 +318,35 @@ def editor_test():
     return problems
 
 
+def page_import_test():
+    """Inline page scripts have webutils without an import; a file of its own needs one."""
+    problems = []
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        check = lambda file: subprocess.run([str(EXE), "check", str(file)], capture_output=True, text=True, encoding="utf-8", timeout=60)
+        page = tmp / "page.dhtml"
+        page.write_text("""<!doctype html>
+<script>
+func[Str] find(a[Str]) { return a; }
+var[Element] item = document.createElement("li");
+item.textContent = find("mine");
+log("no import");
+</script>
+<script>
+$("webutils") { document, Element }
+var[Element | Nil] first = document.querySelector("li");
+print(first != nil);
+</script>
+""", encoding="utf-8")
+        if (r := check(page)).returncode != 0:
+            problems.append("inline scripts: " + r.stdout + r.stderr)
+        script = tmp / "app.ds"
+        script.write_text('document.title = "x";\n', encoding="utf-8")
+        if check(script).returncode == 0:
+            problems.append("a .ds file got webutils without importing it")
+    return problems
+
+
 def verify_test():
     """dessa verify-download: what riv update relies on before running an installer."""
     problems = []
@@ -754,6 +783,16 @@ def main():
         else:
             passed += 1
             print("ok   verify (checking downloads)")
+    if not WASM and (not pattern or pattern in "page imports"):
+        problems = page_import_test()
+        if problems:
+            failed += 1
+            print("FAIL page imports")
+            for p in problems:
+                print("     " + p.replace("\n", "\n     "))
+        else:
+            passed += 1
+            print("ok   page imports")
     if not WASM and (not pattern or pattern in "riv"):
         problems = riv_test()
         if problems is None:

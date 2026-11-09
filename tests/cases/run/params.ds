@@ -57,7 +57,7 @@ func[Str] greet(name[Str]="John", punctuation[Str]="!") {
 print(greet());
 print(greet("Ann"));
 print(greet("Bo", "?"));
-print(greet(punctuation: "..."));
+print(greet(punctuation = "..."));
 
 enum Level {
     LOW,
@@ -68,7 +68,7 @@ func[Str] describe(value[Int], level[Level]=Level.LOW, tags[Str<>]=<>, note[Str 
 }
 print(describe(1));
 print(describe(2, Level.HIGH, <"x">, "noted"));
-print(describe(3, note: "only a note"));
+print(describe(3, note = "only a note"));
 
 class Box {
     var[Int] width = 0;
@@ -89,4 +89,4 @@ func[Str] page(number[Int], size[Int]=PAGE_SIZE, label[Str]=TITLE) {
 }
 const[Int] PAGE_SIZE = 20;
 const[Str] TITLE = "Results";
-print(page(1), page(2, 50), page(3, label: "Users"));
+print(page(1), page(2, 50), page(3, label = "Users"));

@@ -57,6 +57,7 @@ struct Symbol {
     // Imported: which import brought it in (Analyser::importRecords), so
     // unused imports can be found
     int importId = -1;
+    bool autoImported = false;   // from an import nobody wrote: what the file declares itself wins
     // Module: the imported path ("os", "a.b"), shown by editors
     std::string modulePath;
     // Module: which Analyser::aliasTables holds its names

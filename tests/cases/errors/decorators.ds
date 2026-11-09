@@ -1,0 +1,21 @@
+class Base { func[Int] size() { return 1; } }
+class One(Base) {
+    @override
+    func[Int] size() { return 2; }
+}
+class Two(Base) {
+    @override, @override
+    func[Int] size() { return 3; }
+}
+class Three(Base) {
+    @override, @missing          // error: Unknown decorator '@missing'
+    func[Int] size() { return 4; }
+}
+class Four(Base) {
+    @override,
+    func[Int] size() { return 5; }   // error: Expect another decorator after ','
+}
+class Five(Base) {
+    @(override)                  // error: @(...) holds markup
+    func[Int] size() { return 6; }
+}

@@ -5,13 +5,13 @@ func[Flt] add(num1[Flt], num2[Flt]) {
 }
 
 add(1, 2);
-add(num1: 2, num2: 12.23);
-add(num2: 1, num1: 2);
+add(num1 = 2, num2 = 12.23);
+add(num2 = 1, num1 = 2);
 add(1);                        // error: Missing argument(s) for 'add': num2
 add(1, 2, 3);                  // error: takes 2 argument(s), but 3 were given
 add("a", 2);                   // error: Cannot convert Str to Flt
-add(num3: 1, num1: 2);         // error: has no parameter named 'num3'
-add(num1: 1, 2);               // error: Positional arguments cannot follow named arguments
+add(num3 = 1, num1 = 2);         // error: has no parameter named 'num3'
+add(num1 = 1, 2);               // error: Positional arguments cannot follow named arguments
 
 func[Int] noReturn(x[Int]) {   // error: may reach the end without returning Int
     if (x > 0) {

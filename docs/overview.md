@@ -81,7 +81,7 @@ written in JavaScript.
 | Compiler (`src/`, C++20) | about 19,800 |
 | Runtimes (`runtime/`: C, C++, and the WebAssembly loader) | about 6,300 |
 | Core libraries (`include/`, Dessa plus their C and C++ parts) | about 3,400 |
-| riv (`tools/riv/riv.ds`, Dessa) | about 1,200 |
+| riv ([its own repository](https://github.com/d-ustindwayne/riv.ds), Dessa) | about 1,200 |
 | VS Code extension (`tools/vscode-dessa/extension.js`) | about 1,900 |
 
 Tests: 50 programs whose output is compared in every backend, 21 files of
@@ -116,7 +116,7 @@ self-hosted lexer check. CI runs on Windows, Linux and macOS for every push.
 
 - One maintainer so far; the project is looking for co-maintainers.
 - Pre-1.0: the language can still change, though changes come with a
-  migration path (for example `dessa fix-lists` for the switch to `<1, 2>` lists).
+  migration path (for example `dessa fix` for the switch to `<1, 2>` lists).
 - License: Apache 2.0.
 - `main` is the only long-lived branch. Every release is a tag (`v0.2.9`) that
   CI turns into a GitHub release.

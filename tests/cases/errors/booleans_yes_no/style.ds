@@ -1,0 +1,6 @@
+$("textfx") { isAnagram }
+var[Bul] a = yes;
+var[Bul] b = no;
+var[Bul] c = true;     // error: write yes instead of true
+var[Bul] d = false;    // error: write no instead of false
+print(isAnagram("ab", "ba"), a, b, c, d);

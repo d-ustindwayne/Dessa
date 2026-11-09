@@ -1708,6 +1708,9 @@ SemanticType Analyser::analyseZip(const CallExpr* expression, const Symbol& symb
 }
 
 SemanticType Analyser::analyseCall(const CallExpr* expression) {
+    for (const auto& argument : expression->args) {
+        if (argument.oldNamed) warning(argument.value.get(), "Named arguments are written with =: " + *argument.name + " = value instead of " + *argument.name + ": value");
+    }
     const Expr* callee = expression->callee.get();
     std::vector<SemanticType> argTypes;
 

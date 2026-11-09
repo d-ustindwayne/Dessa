@@ -80,9 +80,9 @@ try {
 } catch (e[Base]) {            // error: never reached
 }
 
-print("x", sep: 5);            // error: Cannot convert Int to Str
-print("x", color: "red");      // error: has no option named 'color'
-print("x", end: "", end: "");  // error: 'end' is given more than once
+print("x", sep = 5);            // error: Cannot convert Int to Str
+print("x", color = "red");      // error: has no option named 'color'
+print("x", end = "", end = "");  // error: 'end' is given more than once
 
 print(list<-1>);               // error: Negative indexes are not allowed
 list<-2> = 5;                  // error: Negative indexes are not allowed

@@ -175,7 +175,7 @@ BitTorrent protocol.
 
 - **The index** says which packages and versions exist, each with its
   torrent. It is a handful of JSON files. The official one is in the Dessa
-  repository (`tools/riv/index/`) and riv reads it from GitHub. Yours is in
+  [riv.ds repository](https://github.com/d-ustindwayne/riv.ds) (`index/`) and riv reads it from GitHub. Yours is in
   `~/.riv/index`. Set `RIV_INDEX` to use other ones (folders or web
   addresses, separated like `PATH`).
 - **Installing** looks for the package on your computer first: in your store

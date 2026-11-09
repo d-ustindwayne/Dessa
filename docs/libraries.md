@@ -50,7 +50,7 @@ $("time") { DateTime, dateNow, dateOf, parseDate }
 var[DateTime] now = dateNow();                                // this computer's time zone
 print(now.format("EEEE, d MMMM yyyy HH:mm"));
 print(now.toZone("America/New_York").format("HH:mm z"));
-print(dateOf(2026, 12, 25, zone: "Asia/Manila").longDate("es"));   // 25 de diciembre de 2026
+print(dateOf(2026, 12, 25, zone = "Asia/Manila").longDate("es"));   // 25 de diciembre de 2026
 print(now.daysUntil(parseDate("2027-01-01")));
 ```
 

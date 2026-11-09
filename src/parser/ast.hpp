@@ -87,6 +87,7 @@ struct Argument {
     std::optional<std::string> name;
     ExprPtr value;
     bool isSpread = false;
+    bool oldNamed = false;   // written name: value (it is name = value now)
 };
 
 // One element of a list/set literal. Covers the spread form:
@@ -113,6 +114,7 @@ struct ModuleSpec {
     std::string path;
     mutable bool isBuiltin = false;
     bool isPrelude = false;             // the import of include/prelude/errors.ds every file gets
+    bool isPageLibrary = false;         // the import of webutils every inline page script gets
     std::optional<std::string> alias;   // $("math" as m): used as m.sqrt(2)
     int line = 0;
     int column = 0;

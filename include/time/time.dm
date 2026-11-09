@@ -9,7 +9,7 @@
  *     print(now.format("EEEE d 'de' MMMM", "es"));           // sábado 17 de octubre
  *     print(now.toZone("America/New_York").format("HH:mm z"));
  *
- *     var[DateTime] exam = dateOf(2026, 11, 6, 9, 30, zone: "Asia/Manila");
+ *     var[DateTime] exam = dateOf(2026, 11, 6, 9, 30, zone = "Asia/Manila");
  *     print(now.daysUntil(exam), "days to go");
  *     print(parseDate("2026-12-25T08:00:00+08:00").weekdayName("fil"));   // Biyernes
  *

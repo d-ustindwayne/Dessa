@@ -74,6 +74,8 @@ else say "   C compiler: gcc (installing clang makes Dessa use it for the C it m
 if [ "$PREBUILT" = 0 ]; then
     command -v cmake >/dev/null 2>&1 || { warn "CMake was not found"; hint; fail "install CMake"; }
     ok "CMake: $(command -v cmake)"
+    command -v git >/dev/null 2>&1 || { warn "git was not found (building riv fetches it from GitHub)"; fail "install git"; }
+    ok "git: $(command -v git)"
 fi
 
 if [ "$PREBUILT" = 1 ]; then

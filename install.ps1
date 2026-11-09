@@ -230,6 +230,11 @@ if (-not $cmake) {
     if (-not $cmake) { Fail "install CMake (https://cmake.org/download) and run the installer again" }
 }
 Ok "CMake: $cmake"
+if (-not $Prebuilt) {
+    $git = Find "git" @("C:\Program Files\Git\cmd")
+    if (-not $git) { Fail "install git (https://git-scm.com/downloads) and run the installer again: building riv fetches it from GitHub" }
+    Ok "git: $git"
+}
 
 # The build runs g++ and mingw32-make from the compiler's folder
 if (-not (($env:Path -split ";") -contains $gxxBin)) { $env:Path = "$gxxBin;$env:Path" }

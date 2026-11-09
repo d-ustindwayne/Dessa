@@ -1,7 +1,7 @@
 // $("time"): DateTime, time zones and month / day names in several languages
 $("time") { DateTime, Locale, dateOf, dateNow, parseDate, fromMillis, addLocale, isLeapYear, daysInMonth, localeCodes }
 
-var[DateTime] t = dateOf(2026, 10, 17, 15, 45, 30, zone: "Asia/Manila");
+var[DateTime] t = dateOf(2026, 10, 17, 15, 45, 30, zone = "Asia/Manila");
 print(t);
 print(t.year(), t.month(), t.day(), t.hour(), t.minute(), t.second(), t.weekday(), t.dayOfYear(), t.offset);
 print(t.format("EEEE, d MMMM yyyy 'at' h:mm a"));
@@ -12,26 +12,26 @@ print(t.format("yyyy年M月d日 EEEE a h点", "zh"), "|", t.format("EEE d MMM", 
 
 // Time zones (with daylight saving time)
 print(t.toUtc(), t.toZone("America/New_York"), t.toZone("+05:30").format("HH:mm Z"));
-var[DateTime] winter = dateOf(2026, 1, 15, 12, 0, zone: "Europe/Paris");
-var[DateTime] summer = dateOf(2026, 7, 15, 12, 0, zone: "Europe/Paris");
+var[DateTime] winter = dateOf(2026, 1, 15, 12, 0, zone = "Europe/Paris");
+var[DateTime] summer = dateOf(2026, 7, 15, 12, 0, zone = "Europe/Paris");
 print(winter.offset, summer.offset, winter.toUtc().hour(), summer.toUtc().hour());
 // The night Paris moves its clocks forward: 24 hours later is 01:00 later on the clock,
 // one calendar day later is the same clock time.
-var[DateTime] beforeChange = dateOf(2026, 3, 28, 12, 0, zone: "Europe/Paris");
+var[DateTime] beforeChange = dateOf(2026, 3, 28, 12, 0, zone = "Europe/Paris");
 print(beforeChange.addHours(24).format("dd HH:mm"), beforeChange.addDays(1).format("dd HH:mm"));
 
 // Calendar arithmetic
-var[DateTime] jan31 = dateOf(2028, 1, 31, zone: "UTC");
+var[DateTime] jan31 = dateOf(2028, 1, 31, zone = "UTC");
 print(jan31.addMonths(1).format("yyyy-MM-dd"), jan31.addMonths(13).format("yyyy-MM-dd"), jan31.addMonths(-2).format("yyyy-MM-dd"));
 print(jan31.addDays(366).format("yyyy-MM-dd EEE"), jan31.addYears(-1).addWeeks(2).format("yyyy-MM-dd"));
 print(isLeapYear(2024), isLeapYear(2100), isLeapYear(2000), daysInMonth(2028, 2), daysInMonth(2026, 4));
-var[DateTime] exam = dateOf(2026, 11, 6, 9, 30, zone: "Asia/Manila");
+var[DateTime] exam = dateOf(2026, 11, 6, 9, 30, zone = "Asia/Manila");
 print(t.daysUntil(exam), t.hoursUntil(exam), exam.daysUntil(t), t.isBefore(exam), t.compare(exam), t.equals(t.toUtc()));
 print(t.startOfDay().format("yyyy-MM-dd HH:mm"), fromMillis(0), fromMillis(-86400000).format("yyyy-MM-dd EEEE"));
 
 // Reading ISO 8601
-print(parseDate("2026-12-25T08:00:00+08:00", zone: "UTC"), parseDate("2026-12-25", zone: "Asia/Tokyo"));
-print(parseDate("2026-02-03 04:05:06.7Z").toIso(), parseDate("1999-12-31T23:59", zone: "-03:00").toUtc());
+print(parseDate("2026-12-25T08:00:00+08:00", zone = "UTC"), parseDate("2026-12-25", zone = "Asia/Tokyo"));
+print(parseDate("2026-02-03 04:05:06.7Z").toIso(), parseDate("1999-12-31T23:59", zone = "-03:00").toUtc());
 
 // Your own language
 addLocale(new Locale("eo",

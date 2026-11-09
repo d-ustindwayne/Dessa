@@ -40,7 +40,7 @@ namespace fs = std::filesystem;
 
 namespace {
 
-constexpr const char* kVersion = "0.6.1";
+constexpr const char* kVersion = "0.6.7";
 const char* g_argv0 = nullptr; // to find runtime/ and include/ next to the compiler
 
 void printUsage() {
@@ -54,7 +54,7 @@ void printUsage() {
         "                                               --target wasm makes WebAssembly (app.wasm, and app.js for Node)\n"
         "  dessa run     <file.ds> [-- args...]         compile and run\n"
         "  dessa test    [folder or file]               run the tests: every *_test.ds and *.test.ds (see the chimb package)\n"
-        "  dessa fix-lists <file.ds>                    rewrite old [1, 2] lists as <1, 2>\n"
+        "  dessa fix     <file.ds>                      rewrite old syntax: [1, 2] as <1, 2>, f(a: 1) as f(a = 1)\n"
         "  dessa symbols <file.ds> [--stdin]            symbol table as JSON (for editors)\n"
         "  dessa serve [folder] [--port N]              a web server for pages (.dhtml compiled on each request)\n"
         "  dessa setup wasm                             download the compiler for WebAssembly (pages, --target wasm)\n"
@@ -189,9 +189,10 @@ int cmdAst(const std::string& path) {
     return hasError(diagnostics) ? 1 : 0;
 }
 
-// dessa fix-lists app.ds: rewrites the old list literals [1, 2] as <1, 2>
+// dessa fix app.ds: rewrites the old list literals [1, 2] as <1, 2> and the old
+// named arguments f(name: value) as f(name = value)
 // (only the file itself, not what it imports)
-int cmdFixLists(const std::string& path) {
+int cmdFix(const std::string& path) {
     std::ifstream in(path, std::ios::binary);
     if (!in) {
         std::cerr << "dessa: cannot read " << path << "\n";
@@ -223,12 +224,21 @@ int cmdFixLists(const std::string& path) {
         source[close] = '>';
         ++fixed;
     }
+    // Last to first, since each one makes the text longer
+    const auto& named = parser.oldNamedArgs();
+    for (auto it = named.rbegin(); it != named.rend(); ++it) {
+        size_t colon = at(it->line, it->column);
+        if (colon == std::string::npos || source[colon] != ':') continue;
+        const bool spaced = colon + 1 < source.size() && std::isspace(static_cast<unsigned char>(source[colon + 1]));
+        source.replace(colon, 1, spaced ? " =" : " = ");
+        ++fixed;
+    }
     if (fixed > 0) {
         std::ofstream out(path, std::ios::binary);
         out << source;
     }
     for (const auto& e : parser.getErrors()) std::cerr << path << ": " << e << "\n";
-    std::cout << path << ": " << fixed << " list" << (fixed == 1 ? "" : "s") << " rewritten\n";
+    std::cout << path << ": " << fixed << " place" << (fixed == 1 ? "" : "s") << " rewritten\n";
     return parser.hasErrors() ? 1 : 0;
 }
 
@@ -1316,7 +1326,7 @@ static int dessaMain(int argc, char* argv[]) {
     }
 
     if (command == "check") return cmdCheck(file, asJson, fromStdin);
-    if (command == "fix-lists") return cmdFixLists(file);
+    if (command == "fix" || command == "fix-lists") return cmdFix(file);
     if (command == "emit") return cmdEmit(file, output);
     if (command == "build") return cmdBuild(file, output, argv[0]);
     if (command == "run") return cmdRun(file, programArgs, argv[0]);

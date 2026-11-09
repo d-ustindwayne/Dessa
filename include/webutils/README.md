@@ -6,6 +6,9 @@ The web page from Dessa: the browser's own objects, and the utilities most pages
 
 **Runs in:** Web pages only (`.dhtml`, or `--target wasm` in a browser). `dessa run` of a plain `.ds` file can't use it.
 
+A page's inline scripts have it without an import. An external `<script src="app.ds">`
+starts with `$("webutils");`, as here.
+
 ## Example
 
 ```dessa

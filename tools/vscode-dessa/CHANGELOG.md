@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.7
+
+- No changes to the extension (Dessa 0.6.7: named arguments with =, decorators with commas, booleans in dessa.toml, webutils without an import in inline scripts)
+
 ## 0.6.1
 
 - No changes to the extension (Dessa 0.6.1: fixes a compiler crash on broken input and the website build)

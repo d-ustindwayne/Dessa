@@ -26,7 +26,7 @@ cached.
 
 | Folder | Files | What it does |
 |---|---|---|
-| `src/main.cpp` | | The command line: `run`, `build`, `check`, `emit`, `serve`, `fix-lists`, and the editor queries `symbols`, `complete`, `hover`. Chooses the backend. |
+| `src/main.cpp` | | The command line: `run`, `build`, `check`, `emit`, `serve`, `fix`, and the editor queries `symbols`, `complete`, `hover`. Chooses the backend. |
 | `src/common` | `program.hpp` | `Module` (one file: source, AST, resolved imports), `Program` (all modules, dependencies first, the entry file last), `Diagnostic`. |
 | `src/lexer` | `lexer.cpp`, `token.hpp` | Text to tokens. Handles template strings (`$"..{x}.."`), triple-quoted strings, number bases, `!!`. |
 | `src/parser` | `parser.cpp`, `ast.hpp` | Tokens to an AST (`Stmt` and `Expr` nodes). Decides between `<` as a list and as less-than. Keeps generic declarations as token lists (`Module::templates`) so they can be parsed again for each set of type arguments. |
@@ -162,13 +162,14 @@ compilation fails, Dessa writes a log file and prints its path.
   downloads the release for the computer's system, runs `dessa setup wasm`,
   and then drives `dessa` to build and run WebAssembly.
 
-## riv, the package manager (`tools/riv/`)
+## riv, the package manager
 
-riv is written in Dessa (`riv.ds`) and built with the compiler. It reads a
+riv is written in Dessa, in [its own repository](https://github.com/d-ustindwayne/riv.ds), and
+built with the compiler (`RIV_COMMIT` in `CMakeLists.txt` says which commit). It reads a
 project's `riv.pkg`, chooses versions from ranges (`^1.2.0`, `~2.0`, `>=1.0`),
 writes `riv.lock` with a hash of each package, and installs into
 `riv_modules/`. There is no package server: the index of packages and
-versions is a set of JSON files in this repository (`tools/riv/index/`), and
+versions is a set of JSON files in the riv.ds repository (`index/`), and
 packages travel over BitTorrent (the `torrent` package), from peers on the
 internet or the local network, with GitHub as a web seed when nobody is
 sharing. `riv update` updates Dessa itself from the latest GitHub release.

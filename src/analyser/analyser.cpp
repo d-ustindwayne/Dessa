@@ -261,6 +261,10 @@ void Analyser::importSymbol(const Symbol& exported, const std::string& localName
     symbol.importId = importId;
     if (Symbol* existing = currentScope->resolveLocal(localName)) {
         if (existing->moduleId == symbol.moduleId && existing->originalName == symbol.originalName) return; // same thing twice
+        if (existing->autoImported) {
+            *existing = symbol;
+            return;
+        }
         error(line, column, "Imported name '" + localName + "' conflicts with an existing declaration");
         return;
     }
@@ -362,11 +366,14 @@ void Analyser::processImports(const Module& module) {
 
         if (!anyResolved) continue;
 
-        // The errors every file has: never unused, and a file's own Error wins
-        if (import->modules.size() == 1 && import->modules[0].isPrelude) {
+        // The errors every file has, and webutils in a page's inline scripts:
+        // never unused, and a file's own Error or find wins
+        if (import->modules.size() == 1 && (import->modules[0].isPrelude || import->modules[0].isPageLibrary)) {
             for (const auto& [name, candidates] : available) {
                 if (name.empty() || name[0] == '_' || currentScope->resolveLocal(name)) continue;
-                importSymbol(candidates.front(), name, 0, 0, -1);
+                Symbol given = candidates.front();
+                given.autoImported = true;
+                importSymbol(given, name, 0, 0, -1);
             }
             continue;
         }
@@ -730,7 +737,7 @@ void Analyser::checkClassMembers(ClassInfo& info) {
         }
         for (const auto& a : method->annotations) {
             if (a.lexeme != "override") {
-                error(a.line, a.column, "Unknown annotation '@" + a.lexeme + "' (the only one is @override)");
+                error(a.line, a.column, "Unknown decorator '@" + a.lexeme + "' (the only one is @override)");
                 continue;
             }
             bool found = false;
@@ -925,7 +932,11 @@ bool Analyser::declareSymbol(Symbol symbol, int line, int column) {
     if (symbol.line == 0) { symbol.line = line; symbol.column = column; }
     if (symbol.moduleId == 0 && currentModule != 0 && symbol.kind != SymbolKind::Builtin) symbol.moduleId = currentModule;
     if (!currentScope->declare(symbol)) {
-        const Symbol* existing = currentScope->resolveLocal(symbol.name);
+        Symbol* existing = currentScope->resolveLocal(symbol.name);
+        if (existing && existing->autoImported) {
+            *existing = symbol;
+            return true;
+        }
         std::string where = existing && existing->line > 0 ? " (first declared on line " + std::to_string(existing->line) + ")" : "";
         error(line, column, "Duplicate declaration '" + symbol.name + "'" + where);
         return false;

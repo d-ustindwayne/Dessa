@@ -236,6 +236,43 @@ static int invalidUtf8Line(const std::string& text) {
     return 0;
 }
 
+// The `booleans` setting of the nearest dessa.toml above a file: "both" without one
+std::string ModuleLoader::booleanStyle(const std::string& file) {
+    std::error_code ec;
+    for (fs::path folder = fs::path(file).parent_path(); !folder.empty(); folder = folder.parent_path()) {
+        const fs::path settings = folder / "dessa.toml";
+        if (fs::is_regular_file(settings, ec)) {
+            std::ifstream in(settings);
+            std::string line;
+            std::string style = "both";
+            int number = 0;
+            while (std::getline(in, line)) {
+                ++number;
+                const size_t hash = line.find('#');
+                if (hash != std::string::npos) line.resize(hash);
+                const size_t equal = line.find('=');
+                if (equal == std::string::npos) continue;
+                auto trim = [](std::string text) {
+                    const char* blank = " \t\r\"";
+                    const size_t first = text.find_first_not_of(blank);
+                    if (first == std::string::npos) return std::string();
+                    return text.substr(first, text.find_last_not_of(blank) - first + 1);
+                };
+                if (trim(line.substr(0, equal)) != "booleans") continue;
+                const std::string value = trim(line.substr(equal + 1));
+                if (value == "both" || value == "true-false" || value == "yes-no") {
+                    style = value;
+                } else {
+                    addError(displayPath(settings.generic_string()), number, 1, "booleans is \"both\", \"true-false\" or \"yes-no\", not \"" + value + "\"");
+                }
+            }
+            return style;
+        }
+        if (folder == folder.parent_path()) break;
+    }
+    return "both";
+}
+
 int ModuleLoader::visit(Program& program, const std::string& path, const std::string* sourceOverride, State& state,
                         const std::string& fromFile, int fromLine, int fromColumn) {
     // Already loaded?
@@ -280,6 +317,22 @@ int ModuleLoader::visit(Program& program, const std::string& path, const std::st
     std::vector<Token> tokens = lexer.scanTokens();
     for (const auto& e : lexer.getErrors()) diagnostics.push_back(diagnosticFromMessage(module->displayPath, e));
 
+    // dessa.toml's `booleans` is about the project's own files: a library keeps its own style
+    if (!module->isPrelude && !inLibrary(path)) {
+        const std::string style = booleanStyle(path);
+        if (style != "both") {
+            const std::string yes = style == "yes-no" ? "yes" : "true", no = style == "yes-no" ? "no" : "false";
+            for (const auto& token : tokens) {
+                if (token.type != TokenType::TRUE && token.type != TokenType::FALSE) continue;
+                const std::string& wanted = token.type == TokenType::TRUE ? yes : no;
+                if (token.lexeme != wanted) {
+                    addError(module->displayPath, token.line, token.column,
+                             "This project uses " + yes + " and " + no + " (booleans in dessa.toml): write " + wanted + " instead of " + token.lexeme);
+                }
+            }
+        }
+    }
+
     Parser parser(std::move(tokens));
     module->ast = parser.parseProgram();
     module->templates = parser.takeTemplates();
@@ -291,6 +344,18 @@ int ModuleLoader::visit(Program& program, const std::string& path, const std::st
         ModuleSpec spec;
         spec.path = "errors";
         spec.isPrelude = true;
+        std::vector<ModuleSpec> specs;
+        specs.push_back(std::move(spec));
+        module->ast.insert(module->ast.begin(), std::make_unique<ImportStmt>(std::vector<ImportName>{}, std::move(specs), true));
+    }
+    // A page's inline scripts see webutils as if they had imported it. An
+    // external <script src="app.ds"> is a file of its own and imports it itself.
+    const std::string extension = fs::path(path).extension().string();
+    if (extension == ".dhtml" || extension == ".html" || extension == ".htm") {
+        ModuleSpec spec;
+        spec.path = "webutils";
+        spec.isBuiltin = true;
+        spec.isPageLibrary = true;
         std::vector<ModuleSpec> specs;
         specs.push_back(std::move(spec));
         module->ast.insert(module->ast.begin(), std::make_unique<ImportStmt>(std::vector<ImportName>{}, std::move(specs), true));

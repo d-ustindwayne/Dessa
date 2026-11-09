@@ -61,6 +61,14 @@ Any Int can be shown in another base with `toHex()`, `toOct()`, `toBin()` and
 plain `Int`, so it still works in arithmetic: `255.toHex()` prints `0xff`,
 `0xff.toDec()` prints `255`, `Str(5.toBin())` is `"0b101"`.
 
+A project can settle on one pair with `booleans` in a `dessa.toml` beside its files
+or in a folder above them: `"true-false"`, `"yes-no"`, or `"both"` (the default). The
+other pair is then an error in the project's own files; libraries keep theirs.
+
+```toml
+booleans = "yes-no"
+```
+
 `yes` and `no` are the same two values as `true` and `false`; a value
 remembers how it was written and prints that way:
 
@@ -128,8 +136,8 @@ A conversion that can't work is an error you can catch.
 
 ```dessa
 print("a", 1, true);                  // a 1 true
-print("a", "b", sep: ", ");           // a, b
-print("Loading", end: "");            // no new line
+print("a", "b", sep = ", ");          // a, b
+print("Loading", end = "");           // no new line
 var[Str] answer = input("Name? ");
 ```
 
@@ -160,7 +168,7 @@ A list is written `<1, 2, 3>`, an empty one `<>`, a list of lists
 `<<1, 2>, <3>>`. Inside a list a `>` ends it, so a comparison there needs
 brackets: `<(a > b), (c < d)>`. Lists printed by `print` still look like
 `[1, 2, 3]`. The old way, `[1, 2, 3]`, still works but gets a warning;
-`dessa fix-lists app.ds` rewrites a file's old lists.
+`dessa fix app.ds` rewrites a file's old lists.
 
 Indexes start at 0. Negative indexes are errors, and so is a missing map key
 (use `has`, `get` or `getOr` to check first).
@@ -217,7 +225,7 @@ func[Int] total(numbers[Int*]) {                          // any number of argum
     return sum;
 }
 
-print(add(2, 3), greet("Ann"), greet(greeting: "Hi", name: "Bea"), total(1, 2, 3), total(...<4, 5>));
+print(add(2, 3), greet("Ann"), greet(greeting = "Hi", name = "Bea"), total(1, 2, 3), total(...<4, 5>));
 ```
 
 Functions can be called before the place they are written. Parameters write
@@ -408,8 +416,9 @@ print(a, typeof(b));                        // Box:Int(value: 5) Box:Str
   stay generic: `class Named:T(Box:T) { ... }`.
 - Each use with other types is compiled separately, like C++ templates, so
   generics cost nothing while the program runs.
-- In call arguments, `name: value` (with a space) is a named argument and
-  `first:Int(...)` (no spaces) a generic call.
+- In a call, `first:Int(...)` is a generic call and `name = value` a named argument.
+  The old `name: value` still works but gets a warning; `dessa fix app.ds` rewrites it.
+- An assignment can't be an argument: `f(y = 9)` always names the parameter `y`.
 
 `Lst[Int | Str]` is another way to write the list type `(Int | Str)<>`.
 
@@ -614,7 +623,10 @@ var[Str] title = "hello"
     |> repeatTimes(2);       // repeatTimes(shout("hello"), 2)
 ```
 
-## Annotations
+## Decorators
+
+A decorator goes before a method, and several are separated by commas:
+`@a, @b, @c`. The compiler knows one so far.
 
 `@override` before a method says it replaces a method of the parent class (or
 of the interface). If there is no such method, for example because of a typo,

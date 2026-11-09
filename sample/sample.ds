@@ -10,8 +10,8 @@
 // ============================================================
 
 print("Hello Dessa!");
-print("a", "b", "c", sep: ", ");   // a, b, c
-print("Loading", end: "");         // no newline
+print("a", "b", "c", sep = ", ");   // a, b, c
+print("Loading", end = "");         // no newline
 print("... done");                 // Loading... done
 
 // ============================================================

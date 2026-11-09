@@ -1,7 +1,7 @@
 // Functions and lambdas
 
 print(add(2, 12.5));                       // hoisted: called before declaration
-print(add(num2: 1.5, num1: 10));
+print(add(num2 = 1.5, num1 = 10));
 
 func[Flt] add(num1[Flt], num2[Flt]) {
     const[Flt] result = num1 + num2;

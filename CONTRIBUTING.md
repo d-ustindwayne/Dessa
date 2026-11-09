@@ -18,7 +18,7 @@ How to build Dessa, test a change, and make a release. What Dessa is:
 ```
 cmake -S . -B build
 cmake --build build                 # build/dessa (dessa.exe on Windows)
-cmake --build build --target riv    # build/riv, compiled from tools/riv/riv.ds by dessa
+cmake --build build --target riv    # build/riv: fetches the riv.ds repository (RIV_COMMIT in CMakeLists.txt) and compiles it
 ```
 
 Release builds: `cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release`.

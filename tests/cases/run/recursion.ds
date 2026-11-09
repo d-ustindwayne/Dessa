@@ -12,7 +12,7 @@ func[Func[Int, Int]] makeCountdown() {
         if (n == 0) {
             return 0;
         }
-        print(n, end: " ");
+        print(n, end = " ");
         return countdown(n - 1);
     };
     return countdown;

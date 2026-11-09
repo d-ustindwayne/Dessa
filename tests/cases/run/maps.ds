@@ -16,7 +16,7 @@ print(ages.keys(), ages.values());
 
 print(ages.remove("Bo"), ages.remove("Bo"), ages);
 ages.set("Dee", 22);
-ages.forEach((name[Str], age[Int]) := print($"{name}={age}", end: "; "));
+ages.forEach((name[Str], age[Int]) := print($"{name}={age}", end = "; "));
 print();
 
 // Empty maps

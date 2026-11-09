@@ -95,11 +95,24 @@ else()
     endif()
 endif()
 
-# riv, the package manager, is written in Dessa and compiled with dessa:
+# riv, the package manager, is written in Dessa and lives in its own repository.
+# This fetches the commit below and compiles it with dessa:
 #   cmake --build build --target riv
+# -DRIV_DIR=<folder> uses a copy you have instead.
+set(RIV_REPOSITORY https://github.com/d-ustindwayne/riv.ds)
+set(RIV_COMMIT 9e77098c6677d83515531a0573ae28b496fa83ef)
+set(RIV_DIR "" CACHE PATH "A copy of the riv.ds repository (empty: fetch it)")
+if(RIV_DIR)
+    set(RIV_SOURCE ${RIV_DIR})
+    set(RIV_FETCH ${CMAKE_COMMAND} -E true)
+else()
+    set(RIV_SOURCE ${CMAKE_BINARY_DIR}/riv-${RIV_COMMIT})
+    set(RIV_FETCH ${CMAKE_COMMAND} -DSOURCE=${RIV_SOURCE} -DREPOSITORY=${RIV_REPOSITORY} -DCOMMIT=${RIV_COMMIT} -P ${CMAKE_SOURCE_DIR}/tools/fetch_riv.cmake)
+endif()
 add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/riv${CMAKE_EXECUTABLE_SUFFIX}
-    COMMAND ${CMAKE_COMMAND} -E env DESSA_PACKAGES=${CMAKE_SOURCE_DIR}/tools/riv/packages $<TARGET_FILE:dessa> build ${CMAKE_SOURCE_DIR}/tools/riv/riv.ds -o ${CMAKE_BINARY_DIR}/riv${CMAKE_EXECUTABLE_SUFFIX}
-    DEPENDS dessa ${CMAKE_SOURCE_DIR}/tools/riv/riv.ds
+    COMMAND ${RIV_FETCH}
+    COMMAND ${CMAKE_COMMAND} -E env DESSA_PACKAGES=${RIV_SOURCE}/packages $<TARGET_FILE:dessa> build ${RIV_SOURCE}/riv.ds -o ${CMAKE_BINARY_DIR}/riv${CMAKE_EXECUTABLE_SUFFIX}
+    DEPENDS dessa
     COMMENT "Building riv with dessa")
 add_custom_target(riv DEPENDS ${CMAKE_BINARY_DIR}/riv${CMAKE_EXECUTABLE_SUFFIX})

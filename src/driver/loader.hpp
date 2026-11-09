@@ -46,6 +46,7 @@ private:
     std::string resolveLocal(const std::string& importingFile, const std::string& dotted) const;
     bool isLibrary(const std::string& dotted) const;
     bool inLibrary(const std::string& file) const;
+    std::string booleanStyle(const std::string& file);
     std::filesystem::path libraryFolder(const std::string& dotted, bool includeBuiltins = true) const;
     void addError(const std::string& file, int line, int column, const std::string& message);
 };

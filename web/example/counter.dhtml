@@ -23,7 +23,6 @@
          or try it with:
              dessa run counter.dhtml        (opens it in the browser) -->
     <script>
-        $("webutils") { document, Element, Event, window }
 
         func[Element] need(id[Str]) {
             var[Element | Nil] element = document.getElementById(id);

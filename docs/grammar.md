@@ -37,13 +37,14 @@ try catch throw as new this super init true false yes no nil with is
 ```ebnf
 program      = declaration* ;
 declaration  = import | varDecl | constDecl | funcDecl | classDecl | enumDecl | interfaceDecl
-             | annotation+ funcDecl | statement ;
+             | annotations funcDecl | statement ;
 
 import       = "$" "(" moduleSpec ( "," moduleSpec )* ","? ")" importList? ";"? ;
 moduleSpec   = string ( "as" identifier )? ;
 importList   = "{" importName ( "," importName )* ","? "}" ;     (* names from one module only *)
 importName   = identifier ( "as" identifier )? ;
 
+annotations  = annotation ( ","? annotation )* ;
 annotation   = "@" identifier ;                                  (* only @override today *)
 ```
 
@@ -64,7 +65,7 @@ param        = identifier "[" type "*"? "]" ( "=" expression )? ;     (* * : the
 
 classDecl    = "class" ( "[" identifier "]" )? identifier ( ":" typeParams )?
                ( "(" qualified ( ":" typeArgs )? ")" )? "{" member* "}" ;
-member       = annotation* ( varDecl | constDecl | funcDecl | constructor ) ;
+member       = annotations? ( varDecl | constDecl | funcDecl | constructor ) ;
 constructor  = "init" "(" params? ")" "{" declaration* "}" ;
 
 enumDecl     = "enum" identifier "{" enumValue ( "," enumValue )* ","? "}" ;
@@ -157,7 +158,7 @@ call         = primary ( "(" arguments? ")"
                        | ( "." | "?." ) ( identifier | "init" ) ( ":" typeArgs )?
                        | "<" addition ">" )* ;
 arguments    = argument ( "," argument )* ","? ;
-argument     = ( identifier ":" )? "..."? expression ;
+argument     = ( identifier "=" )? "..."? expression ;
 
 primary      = literal | template | identifier ( ":" typeArgs )? | "this" | "super"
              | conversion | newExpr | list | oldList | mapOrSet | lambda | "(" expression ")" ;
@@ -196,7 +197,8 @@ lambdaParams = identifier "[" type "]" ( "," identifier "[" type "]" )* ;
 
 **`:`** is a generic's types only where one can fit: `pick:Int(items)` needs a `(`
 after the types. In a ternary's then-branch or a map's key a `:` ends the expression.
-`f(x: 1)` with spaces, or with a value that isn't a type, is a named argument.
+The old `f(x: 1)`, with spaces or a value that isn't a type, is still a named argument, with
+a warning. An assignment can't be an argument, so `f(x = 1)` always names the parameter.
 
 **`{` after `$(...)`** is the import's list of names when a name follows it;
 otherwise the statement has ended, as the `;` is optional there.

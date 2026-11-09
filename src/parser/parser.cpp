@@ -275,7 +275,7 @@ StmtPtr Parser::declarationInner() {
     if (check(TokenType::AT)) {
         Token at = peek();
         std::vector<Token> annotations = parseAnnotations();
-        if (!match({TokenType::FUNC})) throw error(peek(), "Annotations like @override go before methods.");
+        if (!match({TokenType::FUNC})) throw error(peek(), "Decorators like @override go before methods.");
         StmtPtr fn = funcDeclaration();
         static_cast<FuncDeclStmt*>(fn.get())->annotations = std::move(annotations);
         return fn;
@@ -442,7 +442,7 @@ StmtPtr Parser::classDeclaration() {
             else throw error(peek(), "Expect var, const, func, or init declaration inside class.");
             if (!annotations.empty()) {
                 if (member->kind == StmtKind::FuncDecl) static_cast<FuncDeclStmt*>(member.get())->annotations = std::move(annotations);
-                else error(annotations.front(), "Annotations like @override go before methods");
+                else error(annotations.front(), "Decorators like @override go before methods");
             }
             members.push_back(place(std::move(member), start));
             takeMoreDeclarations(members);
@@ -471,11 +471,13 @@ StmtPtr Parser::classDeclaration() {
     return klass;
 }
 
-// @override (several may follow each other)
+// @override, or several: @a, @b, @c (or each on its own line)
 std::vector<Token> Parser::parseAnnotations() {
     std::vector<Token> annotations;
     while (match({TokenType::AT})) {
-        annotations.push_back(consume(TokenType::IDENTIFIER, "Expect an annotation name after '@', e.g. @override."));
+        if (check(TokenType::L_PAREN)) throw error(peek(), "@(...) holds markup, in a component of an .xds file. Decorators are written @name, and several @a, @b.");
+        annotations.push_back(consume(TokenType::IDENTIFIER, "Expect a decorator name after '@', e.g. @override."));
+        if (match({TokenType::COMMA}) && !check(TokenType::AT)) error(peek(), "Expect another decorator after ',', e.g. @a, @b.");
     }
     return annotations;
 }
@@ -1352,16 +1354,25 @@ std::vector<Argument> Parser::parseArguments() {
     if (!check(TokenType::R_PAREN)) {
         do {
             Argument arg;
-            // name: value -- but first:Int(...) (no spaces) is a generic call
+            // name = value, or the old name: value -- but first:Int(...) (no spaces) is a generic call
             const bool genericCall = checkNext(TokenType::COLON) && typeArgAheadAt(2) &&
                                      peekAt(1).column == peek().column + static_cast<int>(peek().lexeme.size()) &&
                                      peekAt(2).column == peekAt(1).column + 1 && peekAt(2).line == peek().line;
-            if (check(TokenType::IDENTIFIER) && checkNext(TokenType::COLON) && !genericCall) {
+            if (check(TokenType::IDENTIFIER) && checkNext(TokenType::EQUAL)) {
                 arg.name = advance().lexeme;
+                advance(); // '='
+            } else if (check(TokenType::IDENTIFIER) && checkNext(TokenType::COLON) && !genericCall) {
+                arg.name = advance().lexeme;
+                arg.oldNamed = true;
+                oldNamed.push_back({peek().line, peek().column});
                 advance(); // ':'
             }
             arg.isSpread = match({TokenType::ELLIPSIS});
+            Token start = peek();
             arg.value = expression();
+            const Expr* inner = arg.value.get();
+            while (inner->kind == ExprKind::Grouping) inner = static_cast<const GroupingExpr*>(inner)->inner.get();
+            if (inner->kind == ExprKind::Assign) error(start, "An assignment can't be an argument; assign on the line before the call");
             args.push_back(std::move(arg));
         } while (match({TokenType::COMMA}));
     }

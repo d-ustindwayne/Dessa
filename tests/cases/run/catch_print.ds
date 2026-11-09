@@ -55,14 +55,14 @@ try {
 }
 
 // print options
-print("a", "b", "c", sep: ", ");
-print("no newline", end: "");
+print("a", "b", "c", sep = ", ");
+print("no newline", end = "");
 print(" ... continued");
-print(1, 2, 3, sep: "-", end: "!\n");
-print(end: "", sep: "|", "x", "y");
+print(1, 2, 3, sep = "-", end = "!\n");
+print(end = "", sep = "|", "x", "y");
 print();
-print("Loading", end: "");
+print("Loading", end = "");
 for (var[Int] i = 0; i < 3; i++) {
-    print(".", end: "");
+    print(".", end = "");
 }
 print(" done");

@@ -8,7 +8,7 @@ class Child(Base) {
     func[Str] hello() { return "hey"; }
     @override                                   // error: no parent class or interface of 'Child' has a method 'goodbye'
     func[Str] goodbye() { return "bye"; }
-    @deprecated                                 // error: Unknown annotation '@deprecated'
+    @deprecated                                 // error: Unknown decorator '@deprecated'
     func[Str] old() { return "old"; }
 }
 class Alone {

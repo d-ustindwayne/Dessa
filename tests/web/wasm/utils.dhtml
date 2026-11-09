@@ -13,7 +13,6 @@
 <span id="count"></span>
 <pre id="out"></pre>
 <script>
-$("webutils");
 
 func[Emp] say(line[Str]) {
     must("#out").textContent += line + "\n";

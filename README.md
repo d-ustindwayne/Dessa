@@ -84,7 +84,7 @@ riv run
 | `src/` | the compiler: lexer, parser, analyser, C and C++ generators |
 | `runtime/` | the support code every program uses (C, C++, and the WebAssembly loader) |
 | `include/` | the core libraries (`math`, `os`, `sys`, `time`, `random`, `dsds`, `dcrypto`, `webutils`) |
-| `tools/riv/` | riv and the bundled packages |
+| `tools/riv/` | The bundled packages ([riv](https://github.com/d-ustindwayne/riv.ds) itself has its own repository) |
 | `tools/vscode-dessa/` | the VS Code extension |
 | `web/` | an example page written in Dessa |
 | `npm/` | the npm package: Dessa to WebAssembly from Node |

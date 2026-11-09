@@ -25,6 +25,9 @@ public:
     // `dessa lists`, which rewrites them as <1, 2>)
     struct BracketList { int openLine, openColumn, closeLine, closeColumn; };
     const std::vector<BracketList>& bracketLists() const { return oldLists; }
+    // Where the : of the old named arguments (f(name: value)) is, for `dessa fix`
+    struct OldNamed { int line, column; };
+    const std::vector<OldNamed>& oldNamedArgs() const { return oldNamed; }
 
     // Generic functions and classes (not in the program itself: they are
     // filled in by the analyser for each use)
@@ -38,6 +41,7 @@ private:
     size_t current = 0;
     std::vector<std::string> errors;
     std::vector<BracketList> oldLists;
+    std::vector<OldNamed> oldNamed;
     std::vector<StmtPtr> templates;
     std::vector<std::pair<std::string, TypeNode>> substitutions;   // while instantiating
     bool instantiating = false;

@@ -1,0 +1,9 @@
+func[Int] pair(x[Int] = 1, y[Int] = 2) { return x * 10 + y; }
+var[Int] y = 5;
+var[Int<>] items = <1>;
+
+print(pair(y = 9));
+print(pair(y: 9));              // warning: Named arguments are written with =
+print(pair((y = 9)));           // error: An assignment can't be an argument
+print(pair(items<0> = 9));      // error: An assignment can't be an argument
+print(pair(y += 1));            // error: An assignment can't be an argument

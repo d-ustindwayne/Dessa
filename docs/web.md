@@ -14,7 +14,6 @@ holds Dessa code:
 <body>
     <button id="hello">Say hello</button>
     <script>
-        $("webutils") { document, Element, Event, alert }
         var[Element | Nil] button = document.getElementById("hello");
         if (button != nil) button.addEventListener("click", (e[Event]) := alert("Hello from Dessa!"));
     </script>
@@ -64,8 +63,12 @@ dessa run app.ds --target wasm                run it with Node
 
 ## webutils
 
-`$("webutils")` gives Dessa the page. Its classes are the browser's own
-objects, so setting a field changes the page right away:
+`webutils` gives Dessa the page. Its classes are the browser's own objects, so
+setting a field changes the page right away.
+
+A page's inline scripts have it without an import, and a name the script declares
+itself wins over the library's. An external `<script src="app.ds">` is a file of its
+own, so it starts with `$("webutils");`, or names what it uses:
 
 ```dessa
 $("webutils") { document, window, Element, Event, alert, prompt, confirm, log, setTimeout, fetchText }
