@@ -45,7 +45,11 @@ importList   = "{" importName ( "," importName )* ","? "}" ;     (* names from o
 importName   = identifier ( "as" identifier )? ;
 
 annotations  = annotation ( ","? annotation )* ;
+async        = "async" func | "func" "[" type "]" "async" identifier ... ;   (* "async" and "await" are ordinary names elsewhere *)
+await        = "await" unary ;                                    (* directly in an async function's body *)
 annotation   = "@" identifier ;                                  (* only @override today *)
+component    = "comp" identifier "(" params ")" block ;           (* .xds, .xdz, .xdx files, at the top *)
+markup       = "@(" element ")" ;                                 (* lexed as one block; a value, or as a statement it returns *)
 ```
 
 ## Declarations

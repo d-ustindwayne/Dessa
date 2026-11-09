@@ -356,11 +356,11 @@ void Analyser::processImports(const Module& module) {
             alias.aliasTable = static_cast<int>(aliasTables.size());
             aliasTables.emplace_back();
             for (auto& [name, candidates] : names) {
-                if (!name.empty() && name[0] != '_') aliasTables.back().emplace(name, candidates.front());
+                if (!name.empty() && (name[0] != '_' || spec->isHidden)) aliasTables.back().emplace(name, candidates.front());
             }
             const int importId = static_cast<int>(importRecords.size());
             importRecords.push_back({module.id, statement.get(), alias.name, spec->line, spec->column, 0, false});
-            importSymbol(alias, alias.name, spec->line, spec->column, importId);
+            importSymbol(alias, alias.name, spec->line, spec->column, spec->isHidden ? -1 : importId);
         }
         auto& available = allNames;
 
@@ -550,6 +550,8 @@ Symbol Analyser::makeFunctionSymbol(const FuncDeclStmt* declaration, SymbolKind 
     symbol.moduleId = currentModule;
     symbol.line = declaration->line;
     symbol.column = declaration->column;
+    if (declaration->isComp) prepareComp(declaration);
+    if (declaration->isAsync) prepareAsync(declaration);
     symbol.returnType = resolveType(declaration->returnType, declaration->line, declaration->column);
     for (const auto& t : declaration->throwsTypes) {
         SemanticType thrown = resolveType(t, declaration->line, declaration->column);
@@ -1184,6 +1186,10 @@ SemanticType Analyser::resolveTypeName(const std::string& name, int line, int co
     }
 
     if (const Symbol* symbol = resolveSymbol(name)) {
+        if (name == "Children" && symbol->kind == SymbolKind::Class && symbol->type.moduleId >= 0 &&
+            program->modules[static_cast<size_t>(symbol->type.moduleId)]->browserLibrary) {
+            return childrenType(symbol->type.moduleId);
+        }
         if (symbol->templateId >= 0 && symbol->kind == SymbolKind::Class) {
             const auto& params = templates[static_cast<size_t>(symbol->templateId)].params;
             error(line, column, "'" + name + "' is generic: say its type" + (params.size() == 1 ? "" : "s") + ", e.g. " + name +
@@ -1520,6 +1526,7 @@ void Analyser::analyseVariableDeclaration(const VarDeclStmt* statement) {
         early.isConst = statement->isConst;
         early.isGlobal = currentScope->kind() == ScopeKind::Module;
         early.moduleId = currentModule;
+        early.lambda = lambda;
         if (!declareSymbol(early, statement->line, statement->column)) return;
         predeclared = true;
         definingLambda = statement;
@@ -1582,7 +1589,10 @@ void Analyser::analyseFunctionBody(const FuncDeclStmt* statement) {
     const int previousLoopDepth = loopDepth;
     const bool previousInConstructor = inConstructor;
     currentFunctionName = statement->isConstructor ? "init" : statement->name;
-    currentReturnType = signature->returnType;
+    // async func[T]: inside, it returns a T (callers get a Task:T)
+    const size_t errorsBefore = diagnostics.size();
+    const SemanticType bodyReturn = statement->isAsync ? resolveType(statement->asyncResult, statement->line, statement->column) : signature->returnType;
+    currentReturnType = bodyReturn;
     const auto previousThrows = currentThrows;
     const int previousTryDepth = tryDepth;
     currentThrows = statement->throwsTypes.empty() ? std::nullopt : std::optional<std::vector<SemanticType>>(signature->throws);
@@ -1636,9 +1646,9 @@ void Analyser::analyseFunctionBody(const FuncDeclStmt* statement) {
 
     for (const auto& child : block->statements) analyseStatement(child.get());
 
-    if (!signature->returnType.isVoidLike() && !signature->returnType.isUnknown() &&
+    if (!bodyReturn.isVoidLike() && !bodyReturn.isUnknown() &&
         !blockDefinitelyExits(block, false) && !isStubBody(block)) {
-        error(statement, "Function '" + statement->name + "' may reach the end without returning " + signature->returnType.toString());
+        error(statement, "Function '" + statement->name + "' may reach the end without returning " + bodyReturn.toString());
     }
 
     endScope();
@@ -1650,6 +1660,13 @@ void Analyser::analyseFunctionBody(const FuncDeclStmt* statement) {
     inferringReturn = previousInferring;
     loopDepth = previousLoopDepth;
     inConstructor = previousInConstructor;
+
+    // Checked: an async function now becomes a state machine
+    if (statement->isAsync && statement->body) {
+        bool clean = true;
+        for (size_t d = errorsBefore; d < diagnostics.size(); ++d) if (diagnostics[d].severity == DiagnosticSeverity::Error) clean = false;
+        if (clean) lowerAsync(statement);
+    }
 }
 
 // _get, _set, _neg, _iter, _length, _hash: the shapes the compiler relies on

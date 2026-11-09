@@ -112,6 +112,10 @@ var[Str] sql = """
     """;                                         // multi-line, indentation removed
 ```
 
+Other encodings are bytes, as a list of numbers from 0 to 255: `"hé".encode("utf-16")`, and back with
+`bytes.decode("utf-16")`. See `readFileAs` in [libraries.md](libraries.md#os). Source files may be saved as
+UTF-8, or as UTF-16 or UTF-32 with a BOM.
+
 Text counts characters, not bytes: `"héllo".length()` is 5 and `"héllo"<1>`
 is `'é'`. Useful methods: `length`, `upper`, `lower`, `title`, `trim`, `includes`,
 `startsWith`, `endsWith`, `indexOf`, `replace` (first match), `replaceAll`,
@@ -553,6 +557,42 @@ Callers don't have to catch it; it tells readers (and the editor shows it).
 
 An error nobody catches stops the program and shows where it happened:
 `IndexError: Index 3 is out of range for list of length 2 at app.ds:12`.
+
+## Async functions
+
+An async function can wait without stopping everything else. It gives a `Task` as soon as it
+reaches its first wait; `await` gives what the Task finished with.
+
+```
+async func[Str] slowHello(name[Str]) {
+    await delay(100);
+    return $"Hello {name}";
+}
+
+func[Int] async answer() { return 42; }     // the same thing, written the other way
+
+async func[Emp] main() {
+    var[Task:Str] a = slowHello("Ann"), b = slowHello("Bo");     // both are running
+    print(await a, await b, await answer());
+    print(await all(<slowHello("Cy"), slowHello("Di")>));
+}
+main();
+print("this comes first");
+```
+
+- `async func[T]` gives a `Task:T`, and `async func[Emp]` a `Task:Emp`. Methods can be async too.
+- `await` goes anywhere in an expression, and `try` and `catch` work around it: a Task that failed
+  throws its error at the `await`.
+- `$("async")` is imported for you when a file uses them: `delay(ms)`, `all(tasks)`, `done(value)`,
+  and on a Task `isDone()` and `failed()`. In a page, `fetchTask(url)` and `postTask(url, body)`.
+- There is one thread. Code runs until it waits, and only then does something else get a turn, so
+  a long loop or a blocking call such as `sleep` holds everything up.
+- After the program's last line, Dessa runs what is still waiting. A failed Task that nobody awaited
+  then ends the program with its error. In a page, the browser does the waiting, and that error is
+  logged instead.
+- `await` is only for the body of an async function, not inside a lambda. Lambdas can't be async, and
+  an async function can't be inside another function. A class that isn't an `Error` keeps its message
+  but loses its class if thrown across an `await`.
 
 ## Modules
 

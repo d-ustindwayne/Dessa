@@ -501,6 +501,12 @@ ds_str* ds_str_lower(ds_str* s);
 ds_str* ds_str_trim(ds_str* s);
 ds_str* ds_str_title(ds_str* s);
 ds_str* ds_str_plain(ds_str* s);
+ds_list* ds_str_encode(ds_str* s, ds_str* encoding);   /* the text's bytes in an encoding */
+ds_str* ds_list_decode(ds_list* bytes, ds_str* encoding);
+ds_list* ds_os_read_bytes(ds_str* path);
+void ds_os_write_bytes(ds_str* path, ds_list* bytes);
+void ds_sys_print_err(ds_str* text);
+ds_str* ds_sys_program_path(void);
 ds_str* ds_str_caseless(ds_str* s);
 bool ds_str_includes(ds_str* s, ds_str* part);
 bool ds_str_starts(ds_str* s, ds_str* p);

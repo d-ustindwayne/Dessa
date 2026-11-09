@@ -51,6 +51,68 @@ It runs anywhere, even opened straight from the disk, and doesn't need Dessa.
 Error messages point at the line and column in the `.dhtml` file. Imports
 (`$("utils")`) are relative to the page.
 
+## Components: .xds files
+
+`.xds` (also `.xdz` and `.xdx`) files hold components. `.dhtml` stays as it is.
+
+```
+$("webutils") { Children }
+
+comp Title(text[Str]) { @(<h1>{text}</h1>) }
+
+comp Button(text[Str], kind[Str] = "primary", onClick[Func[Emp] | Nil] = nil) {
+    @(<button class={kind} on:click={onClick}>{text}</button>)
+}
+
+comp Box(child[Children]) { @(<div class="box">{child}</div>) }
+
+comp App(heading[Str] = "Hello") {
+    var[State:Int] count = new State(0);
+    var[Element] label = @(<span>0</span>);
+    count.bindText(label);
+    const[Func[Emp]] add = () := count.update((n[Int]) := n + 1);
+    @(<main>
+        <Title text={heading} />
+        <Box>It's text, an element, or <b>several</b>.</Box>
+        <Button text="Add" onClick={add} />
+        {label}
+    </main>)
+}
+```
+
+Then use the tag in any page, `.html` or `.dhtml`. No `type="module"` is needed:
+
+```html
+<script src="app.xds"></script>
+<App heading="Welcome" />
+```
+
+`dessa run page.html`, `dessa serve` and `dessa build page.html` all rewrite the page, so
+it needs one of them: a browser opening the raw `.html` from disk can't run an `.xds`.
+`dessa build app.xds` makes `app.js` for you to load yourself; add `--html` to also get a page
+showing it (the component `App`, or else the last one that needs no values).
+
+The rules:
+
+- **`comp`** only exists in these files. Its return type is worked out: `Element`, or
+  `Element | Nil` when it can reach its end (`if (show) { @(<b>hi</b>) }`).
+- **`@(...)` returns** the markup; `return @(...)` says the same. Nothing can follow it in the same
+  block. It holds one element, and it can be a value too: `var[Element] e = @(<b>hi</b>);`.
+- **Attributes** are `"text"` or `{value}`. `true` and `false` add or leave out the attribute, and
+  `nil` leaves it out. Every tag needs its end: `<br />`.
+- **Events** are `on:click={f}`, where `f` takes the event or nothing. `f` can be `nil`.
+- **Tags starting with a capital** are components. `<Box>...</Box>` gives what is nested to the
+  parameter of type `Children` (`$("webutils") { Children }`). `Children` takes text, an element, or
+  a list of them.
+- **Values are safe**: `{x}` is always text, never HTML, and `href`/`src` go through `safeUrl`.
+- **A `func` inside** a comp is a lambda with a name, so it works as a tag too. It captures by value,
+  and has no defaults or variadics. (This works in any function, in any Dessa file.)
+- **In a page**, an attribute gives a `Str`, `Int`, `Dbl`, `Flt` or `Bul` parameter. A component with a
+  required parameter of another type can only be used from other components. Components of an
+  imported `.xds` aren't tags until the page has its own `<script src>` for that file.
+
+A component renders once; what changes later goes through `State:T`, as above.
+
 ## 2. WebAssembly files
 
 A program (not a page) compiled to WebAssembly runs with Node, and in any
@@ -139,6 +201,7 @@ var[Func[Emp]] track = throttle(() := update(), 100);          // at most every 
 on(must("#box"), "input", "", (e[Event]) := search());
 
 // The network, without stopping the page
+// or, in an async function: var[FetchResult] r = await fetchTask("data.json");
 fetchAsync("data.json", (r[FetchResult]) := {
     if (r.ok) show(r.text); else log("failed:", r.error);
 });

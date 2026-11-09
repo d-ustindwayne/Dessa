@@ -50,3 +50,4 @@ Thumbs.db
 
 # The playground: built by emcmake (compiler/) and scripts/playground.ts (the rest)
 /public/playground
+/public/llms.txt

@@ -6,7 +6,13 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
   - package-ecosystem: bun
     directory: /website
     schedule:
       interval: weekly
+    groups:
+      website:
+        patterns: ["*"]

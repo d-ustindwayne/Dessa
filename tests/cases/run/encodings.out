@@ -1,0 +1,28 @@
+utf-8 14 true
+utf-8-bom 17 true
+utf-16 20 true
+utf-16le 18 true
+utf-16be 18 true
+utf-32 36 true
+utf-32le 32 true
+utf-32be 32 true
+<65, 0, 172, 32> <0, 65, 32, 172> <0, 0, 0, 65> <255, 254, 65, 0>
+😀
+😀
+A A A B C
+utf-16 true 20
+utf-16be true 18
+utf-32 true 36
+utf-8-bom true 17
+héllo €😀
+hi <104, 105>
+Unknown encoding 'latin-1': use utf-8, utf-8-bom, utf-16, utf-16le, utf-16be, utf-32, utf-32le, utf-32be (or auto, to read)
+Can't encode this: "auto" is only for reading: say which encoding to write
+Can't decode this as utf-8: this isn't valid UTF-8
+Can't decode this as utf-8: this isn't valid UTF-8
+Can't decode this as utf-8: this isn't valid UTF-8
+Can't decode this as utf-16le: UTF-16 comes in pairs of bytes, and this has one left over
+Can't decode this as utf-16le: this UTF-16 ends in half a character
+Can't decode this as utf-16le: this isn't valid UTF-16
+Can't decode this as utf-32le: this isn't valid UTF-32
+A byte is 0 to 255, not 300

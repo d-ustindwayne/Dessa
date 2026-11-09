@@ -1,0 +1,19 @@
+// A func inside a function is a lambda with a name
+func[Int] outer(base[Int]) {
+    func[Int] add(n[Int]) { return base + n; }
+    func[Int] fact(n[Int]) { return n <= 1 ? 1 : n * fact(n - 1); }
+    func[Emp] say(text[Str]) { print(text); }
+    say("hi");
+    return add(2) + fact(4);
+}
+print(outer(10));
+
+class Box {
+    var[Int] size = 3;
+    func[Int] twice() {
+        const[Int] s = this.size;
+        func[Int] double() { return s * 2; }
+        return double();
+    }
+}
+print(new Box().twice());

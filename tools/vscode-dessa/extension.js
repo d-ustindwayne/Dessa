@@ -125,7 +125,7 @@ const DESSA_SCRIPT = /<script\b[^>]*\btype\s*=\s*["']?(?:text|application)\/(?:d
 function isDessa(doc) {
     if (!doc || doc.uri.scheme !== 'file') return false;
     if (doc.languageId === 'dessa' || doc.languageId === 'dessa-html') return true;
-    return doc.languageId === 'html' && DESSA_SCRIPT.test(doc.getText());
+    return doc.languageId === 'html' && (DESSA_SCRIPT.test(doc.getText()) || /<script\b[^>]*\bsrc\s*=\s*["'][^"']+\.xd[szx]["']/i.test(doc.getText()));
 }
 
 function isPage(doc) {
@@ -726,7 +726,7 @@ function projectModules(doc) {
             const full = path.join(folder, e.name);
             if (e.isDirectory()) {
                 if (depth < 3) walk(full, prefix + e.name + '.', depth + 1);
-            } else if (/\.(ds|dm|dx|dz|dsx|dxx|dzx|dds|dss)$/.test(e.name) && path.resolve(full) !== own) {
+            } else if (/\.(ds|dm|dx|dz|dsx|dxx|dzx|dds|dss|xds|xdz|xdx)$/.test(e.name) && path.resolve(full) !== own) {
                 found.push(prefix + e.name.replace(/\.[^.]+$/, ''));
             }
         }
@@ -735,7 +735,7 @@ function projectModules(doc) {
     return [...new Set(found)].sort();
 }
 
-const DESSA_EXTENSIONS = ['.ds', '.dm', '.dx', '.dz', '.dsx', '.dxx', '.dzx', '.dds', '.dss'];
+const DESSA_EXTENSIONS = ['.ds', '.dm', '.dx', '.dz', '.dsx', '.dxx', '.dzx', '.dds', '.dss', '.xds', '.xdz', '.xdx'];
 
 // Packages riv installed (riv_modules in the file's folder or any parent) and
 // the extra package folders, as name -> folder; the nearest one wins, like
@@ -1835,6 +1835,86 @@ const htmlCompletionProvider = {
     },
 };
 
+// ---- Components (.xds) in editors ----
+// <Card title="x" /> in a page or in markup: their names and parameters come
+// from `dessa components`
+
+const COMPONENT_SCRIPT = /<script\b[^>]*\bsrc\s*=\s*["']([^"']+\.xd[szx])["']/gi;
+
+// The component files a document can use: itself (.xds), or a page's .xds scripts
+function componentFiles(doc) {
+    if (/\.xd[szx]$/i.test(doc.fileName)) return [doc.fileName];
+    const found = [];
+    for (const m of doc.getText().matchAll(COMPONENT_SCRIPT)) found.push(path.resolve(path.dirname(doc.fileName), m[1]));
+    return found;
+}
+
+function componentsOf(file) {
+    const { execFileSync } = require('child_process');
+    try {
+        const out = execFileSync(compilerPath(), ['components', file], { encoding: 'utf8', env: compilerEnv(), timeout: 5000, windowsHide: true });
+        return JSON.parse(out);
+    } catch {
+        return [];
+    }
+}
+
+function componentDetail(c) {
+    return `comp ${c.name}(${c.params.map((p) => p.name + (p.required ? '' : '?')).join(', ')})`;
+}
+
+// Is the cursor in markup, or in a page outside its scripts?
+function tagContext(doc, position) {
+    const before = doc.getText(new vscode.Range(new vscode.Position(0, 0), position));
+    const open = before.lastIndexOf('<');
+    if (open < 0 || before.indexOf('>', open) >= 0) return null;
+    const m = /^<([A-Za-z][\w.]*)?(\s[\s\S]*)?$/.exec(before.slice(open));
+    if (!m) return null;
+    return m[2] === undefined ? { kind: 'tag', typed: m[1] || '' } : { kind: 'attribute', tag: m[1], written: m[2] };
+}
+
+const componentCompletionProvider = {
+    provideCompletionItems(doc, position) {
+        const files = componentFiles(doc);
+        if (!files.length) return undefined;
+        const context = tagContext(doc, position);
+        if (!context) return undefined;
+        const components = files.flatMap(componentsOf);
+        if (context.kind === 'tag') {
+            return components.map((c) => {
+                const item = new vscode.CompletionItem(c.name, vscode.CompletionItemKind.Class);
+                item.detail = componentDetail(c);
+                item.sortText = '0' + c.name;
+                return item;
+            });
+        }
+        const component = components.find((c) => c.name === context.tag);
+        if (!component) return undefined;
+        const isPageFile = !/\.xd[szx]$/i.test(doc.fileName);
+        return component.params.filter((p) => !new RegExp(`\\b${p.name}\\s*=`).test(context.written) && (!isPageFile || p.kind !== 'Children')).map((p) => {
+            const item = new vscode.CompletionItem(p.name, vscode.CompletionItemKind.Property);
+            item.detail = p.required ? 'needed' : 'optional';
+            item.insertText = new vscode.SnippetString(isPageFile ? `${p.name}="$1"` : `${p.name}={$1}`);
+            item.sortText = (p.required ? '0' : '1') + p.name;
+            return item;
+        });
+    },
+};
+
+const componentHoverProvider = {
+    provideHover(doc, position) {
+        const files = componentFiles(doc);
+        if (!files.length) return undefined;
+        const range = doc.getWordRangeAtPosition(position, /[A-Z]\w*/);
+        if (!range) return undefined;
+        const before = doc.getText(new vscode.Range(range.start.translate(0, -Math.min(2, range.start.character)), range.start));
+        if (!/<\/?$/.test(before)) return undefined;
+        const name = doc.getText(range);
+        const component = files.flatMap(componentsOf).find((c) => c.name === name);
+        return component ? new vscode.Hover(new vscode.MarkdownString().appendCodeblock(componentDetail(component), 'dessa'), range) : undefined;
+    },
+};
+
 // Typing in a page's HTML, as in .html files: `>` closes the tag
 // (<div>|</div>), `</` finishes the closing tag, `=` after an attribute adds
 // the quotes (class="|")
@@ -2182,6 +2262,9 @@ function activate(context) {
         vscode.languages.registerDefinitionProvider(selector, definitionProvider),
         vscode.languages.registerDocumentLinkProvider(selector, documentLinkProvider),
         vscode.languages.registerCodeActionsProvider(selector, codeActionProvider, { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }),
+        // Components: their tags and parameters, in .xds files and in pages using them
+        vscode.languages.registerCompletionItemProvider(['dessa', 'dessa-html', 'html'], componentCompletionProvider, '<', ' '),
+        vscode.languages.registerHoverProvider(['dessa', 'dessa-html', 'html'], componentHoverProvider),
         // The HTML of .dhtml pages
         vscode.languages.registerCompletionItemProvider({ language: 'dessa-html' }, htmlCompletionProvider, '<', ' ', '"', "'", '=', '/', ':'),
         vscode.languages.registerDocumentHighlightProvider({ language: 'dessa-html' }, htmlHighlightProvider),

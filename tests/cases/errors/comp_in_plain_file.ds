@@ -1,0 +1,1 @@
+comp Title(text[Str]) { }     // error: only .xds, .xdz and .xdx files have them

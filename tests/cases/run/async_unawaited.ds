@@ -1,0 +1,20 @@
+// A failed Task nobody awaited ends the program with its error
+// exit: 1
+// stderr: nobody caught this
+async func[Emp] boom() {
+    await delay(1);
+    throw new Error("nobody caught this");
+}
+
+async func[Emp] loopVariable() {
+    for (var[Int] i = 0; i < 2; i++) {
+        var[Int] fresh;
+        fresh += i + 1;
+        await delay(1);
+        print("fresh", fresh);
+    }
+}
+
+loopVariable();
+boom();
+print("the program's last line");

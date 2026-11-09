@@ -1,0 +1,41 @@
+// Components: $("webutils") is there without asking; Children is named to use it as a type.
+$("webutils") { Children }
+
+comp Title(text[Str]) {
+    @(<h1 style="font-family: system-ui">{text}</h1>)
+}
+
+// Handlers can be left out.
+comp Button(text[Str], onClick[Func[Emp] | Nil] = nil) {
+    @(<button on:click={onClick}>{text}</button>)
+}
+
+// Whatever is nested in the tag comes in as Children.
+comp Card(child[Children]) {
+    @(<div style="border: 1px solid #888; padding: 12px; margin: 8px 0">{child}</div>)
+}
+
+// Can reach its end, so it may give nothing.
+comp Warning(show[Bul]) {
+    if (show) { @(<p style="color: #b00020">Be careful!</p>) }
+}
+
+comp App(heading[Str] = "Hello") {
+    var[Str<>] names = <"Ann", "Bo", "Cy">;
+    // A component renders once. What changes goes through State.
+    var[State:Int] clicks = new State(0);
+    var[Element] count = @(<strong>0</strong>);
+    clicks.bindText(count);
+    const[Func[Emp]] add = () := clicks.update((n[Int]) := n + 1);
+
+    @(<main>
+        <Title text={heading} />
+        <Card>It's <em>text</em>, an element, or several.</Card>
+        <Card>
+            <p>Clicked {count} times</p>
+            <Button text="Add one" onClick={add} />
+        </Card>
+        <Warning show={names.length() > 2} />
+        <ul>{names.map((name[Str]) := @(<li>{name}</li>))}</ul>
+    </main>)
+}

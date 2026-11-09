@@ -12,6 +12,14 @@ inline List<Str> args() { return program_args(); }
     std::exit(static_cast<int>(code));
 }
 
+// To stderr, with a line break
+inline void printErr(const Str& text) {
+    std::cout.flush();
+    std::cerr << text << "\n" << std::flush;
+}
+
+inline Str programPath() { return program_path(); }
+
 inline Str platform() {
 #if defined(_WIN32)
     return "windows";

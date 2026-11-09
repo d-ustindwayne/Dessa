@@ -39,8 +39,6 @@ there) or `"a"` to add to the end. A `File` has `readLine()` (nil at the end),
 `lines()`, `read()` (the rest), `atEnd()`, `write(text)`, `writeLine(text)`,
 `flush()`, `isOpen()` and `close()`.
 
-In WebAssembly under Node on Windows, `listDir` and `deleteAll` of a folder fail with
-"Function not implemented". Native programs don't have this limit.
 
 ## Starting programs safely
 

@@ -33,6 +33,8 @@
  *     toast, copyText, downloadText, readChosenFile, mediaMatches, nextFrame
  */
 
+$("async") { Task }
+
 // ============================================================
 // Page objects (the browser's own; Dessa doesn't create them)
 // ============================================================
@@ -211,6 +213,7 @@ class Rect {
 
 // The page itself.
 class Document {
+    var[Str] readyState;                // "loading" until the page has been read
     var[Element] body;
     var[Element] head;
     var[Element] documentElement;
@@ -222,6 +225,7 @@ class Document {
     func[Element<>] querySelectorAll(selector[Str]) { ... }
     // A new element (not in the page until appendChild): createElement("div")
     func[Element] createElement(tag[Str]) { ... }
+    func[Element] createTextNode(text[Str]) { ... }
     func[Emp] addEventListener(type[Str], listener[Func[Emp, [Event]]]) { ... }
 }
 
@@ -536,6 +540,20 @@ func[Emp] _fetch(method[Str], url[Str], body[Str], contentType[Str], done[Func[E
 //     });
 func[Emp] fetchAsync(url[Str], done[Func[Emp, [FetchResult]]]) {
     _fetch("GET", url, "", "", done);
+}
+
+// The same, to wait for in an async function:
+//     var[FetchResult] r = await fetchTask("data.json");
+func[Task:FetchResult] fetchTask(url[Str]) {
+    var[Task:FetchResult] task = new Task:FetchResult();
+    _fetch("GET", url, "", "", (r[FetchResult]) := task._resolve(r));
+    return task;
+}
+
+func[Task:FetchResult] postTask(url[Str], body[Str], contentType[Str] = "application/json", method[Str] = "POST") {
+    var[Task:FetchResult] task = new Task:FetchResult();
+    _fetch(method.upper(), url, body, contentType, (r[FetchResult]) := task._resolve(r));
+    return task;
 }
 
 // Sends `body` the same way. contentType says what it is.
@@ -933,3 +951,106 @@ func[Emp] readChosenFile(input[Element], done[Func[Emp, [ChosenFile]]]) {
 
 // Does a CSS media query hold? mediaMatches("(max-width: 600px)")
 func[Bul] mediaMatches(query[Str]) { return window.matchMedia(query).matches; }
+
+// ============================================================
+// Components (.xds files)
+// ============================================================
+
+// What a component can have nested inside it: text, an element, or several.
+//     comp Box(child[Children]) { @(<div class="box">{child}</div>) }
+// The compiler knows this name: it is Element | Str | (Element | Str)<>.
+class Children {}
+
+// Markup turns into these (see src/analyser/analyser_markup.cpp).
+class _Markup {
+    var[Element] el;
+    init(tag[Str]) { this.el = document.createElement(tag); }
+    func[_Markup] attr(name[Str], value[Obj]) {
+        if (value == nil) return this;
+        if (value is Bul) {
+            if (value) this.el.setAttribute(name, "");
+            return this;
+        }
+        var[Str] text = Str(value);
+        var[Str] low = name.lower();
+        if (low == "href" || low == "src" || low == "action" || low == "formaction" || low == "xlink:href") text = safeUrl(text);
+        this.el.setAttribute(name, text);
+        return this;
+    }
+    func[_Markup] on0(type[Str], handler[Func[Emp] | Nil]) {
+        if (handler != nil) {
+            const[Func[Emp]] run = handler;
+            _on(this.el, type, (e[Event]) := run(), false);
+        }
+        return this;
+    }
+    func[_Markup] on1(type[Str], handler[Func[Emp, [Event]] | Nil]) {
+        if (handler != nil) _on(this.el, type, handler, false);
+        return this;
+    }
+    func[_Markup] add(child[Obj]) {
+        _addTo(this.el, child);
+        return this;
+    }
+    func[Element] done() { return this.el; }
+}
+
+func[_Markup] _mk(tag[Str]) { return new _Markup(tag); }
+
+func[Emp] _addTo(parent[Element], child[Obj]) {
+    if (child == nil) return;
+    if (child is Element) { parent.appendChild(child); return; }
+    if (child is Str) { parent.appendChild(document.createTextNode(child)); return; }
+    if (child is (Element | Str)<>) { for (var[Element | Str] item in child) _addTo(parent, item); return; }
+    if (child is Element<>) { for (var[Element] item in child) parent.appendChild(item); return; }
+    if (child is Str<>) { for (var[Str] item in child) _addTo(parent, item); return; }
+    if (child is Obj<>) { for (var[Obj] item in child) _addTo(parent, item); return; }
+    parent.appendChild(document.createTextNode(Str(child)));
+}
+
+// What is nested in a component's tag, flat
+func[(Element | Str)<>] _kids(items[Obj*]) {
+    var[(Element | Str)<>] out = <>;
+    for (var[Obj] item in items) {
+        if (item == nil) continue;
+        if (item is Element) out.push(item);
+        else if (item is Str) out.push(item);
+        else if (item is (Element | Str)<>) { for (var[Element | Str] one in item) out.push(one); }
+        else if (item is Element<>) { for (var[Element] one in item) out.push(one); }
+        else if (item is Str<>) { for (var[Str] one in item) out.push(one); }
+        else if (item is Obj<>) { for (var[Element | Str] one in _kids(...item)) out.push(one); }
+        else out.push(Str(item));
+    }
+    return out;
+}
+
+// ---- A component's tag in a page: <Card title="x" /> ----
+
+func[Str] _attrStr(el[Element], name[Str], otherwise[Str]) { return el.getAttribute(name) ?? otherwise; }
+func[Int] _attrInt(el[Element], name[Str], otherwise[Int]) { return el.hasAttribute(name) ? Int(_attrStr(el, name, "")) : otherwise; }
+func[Dbl] _attrDbl(el[Element], name[Str], otherwise[Dbl]) { return el.hasAttribute(name) ? Dbl(_attrStr(el, name, "")) : otherwise; }
+func[Flt] _attrFlt(el[Element], name[Str], otherwise[Flt]) { return el.hasAttribute(name) ? Flt(_attrStr(el, name, "")) : otherwise; }
+func[Bul] _attrBul(el[Element], name[Str], otherwise[Bul]) { return el.hasAttribute(name) ? _attrStr(el, name, "") != "false" : otherwise; }
+
+// What the page has nested in the tag
+func[(Element | Str)<>] _nestedIn(el[Element]) {
+    var[(Element | Str)<>] out = <>;
+    for (var[Element] child in el.children) out.push(child);
+    if (out.length() == 0 && el.textContent != "") out.push(el.textContent);
+    return out;
+}
+
+func[Emp] _place(el[Element], made[Element | Nil]) {
+    if (made != nil) el.replaceWith(made);
+    else el.remove();
+}
+
+func[Emp] _mountNow(tag[Str], make[Func[Emp, [Element]]]) {
+    for (var[Element] el in document.querySelectorAll(tag)) make(el);
+}
+
+// Runs make for each of these tags, when the page has been read
+func[Emp] _mount(tag[Str], make[Func[Emp, [Element]]]) {
+    if (document.readyState == "loading") _onWindow("DOMContentLoaded", (e[Event]) := _mountNow(tag, make));
+    else _mountNow(tag, make);
+}

@@ -76,7 +76,8 @@ enum class TokenType {
     QUESTION_EQUAL, QUESTION_BANG, AT, FUNC_PIPE, WITH, IS, // ?= ?! @ |> with is
 
     // ---- End of stream ----
-    END_OF_FILE
+    END_OF_FILE,
+    MARKUP, // @(<div>...</div>) in an .xds file: the markup, as one raw block (last: `dessa tokens` prints these numbers)
 };
 
 struct Token {

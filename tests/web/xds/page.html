@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>xds</title><script src="app.xds"></script></head>
+<body>
+<!-- <AppContainer /> in a comment stays as it is -->
+<AppContainer heading="From the page" items="3" />
+<WithSlot label="slotted"><em>nested in html</em></WithSlot>
+<p id="after">after</p>
+<Loader />
+<pre id="out"></pre>
+<script>
+window.addEventListener("load", () => setTimeout(() => {
+    const later = document.querySelector("#loader");
+    const lines = [];
+    const show = (what, value) => lines.push(what + ": " + value);
+    show("comment kept", document.body.innerHTML.includes("<!-- <AppContainer /> in a comment stays as it is -->"));
+    show("main", document.querySelector("#app").getAttribute("data-items"));
+    show("title", document.querySelector("#app h1").textContent);
+    show("title style", document.querySelector("#app h1").getAttribute("style"));
+    show("nested text", document.querySelectorAll(".box")[0].innerHTML);
+    show("nested several", document.querySelectorAll(".box")[1].innerHTML);
+    show("escaped", document.querySelector("#escaped").innerHTML);
+    show("inner func", document.querySelector(".container").innerHTML);
+    show("maybe", document.querySelector("#app").querySelectorAll("b").length);
+    show("list", document.querySelector("ul").innerHTML);
+    show("unsafe link", document.querySelector("a").getAttribute("href"));
+    const count = document.querySelector("#count");
+    show("count", count.textContent);
+    document.querySelector("#counter button").click();
+    document.querySelector("#counter button").click();
+    show("count after two clicks", count.textContent);
+    document.querySelector("li").click();
+    show("event handler", document.title);
+    show("slot in html", document.querySelector("section.slotted").innerHTML);
+    show("tag of the page gone", document.querySelectorAll("dessa-appcontainer").length);
+    show("still in order", document.querySelector("#after").previousElementSibling.tagName);
+    show("async in a page", later.textContent + " / " + later.getAttribute("data-done"));
+    document.querySelector("#out").textContent = lines.join("\n") + "\n";
+}, 500));
+</script>
+</body>
+</html>

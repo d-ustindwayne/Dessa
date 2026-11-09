@@ -19,7 +19,7 @@ func[Emp] show() {
 var[Int] afterFunction = 3;
 
 func[Emp] outer() {
-    func[Emp] inner() {}       // error: Functions can only be declared at the top level
+    func[Emp] inner(x[Int] = 1) {}   // error: A function inside a function is a lambda
 }
 
 if (true) {

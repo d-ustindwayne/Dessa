@@ -25,6 +25,8 @@ enum class SymbolKind {
     Module      // $("math" as m): a module under a name
 };
 
+struct LambdaExpr;
+
 struct FunctionParameterSymbol {
     std::string name;
     SemanticType type;                    // for a variadic parameter: the list type (Str<>)
@@ -64,6 +66,8 @@ struct Symbol {
     int aliasTable = -1;
     // Function / Method: what it says it may throw (func[Int !! NumberError])
     std::vector<SemanticType> throws;
+    // A lambda stored under this name: its parameters have names, for <Name a={1} />
+    const LambdaExpr* lambda = nullptr;
     // A generic function or class (Analyser::templates): filled in when used
     int templateId = -1;
 };

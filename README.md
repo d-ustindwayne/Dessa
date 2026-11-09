@@ -29,7 +29,8 @@ print($"{cart.length()} items, total {total.toFixed(2)}");
 - Errors you can catch, including runtime errors such as overflow and bad indexes
 - Unicode text that counts characters, not bytes
 - Identical output everywhere: native (through C) and WebAssembly
-- Web pages written in Dessa (`.dhtml`), compiled to WebAssembly, with every library
+- Async functions (`async`, `await`, `Task`), the same natively and in the browser
+- Web pages written in Dessa (`.dhtml`), and components (`.xds`) you use as tags in any page
 - `riv`, a package manager, and libraries for files, time zones, JSON, SQL, HTTP, desktop windows and more
 - VS Code support driven by the compiler: errors, completion, hover, go to definition
 
@@ -66,7 +67,7 @@ riv run
 | [docs/compiler.md](docs/compiler.md) | The `dessa` command, targets, settings |
 | [docs/riv.md](docs/riv.md) | Packages: using, making and publishing them |
 | [docs/libraries.md](docs/libraries.md) | The libraries and what they contain |
-| [docs/web.md](docs/web.md) | `.dhtml` pages, WebAssembly, `webutils`, npm |
+| [docs/web.md](docs/web.md) | `.dhtml` pages, `.xds` components, WebAssembly, `webutils`, npm |
 | [docs/overview.md](docs/overview.md) | Dessa in brief: goals, state, numbers, where help is needed |
 | [docs/architecture.md](docs/architecture.md) | How the compiler, runtimes, riv and the editor work |
 | [docs/runtime.md](docs/runtime.md) | How a program runs: values, memory, errors, the page bridge |
@@ -77,13 +78,15 @@ riv run
 | [SECURITY.md](SECURITY.md) | Reporting a security problem |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Building, testing and releasing Dessa |
 
+For coding agents: `dessa context` prints what they need to know, for your version. `dessa context --init` adds a short `AGENTS.md` to your project saying so. The website has [llms.txt](https://dessa.dustindwayn.ee/llms.txt).
+
 ## Repository layout
 
 | Folder | What is in it |
 |---|---|
 | `src/` | the compiler: lexer, parser, analyser, C and C++ generators |
 | `runtime/` | the support code every program uses (C, C++, and the WebAssembly loader) |
-| `include/` | the core libraries (`math`, `os`, `sys`, `time`, `random`, `dsds`, `dcrypto`, `webutils`) |
+| `include/` | the core libraries (`math`, `os`, `sys`, `time`, `random`, `dsds`, `dcrypto`, `xml`, `webutils`) |
 | `tools/riv/` | The bundled packages ([riv](https://github.com/d-ustindwayne/riv.ds) itself has its own repository) |
 | `tools/vscode-dessa/` | the VS Code extension |
 | `web/` | an example page written in Dessa |

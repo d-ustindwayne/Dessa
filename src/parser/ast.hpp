@@ -115,6 +115,7 @@ struct ModuleSpec {
     mutable bool isBuiltin = false;
     bool isPrelude = false;             // the import of include/prelude/errors.ds every file gets
     bool isPageLibrary = false;         // the import of webutils every inline page script gets
+    bool isHidden = false;              // what markup in an .xds file turns into uses it; nobody wrote it
     std::optional<std::string> alias;   // $("math" as m): used as m.sqrt(2)
     int line = 0;
     int column = 0;
@@ -139,7 +140,7 @@ struct SwitchCase {
 // ============================================================
 enum class ExprKind {
     Literal, TemplateString, Identifier, Unary, Postfix, Binary, Assign,
-    Ternary, Call, Index, Member, Lambda, New, List, Set, Grouping, Is, Map, Convert
+    Ternary, Call, Index, Member, Lambda, New, List, Set, Grouping, Is, Map, Convert, Markup, Await
 };
 
 struct Expr {
@@ -267,6 +268,9 @@ struct MemberExpr : Expr {
     Token name;
     std::vector<TypeNode> typeArgs;   // db.all:Person(...): a generic method's types, given
     bool isOptional = false; // ?. vs .
+    // A local variable that has become a field of an async function's frame:
+    // what the first check found it to be at this point (narrowing). See analyser_async.cpp
+    std::shared_ptr<SemanticType> trustedType;
     MemberExpr(ExprPtr object, Token name, bool isOptional)
         : Expr(ExprKind::Member), object(std::move(object)), name(std::move(name)), isOptional(isOptional) {}
 };
@@ -281,6 +285,36 @@ struct LambdaExpr : Expr {
     StmtPtr body;
     LambdaExpr(std::vector<Param> params, StmtPtr body)
         : Expr(ExprKind::Lambda), params(std::move(params)), body(std::move(body)) {}
+};
+
+// @(<div class={kind}>Hello {name}</div>) in an .xds file. The analyser turns
+// it into calls (see Analyser::analyseMarkup), by what it's being assigned to:
+// a page element, or an Xml value.
+struct MarkupAttribute {
+    std::string name;
+    ExprPtr value;      // "text" is a Str literal, {x} is x
+    bool isText = false;
+    int line = 0;
+    int column = 0;
+};
+struct MarkupNode {
+    enum class Kind { Element, Text, Value } kind = Kind::Element;
+    std::string tag;                        // Element
+    std::vector<MarkupAttribute> attributes;
+    std::vector<MarkupNode> children;
+    std::string text;                       // Text
+    ExprPtr value;                          // Value: {x}
+    int line = 0;
+    int column = 0;
+};
+// await task, in an async function
+struct AwaitExpr : Expr {
+    ExprPtr operand;
+    explicit AwaitExpr(ExprPtr operand) : Expr(ExprKind::Await), operand(std::move(operand)) {}
+};
+struct MarkupExpr : Expr {
+    MarkupNode root;
+    explicit MarkupExpr(MarkupNode root) : Expr(ExprKind::Markup), root(std::move(root)) {}
 };
 
 // new ClassB(), new Setting()
@@ -399,6 +433,9 @@ struct FuncDeclStmt : Stmt {
     std::vector<Param> params;
     StmtPtr body; // a BlockStmt, or nullptr for an interface signature
     bool isConstructor = false;
+    bool isComp = false;              // comp Name(...) in an .xds file; its return type is worked out
+    bool isAsync = false;             // until analyser_async.cpp has rewritten it
+    TypeNode asyncResult;             // async func[T]: the T (returnType is Task:T)
     std::vector<Token> annotations;   // @override
     std::vector<TypeNode> throwsTypes; // func[Int !! NumberError, Str]
     // func[T] first:T(items[T<>]): a generic function, kept as its tokens and
@@ -544,6 +581,7 @@ struct ContinueStmt : Stmt {
 // return; / return expr;
 struct ReturnStmt : Stmt {
     ExprPtr value; // nullptr for a bare `return;`
+    bool isMarkup = false;   // @(...) on its own, or return @(...): nothing may follow it in the block
     explicit ReturnStmt(ExprPtr value)
         : Stmt(StmtKind::Return), value(std::move(value)) {}
 };

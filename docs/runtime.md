@@ -112,6 +112,14 @@ two stores per statement, in exchange for every error saying where it happened.
 released, as `longjmp` doesn't run any code on the way out. Variables held across a
 `try` are `volatile` where needed. The leak is small and only on paths with errors.
 
+## Async
+
+The generators know nothing of `async`. `src/analyser/analyser_async.cpp` rewrites each async function, once
+checked, into plain Dessa: a class holding its variables, with one method that runs from where it
+stopped, a `switch` over states inside a `try`. So reference counting, errors and all three outputs work as
+for any class. A stopped function is an object in the heap, with no stack of its own. `include/async/async.dm` has
+`Task`, the list of what is ready, and timers; pages use the browser's timers instead.
+
 ## Checks
 
 | Check | How | Cost |

@@ -1,0 +1,27 @@
+// :T is a type to be filled in.
+class Box:T {
+    var[T] value;
+    init(value[T]) { this.value = value; }
+    func[T] get() { return this.value; }
+}
+
+var[Box:Int] number = new Box(5);
+var[Box:Str] word = new Box:Str("hi");
+print(number.get() + 1, word.get().upper());
+
+func[T] firstOf:T(items[T<>]) {
+    return items<0>;
+}
+print(firstOf(<7, 8>), firstOf(<"a", "b">));
+
+// Several: :[K, V]
+class Pair:[K, V] {
+    var[K] key;
+    var[V] value;
+    init(key[K], value[V]) {
+        this.key = key;
+        this.value = value;
+    }
+}
+var[Pair:[Str, Int]] entry = new Pair("age", 30);
+print(entry.key, entry.value);

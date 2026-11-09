@@ -1,0 +1,8 @@
+50
+caught: 1 is too small
+IndexError: Index 3 is out of range for list of length 0
+not a number
+plain text
+11
+found
+it was nil

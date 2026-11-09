@@ -230,6 +230,8 @@ CCodegen::CV CCodegen::expr(const Expr* e) {
     if (e->lowered) return expr(e->lowered.get());
     const SemanticType& type = analyser.typeOf(e) ? *analyser.typeOf(e) : kUnknown;
     switch (e->kind) {
+        case ExprKind::Markup:
+        case ExprKind::Await: return {"", false};   // the analyser has rewritten it (see `lowered` above)
         case ExprKind::Literal: return literalExpr(static_cast<const LiteralExpr*>(e));
         case ExprKind::TemplateString: return templateString(static_cast<const TemplateStringExpr*>(e));
         case ExprKind::Identifier: return identifier(static_cast<const IdentifierExpr*>(e));
@@ -393,7 +395,10 @@ CCodegen::CV CCodegen::identifier(const IdentifierExpr* e) {
 
     // Narrowed by `!= nil`, `is` or an assignment
     const SemanticType& now = analyser.typeOf(e) ? *analyser.typeOf(e) : kUnknown;
-    const SemanticType& declared = symbol->type;
+    return narrowed(name, symbol->type, now);
+}
+
+CCodegen::CV CCodegen::narrowed(const std::string& name, const SemanticType& declared, const SemanticType& now) {
     if (now.isUnknown() || now == declared) return {name, false};
     if (isOptValue(declared) && now == withoutNil(declared)) return {"DS_UNWRAP(" + name + ")", false};
     if (isDynamic(declared)) return convert({name, false}, declared, now);
@@ -1225,6 +1230,8 @@ CCodegen::CV CCodegen::builtinCall(const CallExpr* e, const Symbol& symbol) {
     if (n == "dessa::sys::args") return {"(ds_list*)ds_retain(ds_program_args)", true};
     if (n == "dessa::sys::exit") return {"ds_sys_exit(" + arg(0) + ")", false};
     if (n == "dessa::sys::platform") return {"ds_sys_platform()", true};
+    if (n == "dessa::sys::printErr") return {"ds_sys_print_err(" + arg(0) + ")", false};
+    if (n == "dessa::sys::programPath") return {"ds_sys_program_path()", true};
     // time
     if (n == "dessa::time::millis") return {"ds_time_millis()", false};
     if (n == "dessa::time::now") return {"ds_time_now()", false};
@@ -1233,6 +1240,8 @@ CCodegen::CV CCodegen::builtinCall(const CallExpr* e, const Symbol& symbol) {
     // os
     if (n == "dessa::os::readFile") return {"ds_os_read_file(" + arg(0) + ")", true};
     if (n == "dessa::os::writeFile") return {"ds_os_write_file(" + arg(0) + ", " + arg(1) + ")", false};
+    if (n == "dessa::os::readBytes") return {"ds_os_read_bytes(" + arg(0) + ")", true};
+    if (n == "dessa::os::writeBytes") return {"ds_os_write_bytes(" + arg(0) + ", " + arg(1) + ")", false};
     if (n == "dessa::os::appendFile") return {"ds_os_append_file(" + arg(0) + ", " + arg(1) + ")", false};
     if (n == "dessa::os::fileExists") return {"ds_os_file_exists(" + arg(0) + ")", false};
     if (n == "dessa::os::isDir") return {"ds_os_is_dir(" + arg(0) + ")", false};
@@ -1419,6 +1428,7 @@ CCodegen::CV CCodegen::builtinMethod(const CallExpr* e, const MemberExpr* m, con
         if (name == "trim") return {"ds_str_trim(" + r + ")", true};
         if (name == "title") return {"ds_str_title(" + r + ")", true};
         if (name == "plain") return {"ds_str_plain(" + r + ")", true};
+        if (name == "encode") return {"ds_str_encode(" + r + ", " + arg(0) + ")", true};
         if (name == "caseless") return {"ds_str_caseless(" + r + ")", true};
         if (name == "includes") return {"ds_str_includes(" + r + ", " + arg(0) + ")", false};
         if (name == "startsWith") return {"ds_str_starts(" + r + ", " + arg(0) + ")", false};
@@ -1528,6 +1538,7 @@ CCodegen::CV CCodegen::builtinMethod(const CallExpr* e, const MemberExpr* m, con
         }
         if (name == "slice") return {"ds_list_slice(" + receiver() + ", " + arg(0) + ", " + arg(1) + ")", true};
         if (name == "copy" || name == "toList") return {"(ds_list*)ds_retain(" + receiver() + ")", true};
+        if (name == "decode") return {"ds_list_decode(" + receiver() + ", " + arg(0) + ")", true};
         if (name == "join") return {"ds_list_join(" + receiver() + ", " + arg(0) + ")", true};
         if (name == "push") {
             std::string value = isCounted(et) ? "(" + T + ")ds_retain(" + arg(0) + ")" : arg(0);
@@ -1699,7 +1710,10 @@ CCodegen::CV CCodegen::member(const MemberExpr* e) {
     }
     if (analyser.isOptionalChain(e)) return optionalChain(e, nullptr);
     if (symbol->kind != SymbolKind::Field) unsupported("a method used as a value");
-    if (isThisExpr(object) || isSuperExpr(object)) return {thisValue().code + "->" + mangle(e->name.lexeme), false};
+    if (isThisExpr(object) || isSuperExpr(object)) {
+        const std::string read = thisValue().code + "->" + mangle(e->name.lexeme);
+        return e->trustedType ? narrowed(read, symbol->type, *e->trustedType) : CV{read, false};
+    }
     if (const InterfaceInfo* iface = interfaceOf(ot)) {
         auto it = interfaceIds.find(iface->type().key());
         if (it == interfaceIds.end()) unsupported("this interface");

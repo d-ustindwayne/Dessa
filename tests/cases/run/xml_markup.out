@@ -1,0 +1,21 @@
+<catalog><book id="7" kind="sf">Dune &amp; &lt;Friends&gt;</book><empty />it's text</catalog>
+7
+Dune & <Friends>
+true
+<catalog>
+  <book id="7" kind="sf">Dune &amp; &lt;Friends&gt;</book>
+  <empty />
+  it's text
+</catalog>
+1 2
+<item n="3" />
+passed
+line 1, column 10: </a> closes <b>
+line 1, column 7: unknown entity &x;
+line 1, column 6: an attribute's value goes in quotes
+line 1, column 8: only one element can be at the top
+line 1, column 1: expected an element
+line 1, column 4: <a> has no closing tag
+line 1, column 12: attribute b is given twice
+line 1, column 14: bad character code &#x110000;
+A&<raw>

@@ -1,0 +1,23 @@
+$("os") { readFile, writeFile, appendFile, fileExists, deleteFile, open, File, readFileAs, writeFileAs, joinPath }
+
+const[Str] path = "sample_notes.txt";
+
+writeFile(path, "first line\n");
+appendFile(path, "second line\n");
+print(readFile(path).trim());
+
+// A piece at a time, for big files.
+var[File] file = open(path, "r");
+loop {
+    var[Str | Nil] line = file.readLine();
+    if (line == nil) break;
+    print("read:", line);
+}
+file.close();
+
+// In another encoding. Str is always UTF-8 in your program.
+writeFileAs(path, "héllo", "utf-16");
+print(readFileAs(path, "auto"));
+
+deleteFile(path);
+print(fileExists(path));

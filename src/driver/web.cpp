@@ -1,4 +1,6 @@
 #include "web.hpp"
+#include "loader.hpp"
+#include "source_text.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -44,7 +46,14 @@ std::string readFile(const fs::path& p, bool& ok) {
     ok = static_cast<bool>(in);
     std::stringstream buffer;
     buffer << in.rdbuf();
-    return buffer.str();
+    std::string text = buffer.str();
+    const fs::path extension = p.extension();
+    // A page or a Dessa file may be saved as UTF-16 or UTF-32. (Pictures etc. stay bytes.)
+    if (extension == ".html" || extension == ".htm" || extension == ".dhtml" || isComponentFile(p.string())) {
+        std::string problem;
+        sourceToUtf8(text, problem);
+    }
+    return text;
 }
 
 std::string lower(std::string s) {
@@ -88,8 +97,13 @@ bool isDessaType(const std::string& type) {
 
 bool isDessaFile(const std::string& src) {
     std::string ext = lower(fs::path(src).extension().string());
-    static const char* const exts[] = {".ds", ".dm", ".dx", ".dz", ".dsx", ".dxx", ".dzx", ".dds", ".dss"};
+    static const char* const exts[] = {".ds", ".dm", ".dx", ".dz", ".dsx", ".dxx", ".dzx", ".dds", ".dss", ".xds", ".xdz", ".xdx"};
     return std::any_of(std::begin(exts), std::end(exts), [&](const char* e) { return ext == e; });
+}
+
+// A <script src="app.xds">: components, in any page. (type="module" changes nothing: it is one script.)
+bool isComponentScript(const std::string& src, const std::string& type, bool hasType) {
+    return isComponentFile(src) && (!hasType || lower(type) == "module");
 }
 
 // JavaScript inside <script>...</script>: "</script" would end the tag early
@@ -140,7 +154,7 @@ std::vector<Script> scripts(const std::string& path, const std::string& page) {
         bool hasType = false;
         const std::string type = attribute(attrs, "type", hasType);
         s.src = attribute(attrs, "src", s.hasSrc);
-        s.dessa = isDessaType(type) || (dhtml && !hasType && (!s.hasSrc || isDessaFile(s.src)));
+        s.dessa = isDessaType(type) || (dhtml && !hasType && (!s.hasSrc || isDessaFile(s.src))) || (s.hasSrc && isComponentScript(s.src, type, hasType));
         found.push_back(s);
         pos = s.closeEnd;
     }
@@ -170,9 +184,101 @@ std::string dessaOnly(const std::string& path, const std::string& page, size_t o
     return out;
 }
 
+namespace {
+
+// <Card title="x" /> in a page: the browser would lowercase the name and ignore
+// the />, so the page's source is changed: <dessa-card title="x"></dessa-card>.
+// Components put themselves in those tags when the page runs. A .dhtml's or
+// .html's own scripts and comments stay as they are.
+std::string rewriteComponentTags(const std::string& path, const std::string& html, const std::vector<ComponentInfo>& components, std::string& errors) {
+    if (components.empty()) return html;
+    const std::string low = lower(html);
+    std::string out;
+    size_t pos = 0;
+    const auto isNameChar = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-'; };
+    const auto lineOf = [&](size_t at) { return 1 + std::count(html.begin(), html.begin() + static_cast<long>(at), '\n'); };
+    while (pos < html.size()) {
+        const size_t lt = html.find('<', pos);
+        if (lt == std::string::npos) break;
+        out.append(html, pos, lt - pos);
+        pos = lt;
+        // Comments, scripts and styles are copied whole
+        if (low.compare(lt, 4, "<!--") == 0) {
+            const size_t end = low.find("-->", lt + 4);
+            const size_t stop = end == std::string::npos ? html.size() : end + 3;
+            out.append(html, lt, stop - lt);
+            pos = stop;
+            continue;
+        }
+        bool skipped = false;
+        for (const char* raw : {"script", "style"}) {
+            if (low.compare(lt + 1, std::string(raw).size(), raw) == 0) {
+                const size_t end = low.find(std::string("</") + raw, lt);
+                const size_t close = end == std::string::npos ? std::string::npos : low.find('>', end);
+                const size_t stop = close == std::string::npos ? html.size() : close + 1;
+                out.append(html, lt, stop - lt);
+                pos = stop;
+                skipped = true;
+                break;
+            }
+        }
+        if (skipped) continue;
+        const bool closing = lt + 1 < html.size() && html[lt + 1] == '/';
+        const size_t nameStart = lt + (closing ? 2 : 1);
+        size_t nameEnd = nameStart;
+        while (nameEnd < html.size() && isNameChar(html[nameEnd])) ++nameEnd;
+        const std::string name = html.substr(nameStart, nameEnd - nameStart);
+        const ComponentInfo* component = nullptr;
+        for (const auto& c : components) if (c.name == name) component = &c;
+        if (!component) {
+            out += '<';
+            pos = lt + 1;
+            continue;
+        }
+        const std::string tag = "dessa-" + lower(name);
+        if (closing) {
+            out += "</" + tag;
+            pos = nameEnd;
+            continue;
+        }
+        // Up to the end of the tag, past quoted attributes
+        size_t end = nameEnd;
+        char quote = 0;
+        for (; end < html.size(); ++end) {
+            const char c = html[end];
+            if (quote) { if (c == quote) quote = 0; }
+            else if (c == '"' || c == '\'') quote = c;
+            else if (c == '>') break;
+        }
+        if (end >= html.size()) {
+            out.append(html, lt, std::string::npos);
+            return out;
+        }
+        std::string attrs = html.substr(nameEnd, end - nameEnd);
+        const bool selfClosed = !attrs.empty() && attrs.back() == '/';
+        if (selfClosed) attrs.pop_back();
+        for (const auto& p : component->params) {
+            bool present = false;
+            attribute(attrs, lower(p.name), present);
+            if (p.required && p.kind != "Children" && !present) {
+                errors += path + ":" + std::to_string(lineOf(lt)) + ": <" + name + "> needs " + p.name + "=\"...\"\n";
+            }
+            if (p.required && p.kind.empty()) {
+                errors += path + ":" + std::to_string(lineOf(lt)) + ": <" + name + "> can't be used in a page: its parameter " + p.name + " can't be written as an attribute. Give it a default, or use it from another comp.\n";
+            }
+        }
+        out += "<" + tag + attrs + (selfClosed ? "></" + tag + ">" : ">");
+        pos = end + 1;
+    }
+    if (pos < html.size()) out.append(html, pos, std::string::npos);
+    return out;
+}
+
+} // namespace
+
 bool buildPage(const std::string& path, const CompileFn& compile, std::string& html, std::string& errors) {
     bool ok = false;
-    const std::string page = readFile(path, ok);
+    std::string page = readFile(path, ok);
     if (!ok) {
         errors = "Could not open " + path + "\n";
         return false;
@@ -181,6 +287,23 @@ bool buildPage(const std::string& path, const CompileFn& compile, std::string& h
     html.clear();
     size_t pos = 0;
     bool allOk = true;
+    // Tags of the components of the page's .xds scripts
+    std::vector<ComponentInfo> components;
+    for (const auto& s : scripts(path, page)) {
+        if (!s.dessa || !s.hasSrc || !isComponentFile(s.src)) continue;
+        bool read = false;
+        const std::string source = readFile(folder / s.src, read);
+        if (!read) continue;   // said below
+        for (auto& c : componentsInSource(s.src, source)) components.push_back(std::move(c));
+    }
+    if (!components.empty()) {
+        std::string tagErrors;
+        page = rewriteComponentTags(path, page, components, tagErrors);
+        if (!tagErrors.empty()) {
+            errors += tagErrors;
+            allOk = false;
+        }
+    }
     for (const auto& s : scripts(path, page)) {
         const size_t open = s.open, tagEnd = s.tagEnd, close = s.close, closeEnd = s.closeEnd;
         const bool hasSrc = s.hasSrc;
@@ -504,7 +627,7 @@ int serve(const std::string& folderArg, int port, const std::string& open, const
         bool read = false;
         std::string body = readFile(file, read);
         if (ext == ".dhtml" || ((ext == ".html" || ext == ".htm") &&
-                                (lower(body).find("text/dessa") != std::string::npos || lower(body).find("text/ds") != std::string::npos))) {
+                                (lower(body).find("text/dessa") != std::string::npos || lower(body).find("text/ds") != std::string::npos || lower(body).find(".xd") != std::string::npos))) {
             std::string html, errors;
             if (buildPage(file.string(), compile, html, errors)) {
                 respond(client, 200, "text/html; charset=utf-8", withWatcher(html));

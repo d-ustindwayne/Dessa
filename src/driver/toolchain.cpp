@@ -717,7 +717,7 @@ bool compileWasmCached(const std::string& c, const char* argv0, std::string& was
     const WasmTool tool = findWasm(argv0);
     std::string runtime = runtimeDir(argv0);
     std::uint64_t key = fnv1a(c, fnv1a(tool.cc + (page ? " page" : "")));
-    for (const char* file : {"dessa_rt.c", "dessa_rt.h", "dessa_web.c", "dessa_web.h"}) key = fnv1a(readFile(fs::path(runtime) / file), key);
+    for (const char* file : {"dessa_rt.c", "dessa_rt.h", "dessa_encoding.h", "dessa_web.c", "dessa_web.h"}) key = fnv1a(readFile(fs::path(runtime) / file), key);
     for (const auto& name : glueLibrariesOf(c)) {
         if (const BuiltinLibrary* lib = findBuiltinLibrary(name); lib && !lib->cImpl.empty()) {
             const fs::path base = lib->baseDir.empty() ? fs::path(includeDir(argv0)) : fs::path(lib->baseDir);

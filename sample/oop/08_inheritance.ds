@@ -1,0 +1,29 @@
+class Animal {
+    var[Str] name;
+    init(name[Str]) { this.name = name; }
+    func[Str] sound() { return "..."; }
+    func[Str] describe() { return $"{this.name} says {this.sound()}"; }
+}
+
+// (Animal) is the parent.
+class Dog(Animal) {
+    @override
+    func[Str] sound() { return "woof"; }
+}
+
+class Puppy(Dog) {
+    var[Int] weeks;
+    init(name[Str], weeks[Int]) {
+        super(name);
+        this.weeks = weeks;
+    }
+    @override
+    func[Str] sound() { return super.sound() + "!"; }
+}
+
+var[Animal<>] pets = <new Animal("Rock"), new Dog("Rex"), new Puppy("Bit", 8)>;
+for (var[Animal] pet in pets) {
+    print(pet.describe());
+    // `is` checks, and inside the if it is that type.
+    if (pet is Puppy) print(pet.weeks, "weeks old");
+}

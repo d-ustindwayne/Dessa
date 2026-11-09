@@ -1,0 +1,36 @@
+var[Int] score = 75;
+
+if (score >= 90) {
+    print("top");
+} else if (score >= 50) {
+    print("pass");
+} else {
+    print("fail");
+}
+
+print(score > 50 ? "high" : "low");
+
+switch (score / 25) {
+    case 3 := { print("three quarters"); }
+    case 4 := { print("all of it"); }
+    default := { print("something else"); }
+}
+
+for (var[Int] i = 0; i < 3; i++) print("for", i);
+
+for (var[Str] fruit in <"apple", "pear">) print(fruit);
+
+var[Int] n = 3;
+while (n > 0) {
+    print("while", n);
+    n--;
+}
+
+// loop runs until break.
+var[Int] tries = 0;
+loop {
+    tries++;
+    if (tries == 2) continue;
+    if (tries > 3) break;
+    print("try", tries);
+}

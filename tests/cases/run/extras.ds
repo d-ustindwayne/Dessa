@@ -3,7 +3,7 @@ $("math") { mean, median, mode, stdev, sum }
 $("numbers");
 $("codes");
 $("colors") { textColor, background, stripColors, rgbToHex, hexToRgb, clearLines }
-$("textfx") { isPalindrome, isAnagram, isPangram, splitCamel, countVowels, countConsonants, likes, padLeft }
+$("textfx") { isPalindrome, isAnagram, splitCamel, countConsonants, padLeft }
 
 print(sum(<1, 2, 3>), mean(<2, 4, 9>), median(<5, 1, 3, 2>), median(<3, 1, 2>), mode(<1, 2, 2, 3>), stdev(<2, 4, 4, 4, 5, 5, 7, 9>));
 
@@ -26,9 +26,8 @@ print(rgbToHex(123, 45, 167), rgbToHex(300, -5, 16), hexToRgb("#A1B2C3"), hexToR
 print(stripColors(textColor("ok", "green")), stripColors(background("warn", "yellow", bright = false)), stripColors("plain"), clearLines(2).length());
 
 print(isPalindrome("Never odd or even"), isPalindrome("Dessa"), isAnagram("North", "Thorn"), isAnagram("ab", "abc"));
-print(isPangram("The quick brown fox jumps over the lazy dog"), isPangram("Hello"), splitCamel("userNameField"), splitCamel("HTMLParser"));
-print(countVowels("Mister Tallyman"), countConsonants("Mister Tallyman"), padLeft("7", 3, "0"));
-print(likes(<>), "|", likes(<"Ann">), "|", likes(<"Ann", "Bea">), "|", likes(<"Ann", "Bea", "Cy">), "|", likes(<"Ann", "Bea", "Cy", "Di", "Ed">));
+print(splitCamel("userNameField"), splitCamel("HTMLParser"));
+print(countConsonants("Mister Tallyman"), padLeft("7", 3, "0"));
 
 for (var[Str] bad in <"ABC", "MMMM">) {
     try {

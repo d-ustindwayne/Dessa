@@ -1018,6 +1018,8 @@ std::string Codegen::expr(const Expr* e) {
     if (!e) return "";
     if (e->lowered) return expr(e->lowered.get());
     switch (e->kind) {
+        case ExprKind::Markup:
+        case ExprKind::Await: return "";   // the analyser has rewritten it (see `lowered` above)
         case ExprKind::Literal: return literal(static_cast<const LiteralExpr*>(e));
         case ExprKind::TemplateString: return templateString(static_cast<const TemplateStringExpr*>(e));
         case ExprKind::Identifier: return identifier(static_cast<const IdentifierExpr*>(e));
@@ -1173,21 +1175,7 @@ std::string Codegen::identifier(const IdentifierExpr* e) {
 
     // Narrowed: by `!= nil` (Int | Nil -> Int), by `is` (Account -> SavingsAccount,
     // Int | Str -> Int) or by an assignment.
-    const SemanticType& now = typeOf(e);
-    const SemanticType& declared = symbol->type;
-    if (now.isUnknown() || now == declared) return name;
-    if (isOptionalValue(declared) && now == withoutNil(declared)) return "dessa::unwrap(" + name + ")";
-    if (declared.is(SemanticTypeKind::Obj)) {
-        return "dessa::obj_as<" + (now.isReference() ? typeName(now) : cppType(now)) + ">(" + name + ")";
-    }
-    if (now.isReference()) {
-        if (withoutNil(declared) == now) return name; // Ref<T> already; nil was ruled out
-        return "dessa::as<" + typeName(now) + ">(" + name + ")";
-    }
-    if (withoutNil(declared).kind == SemanticTypeKind::Union) {
-        return "dessa::unwrap_to<" + cppType(now) + ">(" + name + ")";
-    }
-    return name;
+    return narrowed(name, symbol->type, typeOf(e));
 }
 
 // a + b through _add (or a < b through _cmp)
@@ -1561,7 +1549,27 @@ std::string Codegen::call(const CallExpr* e) {
     return withHoist(hoist, expr(callee) + "(" + args + ")");
 }
 
+std::string Codegen::narrowed(const std::string& name, const SemanticType& declared, const SemanticType& now) {
+    if (now.isUnknown() || now == declared) return name;
+    if (isOptionalValue(declared) && now == withoutNil(declared)) return "dessa::unwrap(" + name + ")";
+    if (declared.is(SemanticTypeKind::Obj)) {
+        return "dessa::obj_as<" + (now.isReference() ? typeName(now) : cppType(now)) + ">(" + name + ")";
+    }
+    if (now.isReference()) {
+        if (withoutNil(declared) == now) return name; // Ref<T> already; nil was ruled out
+        return "dessa::as<" + typeName(now) + ">(" + name + ")";
+    }
+    if (withoutNil(declared).kind == SemanticTypeKind::Union) {
+        return "dessa::unwrap_to<" + cppType(now) + ">(" + name + ")";
+    }
+    return name;
+}
+
 std::string Codegen::member(const MemberExpr* e) {
+    if (e->trustedType) {
+        const Symbol* field = analyser.memberOf(e);
+        if (field && field->kind == SymbolKind::Field) return narrowed("this->" + mangle(e->name.lexeme), field->type, *e->trustedType);
+    }
     const Symbol* symbol = analyser.memberOf(e);
     const Expr* object = e->object.get();
     const SemanticType& objectType = typeOf(object);

@@ -60,8 +60,10 @@ def mutate(source, rng):
 
 def one_round(seed, sources, folder):
     rng = random.Random(seed)
-    data = mutate(rng.choice(sources), rng)
-    file = Path(folder) / f"fuzz_{seed}.ds"
+    # In its own kind of file: .xds is lexed differently
+    source, suffix = rng.choice(sources)
+    data = mutate(source, rng)
+    file = Path(folder) / f"fuzz_{seed}{suffix}"
     file.write_bytes(data)
     try:
         result = subprocess.run([str(EXE), "check", str(file)], capture_output=True, timeout=30, cwd=folder)
@@ -71,7 +73,7 @@ def one_round(seed, sources, folder):
         problem = "took more than 30 seconds"
     if problem:
         FAILURES.mkdir(exist_ok=True)
-        (FAILURES / f"fuzz_{seed}.ds").write_bytes(data)
+        (FAILURES / f"fuzz_{seed}{suffix}").write_bytes(data)
     file.unlink(missing_ok=True)
     return seed, problem
 
@@ -83,8 +85,8 @@ def main():
     parser.add_argument("--jobs", type=int, default=os.cpu_count() or 2)
     options = parser.parse_args()
     files = [p for folder in ("tests/cases", "sample", "include", "tools/riv/packages") for p in (ROOT / folder).rglob("*")
-             if p.suffix in (".ds", ".dm") and p.stat().st_size < 60000]
-    sources = [p.read_bytes() for p in sorted(files)]
+             if p.suffix in (".ds", ".dm", ".xds") and p.stat().st_size < 60000]
+    sources = [(p.read_bytes(), p.suffix) for p in sorted(files)]
     end = time.time() + options.seconds
     rounds = 0
     failures = []

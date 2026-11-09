@@ -1,0 +1,58 @@
+// What .xds files don't allow
+$("webutils") { Children }
+
+comp Fine(text[Str]) { @(<p>{text}</p>) }
+
+comp AfterMarkup() {
+    @(<p>one</p>)
+    print("two");     // error: Nothing can follow @(...) in the same block
+}
+
+comp Stray() {
+    <div>hello</div>      // error: Markup needs @(...) around it
+}
+
+comp Outer() {
+    comp Inner() { @(<p />) }     // error: A comp can't be inside a comp or a function
+    @(<p />)
+}
+
+comp Attributes(h[Func[Emp]]) {
+    @(<button onclick="x()">a</button>)     // error: is a page script: use on:click
+}
+
+comp Events(n[Int]) {
+    @(<button on:click={n}>a</button>)     // error: on:click takes a function, not Int
+}
+
+comp EventText() {
+    @(<button on:click="f">a</button>)     // error: on:click takes a function
+}
+
+comp Unknown() {
+    @(<Nowhere />)     // error: There is no component <Nowhere>
+}
+
+comp NoChildren() {
+    @(<Fine text="x">inside</Fine>)     // error: takes nothing nested inside it
+}
+
+comp BadParam() {
+    @(<Fine nope="x" text="y" />)     // error: has no parameter named 'nope'
+}
+
+comp BadType() {
+    @(<Fine text={1} />)     // error: for parameter 'text' of 'Fine'
+}
+
+comp OnComponent(f[Func[Emp]]) {
+    @(<Fine text="x" on:click={f} />)     // error: on: goes on page tags
+}
+
+comp Wrong() {
+    @(<a></b>)     // error: </b> closes <a>
+}
+
+comp Bare() {
+    @(<input disabled />)     // error: Attribute 'disabled' needs a value
+}

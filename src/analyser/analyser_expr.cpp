@@ -69,6 +69,8 @@ SemanticType Analyser::analyseExpressionInner(const Expr* expression, bool allow
         case ExprKind::Index: return analyseIndex(static_cast<const IndexExpr*>(expression));
         case ExprKind::Member: return analyseMember(static_cast<const MemberExpr*>(expression));
         case ExprKind::Lambda: return analyseLambda(static_cast<const LambdaExpr*>(expression));
+        case ExprKind::Markup: return analyseMarkup(static_cast<const MarkupExpr*>(expression));
+        case ExprKind::Await: return analyseAwait(static_cast<const AwaitExpr*>(expression));
         case ExprKind::New: return analyseNew(static_cast<const NewExpr*>(expression));
         case ExprKind::List: {
             const auto* list = static_cast<const ListExpr*>(expression);
@@ -377,7 +379,7 @@ std::vector<Symbol> Analyser::membersOf(const SemanticType& type) const {
         "replace", "replaceAll", "split", "substr", "repeat", "chars", "isDigit", "isAlpha", "isSpace",
         "isUpper", "isLower", "code", "toChr", "toFixed", "name", "value", "add", "push", "pop", "insert",
         "remove", "removeAt", "clear", "copy", "first", "last", "get", "getOr", "set", "has", "keys",
-        "values", "join", "slice", "sort", "reverse", "filter", "map", "forEach", "toList", "compare",
+        "values", "join", "encode", "decode", "slice", "sort", "reverse", "filter", "map", "forEach", "toList", "compare",
         "toStr", "toInt", "toDbl", "toFlt", "toHex", "toDec", "toOct", "toBin",
     };
     for (const char* n : builtinNames) {
@@ -1235,6 +1237,7 @@ std::optional<Symbol> Analyser::builtinMethod(const SemanticType& receiver, cons
         if (name == "upper" || name == "lower" || name == "trim" || name == "title" || name == "plain" || name == "caseless") return make({}, Str);
         if (name == "includes" || name == "startsWith" || name == "endsWith") return make({{"text", Str}}, Bul);
         if (name == "indexOf") return make({{"text", Str}}, Int);
+        if (name == "encode") return make({{"encoding", Str}}, SemanticType::listOf(Int));
         if (name == "replace" || name == "replaceAll") return make({{"target", Str}, {"replacement", Str}}, Str);
         if (name == "split") return make({{"separator", Str}}, SemanticType::listOf(Str));
         if (name == "substr") return make({{"start", Int}, {"length", Int}}, Str);
@@ -1330,6 +1333,7 @@ std::optional<Symbol> Analyser::builtinMethod(const SemanticType& receiver, cons
         if (name == "slice") return make({{"start", Int}, {"end", Int}}, self);
         if (name == "copy") return make({}, self);
         if (name == "join") return make({{"separator", Str}}, Str);
+        if (name == "decode" && receiver.elementType && receiver.elementType->is(K::Int)) return make({{"encoding", Str}}, Str);
         return std::nullopt;
     }
     return std::nullopt;
@@ -1354,6 +1358,14 @@ const Symbol* Analyser::aliasMember(const MemberExpr* expression, bool report) {
 SemanticType Analyser::analyseMember(const MemberExpr* expression) {
     const Expr* object = expression->object.get();
     const std::string& name = expression->name.lexeme;
+    if (expression->trustedType) {
+        analyseMemberPlain(expression, object, name);
+        return *expression->trustedType;
+    }
+    return analyseMemberPlain(expression, object, name);
+}
+
+SemanticType Analyser::analyseMemberPlain(const MemberExpr* expression, const Expr* object, const std::string& name) {
 
     // m.sqrt, m.PI, m.Color with $("math" as m)
     if (const Symbol* target = aliasMember(expression, true)) {
@@ -1595,6 +1607,7 @@ ArgumentOrder Analyser::checkArguments(const std::string& name,
         const SemanticType expected = parameters[index].variadic && parameters[index].type.elementType
             ? *parameters[index].type.elementType : parameters[index].type;
         const Expr* valueExpr = argument.value.get();
+        if (valueExpr->kind == ExprKind::Markup) typeHints[valueExpr] = expected;
         SemanticType actual;
         if (valueExpr->kind == ExprKind::Lambda && expected.kind == SemanticTypeKind::Function && expected.returnType &&
             !expected.returnType->isUnknown() && !expected.returnType->isVoidLike()) {

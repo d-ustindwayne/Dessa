@@ -1,0 +1,65 @@
+$("webutils") { Children }
+
+comp TitleText(text[Str]) { @(<h1 style="color: blue;">{text}</h1>) }
+
+comp Button(text[Str], kind[Str] = "primary", onClick[Func[Emp] | Nil] = nil) {
+    @(<button class={kind} on:click={onClick}>{text}</button>)
+}
+
+comp Box(child[Children]) { @(<div class="box">{child}</div>) }
+
+// A func inside: a lambda with a name, so its parameters can be attributes
+comp WithInner(text[Str]) {
+    func[Element] CenterText(textToCenter[Children]) { @(<p class="text-center">{textToCenter}</p>) }
+    @(<div class="container"><CenterText textToCenter={text} /></div>)
+}
+
+// Can reach its end: Element | Nil
+comp Maybe(show[Bul]) {
+    if (show) { @(<b>shown, don't hide</b>) }
+}
+
+comp Counter(start[Int] = 0) {
+    var[State:Int] count = new State(start);
+    var[Element] label = @(<span id="count">{start}</span>);
+    count.bindText(label);
+    const[Func[Emp]] add = () := count.update((n[Int]) := n + 1);
+    @(<div id="counter"><Button text="add" onClick={add} />{label}</div>)
+}
+
+comp AppContainer(heading[Str] = "Hello", items[Int] = 2) {
+    var[Str<>] names = <"a", "b", "c">;
+    var[Str] typed = "<script>document.title = 'HACKED'</script> & more";
+    @(<main id="app" data-items={items}>
+        <TitleText text={heading} />
+        <Box>hello from nested</Box>
+        <Box><i>one</i><i>two</i> three</Box>
+        <p id="escaped">{typed}</p>
+        <WithInner text="inner" />
+        <Maybe show={true} />
+        <Maybe show={false} />
+        <ul>{names.map((n[Str]) := @(<li on:click={(e[Event]) := { document.title = n; }}>{n}</li>))}</ul>
+        <a href="javascript:alert(1)">unsafe</a>
+        <Counter start={5} />
+    </main>)
+}
+
+// async, in a page: the browser's timers and fetch
+async func[Emp] later(el[Element]) {
+    el.textContent = "waiting";
+    await delay(20);
+    var[FetchResult] r = await fetchTask("data.txt");
+    el.textContent = $"fetched: {r.text.trim()}";
+    await all(<delay(5), delay(1)>);
+    el.setAttribute("data-done", "yes");
+}
+
+comp Loader() {
+    var[Element] box = @(<div id="loader">not yet</div>);
+    later(box);
+    @(<section>{box}</section>)
+}
+
+comp WithSlot(label[Str], child[Children]) {
+    @(<section class={label}>{child}</section>)
+}

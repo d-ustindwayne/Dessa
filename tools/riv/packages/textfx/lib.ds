@@ -1,15 +1,12 @@
 /***
  * textfx -- small text helpers.
  *
- *     $("textfx") { box, isPalindrome, splitCamel, likes }   (after `riv add textfx`)
+ *     $("textfx") { box, isPalindrome, splitCamel }   (after `riv add textfx`)
  *
  *     print(box("Hello", "Dessa"));          a framed block of lines
  *     isPalindrome("Never odd or even")      true
  *     isAnagram("North", "Thorn")            true
- *     isPangram("The quick brown fox jumps over the lazy dog")   true
  *     splitCamel("userNameField")            "user Name Field"  ("HTMLParser": "HTML Parser")
- *     countVowels("Mister Tallyman")         5
- *     likes(<"Ann", "Bea", "Cy", "Di">)      "Ann, Bea and 2 others like this"
  */
 
 func[Str] padRight(text[Str], width[Int], fill[Str]=" ") {
@@ -62,13 +59,6 @@ func[Bul] isAnagram(first[Str], second[Str]) {
     return a == b;
 }
 
-// Uses every letter from a to z at least once.
-func[Bul] isPangram(text[Str]) {
-    var[Chr{}] seen = {};
-    for (var[Chr] c in text.lower()) if (c.code() >= 97 && c.code() <= 122) seen.add(c);
-    return seen.length() == 26;
-}
-
 // "userNameField" -> "user Name Field"
 func[Str] splitCamel(text[Str]) {
     var[Str] out = "";
@@ -88,7 +78,7 @@ func[Bul] _isVowel(c[Chr]) {
 }
 
 // a, e, i, o, u, and y when it isn't the first letter of a word
-func[Int] countVowels(text[Str]) {
+func[Int] _countVowels(text[Str]) {
     var[Int] count = 0;
     var[Chr<>] c = text.chars();
     for (var[Int] i = 0; i < c.length(); i++) {
@@ -103,16 +93,5 @@ func[Int] countVowels(text[Str]) {
 func[Int] countConsonants(text[Str]) {
     var[Int] letters = 0;
     for (var[Chr] c in text.lower()) if (c.code() >= 97 && c.code() <= 122) letters++;
-    return letters - countVowels(text);
-}
-
-// The "who liked this" line of a post.
-func[Str] likes(names[Str<>]) {
-    switch (names.length()) {
-        case 0 := { return "No one likes this"; }
-        case 1 := { return $"{names<0>} likes this"; }
-        case 2 := { return $"{names<0>} and {names<1>} like this"; }
-        case 3 := { return $"{names<0>}, {names<1>} and {names<2>} like this"; }
-        default := { return $"{names<0>}, {names<1>} and {names.length() - 2} others like this"; }
-    }
+    return letters - _countVowels(text);
 }

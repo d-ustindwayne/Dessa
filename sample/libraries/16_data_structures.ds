@@ -1,0 +1,19 @@
+$("dsds") { Stack, Queue, Deque }
+
+var[Stack:Str] plates = new Stack();
+plates.push("first");
+plates.push("second");
+print(plates.pop(), plates.size());
+
+var[Queue:Int] line = new Queue();
+line.enqueue(1);
+line.enqueue(2);
+print(line.dequeue(), line.size());
+
+// Both ends.
+var[Deque:Int] both = new Deque();
+both.pushBack(2);
+both.pushFront(1);
+both.pushBack(3);
+print(both);
+print(both.popFront(), both.popBack());

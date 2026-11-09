@@ -50,7 +50,7 @@ const std::unordered_map<std::string, TokenType> Lexer::keywords = {
     {"is",    TokenType::IS},
 };
 
-Lexer::Lexer(std::string source) : source(std::move(source)) {}
+Lexer::Lexer(std::string source, bool componentFile) : source(std::move(source)), componentFile(componentFile) {}
 
 std::vector<Token> Lexer::scanTokens() {
     while (!isAtEnd()) {
@@ -153,7 +153,9 @@ void Lexer::scanToken() {
                 addToken(TokenType::DOT);
             }
             break;
-        case '@': addToken(TokenType::AT); break;
+        case '@':
+            if (!componentFile || !scanMarkup()) addToken(TokenType::AT);
+            break;
         case '$':
             if (peek() == '"' && peekNext() == '"' && current + 2 < source.size() && source[current + 2] == '"') {
                 advance(); advance(); advance();
@@ -251,6 +253,142 @@ void Lexer::scanToken() {
             }
             break;
     }
+}
+
+// ---- Markup in an .xds file ----
+// @(<div>don't</div>) is lexed as one block, so text in it can't break the
+// lexer (an apostrophe isn't a character literal there). The parser reads the
+// block itself (Parser::parseMarkup).
+
+namespace {
+const int kMaxMarkupDepth = 200;
+bool isMarkupName(char c) {
+    return std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-' || c == ':' || c == '.';
+}
+} // namespace
+
+// After `@`: does `( <name` follow? `at` is then where the < is.
+bool Lexer::markupAhead(size_t& at) const {
+    size_t i = current;
+    const auto blanks = [&] { while (i < source.size() && std::isspace(static_cast<unsigned char>(source[i]))) ++i; };
+    blanks();
+    if (i >= source.size() || source[i] != '(') return false;
+    ++i;
+    blanks();
+    if (i + 1 >= source.size() || source[i] != '<' || !std::isalpha(static_cast<unsigned char>(source[i + 1]))) return false;
+    at = i;
+    return true;
+}
+
+// Past `{ ... }` (the cursor is on the {): strings, comments and markup inside are skipped whole
+bool Lexer::skipMarkupExpression(int depth) {
+    int braces = 0;
+    while (!isAtEnd()) {
+        const char c = peek();
+        if (c == '"' || c == '\'') {
+            advance();
+            while (!isAtEnd() && peek() != c) {
+                if (peek() == '\\') advance();
+                if (!isAtEnd()) advance();
+            }
+            if (isAtEnd()) return false;
+            advance();
+        } else if (c == '/' && peekNext() == '/') {
+            while (!isAtEnd() && peek() != '\n') advance();
+        } else if (c == '/' && peekNext() == '*') {
+            while (!isAtEnd() && !(peek() == '*' && peekNext() == '/')) advance();
+            if (isAtEnd()) return false;
+            advance(); advance();
+        } else if (c == '@') {
+            advance();
+            size_t at = 0;
+            if (markupAhead(at)) {
+                while (current < at) advance();
+                if (!skipMarkupElement(depth + 1)) return false;
+            }
+        } else {
+            if (c == '{') ++braces;
+            advance();
+            if (c == '}' && --braces == 0) return true;
+        }
+    }
+    return false;
+}
+
+// Past one element (the cursor is on its <). What's wrong in it, the parser says.
+bool Lexer::skipMarkupElement(int depth) {
+    if (depth > kMaxMarkupDepth) return false;
+    int open = 0;
+    while (!isAtEnd()) {
+        const char c = peek();
+        if (c == '{') {
+            if (!skipMarkupExpression(depth + 1)) return false;
+        } else if (c != '<') {
+            advance();
+        } else if (source.compare(current, 4, "<!--") == 0) {
+            const size_t end = source.find("-->", current + 4);
+            if (end == std::string::npos) return false;
+            while (current < end + 3) advance();
+        } else if (peekNext() == '/') {
+            while (!isAtEnd() && peek() != '>') advance();
+            if (isAtEnd()) return false;
+            advance();
+            if (--open <= 0) return true;
+        } else if (!std::isalpha(static_cast<unsigned char>(peekNext()))) {
+            advance();   // a < in the text
+        } else {
+            advance();
+            while (isMarkupName(peek())) advance();
+            bool selfClosed = false;
+            while (!isAtEnd() && peek() != '>') {
+                const char a = peek();
+                if (a == '"' || a == '\'') {
+                    advance();
+                    while (!isAtEnd() && peek() != a) advance();
+                    if (isAtEnd()) return false;
+                    advance();
+                } else if (a == '{') {
+                    if (!skipMarkupExpression(depth + 1)) return false;
+                } else {
+                    selfClosed = a == '/' && peekNext() == '>';
+                    advance();
+                }
+            }
+            if (isAtEnd()) return false;
+            advance();
+            if (selfClosed) {
+                if (open == 0) return true;
+            } else {
+                ++open;
+            }
+        }
+    }
+    return false;
+}
+
+// The `@` has been read. False when no markup follows (a decorator).
+bool Lexer::scanMarkup() {
+    size_t at = 0;
+    if (!markupAhead(at)) return false;
+    while (current < at) advance();
+    startLine = line;
+    startColumn = column;
+    const size_t from = current;
+    if (!skipMarkupElement(0)) {
+        error("This markup never ends. Every tag needs its closing tag, or /> at the end: <br />");
+        stoppedEarly = true;
+        current = source.size();
+        return true;
+    }
+    const std::string raw = source.substr(from, current - from);
+    while (std::isspace(static_cast<unsigned char>(peek()))) advance();
+    if (peek() != ')') {
+        error("@(...) holds one element, and ')' comes right after it. Put several inside one element.");
+        while (!isAtEnd() && peek() != ')') advance();
+    }
+    if (!isAtEnd()) advance();
+    addToken(TokenType::MARKUP, raw);
+    return true;
 }
 
 char Lexer::translateEscape(char escape) {

@@ -1,0 +1,10 @@
+// A program is just statements, run from the top.
+print("Hello, Dessa!");
+
+// print takes any number of values, and puts spaces between them.
+print("One", "two", 3);
+
+// sep and end change what goes between them and after them.
+print("a", "b", "c", sep = ", ");
+print("Loading", end = "");
+print("... done");

@@ -1,12 +1,14 @@
 #include "loader.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 
 #include "builtins.hpp"
+#include "source_text.hpp"
 #include "lexer.hpp"
 #include "parser.hpp"
 
@@ -65,6 +67,113 @@ Diagnostic diagnosticFromMessage(const std::string& file, const std::string& mes
     return d;
 }
 
+bool isComponentFile(const std::string& path) {
+    std::string extension = fs::path(path).extension().string();
+    for (auto& c : extension) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return extension == ".xds" || extension == ".xdz" || extension == ".xdx";
+}
+
+// What kind of value a <Tag attribute="..."> gives a parameter
+static std::string pageParamKind(const TypeNode& type) {
+    if (!type.unionMembers.empty() || type.isFunction || !type.group.empty() || type.isMap || type.isList || type.isSet) return "";
+    if (type.name == "Str" || type.name == "Int" || type.name == "Dbl" || type.name == "Flt" || type.name == "Bul" || type.name == "Children") return type.name;
+    return "";
+}
+
+std::vector<ComponentInfo> componentsIn(const std::vector<StmtPtr>& ast) {
+    std::vector<ComponentInfo> found;
+    for (const auto& statement : ast) {
+        if (!statement || statement->kind != StmtKind::FuncDecl) continue;
+        const auto* fn = static_cast<const FuncDeclStmt*>(statement.get());
+        if (!fn->isComp) continue;
+        ComponentInfo info;
+        info.name = fn->name;
+        for (const auto& p : fn->params) {
+            ComponentParam param;
+            param.name = p.name;
+            param.kind = pageParamKind(p.type);
+            param.required = !p.defaultValue;
+            info.params.push_back(std::move(param));
+        }
+        found.push_back(std::move(info));
+    }
+    return found;
+}
+
+std::vector<ComponentInfo> componentsInSource(const std::string& path, const std::string& source) {
+    std::string text = source, problem;
+    sourceToUtf8(text, problem);
+    Lexer lexer(text, isComponentFile(path));
+    Parser parser(lexer.scanTokens());
+    parser.setComponentFile(isComponentFile(path));
+    return componentsIn(parser.parseProgram());
+}
+
+// Source text of a default value, when it's that simple
+static std::string defaultText(const Expr* e) {
+    if (!e) return "";
+    if (e->kind == ExprKind::Literal) {
+        const Token& t = static_cast<const LiteralExpr*>(e)->token;
+        if (t.type != TokenType::STRING) return t.lexeme;
+        std::string out = "\"";
+        for (char c : t.lexeme) {
+            if (c == '"' || c == '\\') { out += '\\'; out += c; }
+            else if (c == '\n') out += "\\n";
+            else if (c == '\t') out += "\\t";
+            else if (c == '\r') out += "\\r";
+            else out += c;
+        }
+        return out + "\"";
+    }
+    if (e->kind == ExprKind::Identifier) return static_cast<const IdentifierExpr*>(e)->name.lexeme;
+    if (e->kind == ExprKind::Unary) {
+        const auto* u = static_cast<const UnaryExpr*>(e);
+        const std::string inner = defaultText(u->operand.get());
+        return inner.empty() ? "" : u->op.lexeme + inner;
+    }
+    return "";
+}
+
+// For each component a page can use: find its tags and put it there.
+//   _xds._mount("dessa-card", (el[_xds.Element]) := { _xds._place(el, Card(title = _xds._attrStr(el, "title", "") )); });
+std::string componentMounts(const std::vector<StmtPtr>& ast) {
+    std::string code;
+    for (const auto& statement : ast) {
+        if (!statement || statement->kind != StmtKind::FuncDecl) continue;
+        const auto* fn = static_cast<const FuncDeclStmt*>(statement.get());
+        if (!fn->isComp) continue;
+        std::string args;
+        bool usable = true;
+        for (const auto& p : fn->params) {
+            const std::string kind = pageParamKind(p.type);
+            if (kind.empty()) {
+                if (!p.defaultValue) usable = false;
+                continue;   // its default
+            }
+            std::string value;
+            const std::string quoted = "\"" + p.name + "\"";
+            if (kind == "Children") {
+                value = "_xds._nestedIn(el)";
+            } else {
+                std::string fallback = p.defaultValue ? defaultText(p.defaultValue.get()) : (kind == "Str" ? "\"\"" : kind == "Bul" ? "false" : "0");
+                if (fallback.empty()) {
+                    if (p.defaultValue) continue;   // not simple enough to write again: always the default
+                    usable = false;
+                    continue;
+                }
+                value = "_xds._attr" + kind + "(el, " + quoted + ", " + fallback + ")";
+            }
+            if (!args.empty()) args += ", ";
+            args += p.name + " = " + value;
+        }
+        if (!usable) continue;
+        std::string tag = fn->name;
+        for (auto& c : tag) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        code += "_xds._mount(\"dessa-" + tag + "\", (el[_xds.Element]) := { _xds._place(el, " + fn->name + "(" + args + ")); });\n";
+    }
+    return code;
+}
+
 ModuleLoader::ModuleLoader(std::vector<Diagnostic>& diagnostics) : diagnostics(diagnostics) {}
 
 void ModuleLoader::addError(const std::string& file, int line, int column, const std::string& message) {
@@ -79,6 +188,7 @@ Program ModuleLoader::load(const std::string& entryPath, const std::string* sour
     Program program;
     std::string entry = normalise(entryPath);
     projectRoot = fs::path(entry).parent_path().string();
+    entryFile = entry;
     State state;
     int id = visit(program, entry, sourceOverride, state, "", 0, 0);
     if (id >= 0) program.modules.back()->isEntry = true;
@@ -95,7 +205,7 @@ std::string ModuleLoader::preludePath() const {
 
 // All Dessa file types, in order of preference. (They are compiled the same
 // way for now.)
-static const char* const extensions[] = {".ds", ".dm", ".dx", ".dz", ".dsx", ".dxx", ".dzx", ".dds", ".dss"};
+static const char* const extensions[] = {".ds", ".dm", ".dx", ".dz", ".dsx", ".dxx", ".dzx", ".dds", ".dss", ".xds", ".xdz", ".xdx"};
 
 // Is this file part of a library (include/, riv_modules/, DESSA_PACKAGES)?
 bool ModuleLoader::inLibrary(const std::string& file) const {
@@ -307,13 +417,19 @@ int ModuleLoader::visit(Program& program, const std::string& path, const std::st
         module->source = buffer.str();
     }
 
+    // Saved as UTF-16 or UTF-32, or with a BOM? From here on it's UTF-8.
+    if (std::string problem; !sourceToUtf8(module->source, problem)) {
+        addError(module->displayPath, 1, 1, "This file can't be read: " + problem + ".");
+        return -1;
+    }
     // Everything after this may rely on valid text (Str, file names from imports, ...)
     if (const int line = invalidUtf8Line(module->source)) {
         addError(module->displayPath, line, 1, "This file isn't valid UTF-8 text here. Save it as UTF-8.");
         return -1;
     }
 
-    Lexer lexer(module->source);
+    const bool componentFile = isComponentFile(path);
+    Lexer lexer(module->source, componentFile);
     std::vector<Token> tokens = lexer.scanTokens();
     for (const auto& e : lexer.getErrors()) diagnostics.push_back(diagnosticFromMessage(module->displayPath, e));
 
@@ -333,7 +449,41 @@ int ModuleLoader::visit(Program& program, const std::string& path, const std::st
         }
     }
 
+    // async, await, Task:T: the library is there without asking
+    bool usesAsync = false;
+    const bool isAsyncLibrary = !includeDir.empty() && fs::path(path).parent_path() == fs::path(normalise(fs::path(includeDir) / "async"));
+    const bool isPageLibrary = !includeDir.empty() && fs::path(path).parent_path() == fs::path(normalise(fs::path(includeDir) / "webutils"));
+    if (!isAsyncLibrary && !isPageLibrary && path != preludePath()) {
+        for (size_t t = 0; t + 1 < tokens.size(); ++t) {
+            if (tokens[t].type != TokenType::IDENTIFIER) continue;
+            const std::string& word = tokens[t].lexeme;
+            const TokenType next = tokens[t + 1].type;
+            if ((word == "async" && (next == TokenType::FUNC || next == TokenType::IDENTIFIER)) || (word == "Task" && next == TokenType::COLON) ||
+                (word == "await" && next != TokenType::EQUAL)) {
+                usesAsync = true;
+                break;
+            }
+        }
+    }
+    if (usesAsync) state.usesAsync = true;
+
+    // In a component file, what its markup turns into needs these libraries.
+    // They come under hidden names, so the file's own names are never in the way.
+    bool usesPage = false, usesXml = false;
+    if (componentFile) {
+        bool hasMarkup = false, namesXml = false, hasComp = false;
+        for (const auto& token : tokens) {
+            if (token.type == TokenType::MARKUP) hasMarkup = true;
+            if (token.type == TokenType::IDENTIFIER && token.lexeme == "Xml") namesXml = true;
+            if (token.type == TokenType::IDENTIFIER && (token.lexeme == "comp" || token.lexeme == "Children" || token.lexeme == "Element")) hasComp = true;
+        }
+        usesXml = namesXml;
+        usesPage = hasComp || (hasMarkup && !namesXml);
+    }
+
+    if (lexer.stopped()) tokens.erase(tokens.begin(), tokens.end() - 1);
     Parser parser(std::move(tokens));
+    parser.setComponentFile(componentFile);
     module->ast = parser.parseProgram();
     module->templates = parser.takeTemplates();
     for (const auto& e : parser.getErrors()) diagnostics.push_back(diagnosticFromMessage(module->displayPath, e));
@@ -351,7 +501,7 @@ int ModuleLoader::visit(Program& program, const std::string& path, const std::st
     // A page's inline scripts see webutils as if they had imported it. An
     // external <script src="app.ds"> is a file of its own and imports it itself.
     const std::string extension = fs::path(path).extension().string();
-    if (extension == ".dhtml" || extension == ".html" || extension == ".htm") {
+    if (extension == ".dhtml" || extension == ".html" || extension == ".htm" || usesPage) {
         ModuleSpec spec;
         spec.path = "webutils";
         spec.isBuiltin = true;
@@ -359,6 +509,42 @@ int ModuleLoader::visit(Program& program, const std::string& path, const std::st
         std::vector<ModuleSpec> specs;
         specs.push_back(std::move(spec));
         module->ast.insert(module->ast.begin(), std::make_unique<ImportStmt>(std::vector<ImportName>{}, std::move(specs), true));
+    }
+    const auto hiddenImport = [&](const char* library, const char* alias) {
+        ModuleSpec spec;
+        spec.path = library;
+        spec.alias = alias;
+        spec.isBuiltin = true;
+        spec.isHidden = true;
+        std::vector<ModuleSpec> specs;
+        specs.push_back(std::move(spec));
+        module->ast.insert(module->ast.begin(), std::make_unique<ImportStmt>(std::vector<ImportName>{}, std::move(specs), true));
+    };
+    if (usesPage) hiddenImport("webutils", "_xds");
+    const auto autoImport = [&](const char* library) {
+        ModuleSpec spec;
+        spec.path = library;
+        spec.isBuiltin = true;
+        spec.isPageLibrary = true;
+        std::vector<ModuleSpec> specs;
+        specs.push_back(std::move(spec));
+        module->ast.insert(module->ast.begin(), std::make_unique<ImportStmt>(std::vector<ImportName>{}, std::move(specs), true));
+    };
+    if (usesAsync) {
+        hiddenImport("async", "_xdsasync");
+        autoImport("async");
+    }
+    if (usesXml) hiddenImport("xml", "_xdsxml");
+    // The entry file of a page: components are put in the page's tags (see web.cpp)
+    if (usesPage && path == entryFile) {
+        std::string mounts = componentMounts(module->ast);
+        if (!mounts.empty()) {
+            Lexer mountLexer(mounts, false);
+            std::vector<Token> mountTokens = mountLexer.scanTokens();
+            for (auto& t : mountTokens) t.line = t.column = 0;   // at no place in the file
+            Parser mountParser(std::move(mountTokens));
+            for (auto& statement : mountParser.parseProgram()) module->ast.push_back(std::move(statement));
+        }
     }
 
     state.loadingStack.push_back(path);
@@ -433,6 +619,41 @@ int ModuleLoader::visit(Program& program, const std::string& path, const std::st
         }
     }
     state.loadingStack.pop_back();
+
+    // The file being run, if anything uses async: what is still waiting goes on
+    // after its last line. In a page, the browser's timers do that.
+    if (path == entryFile && state.usesAsync && fs::path(path).extension() != ".dm") {
+        bool hasPage = false;
+        for (const auto& m : program.modules) if (m->browserLibrary) hasPage = true;
+        const auto hiddenLibrary = [&](const char* library, const char* alias) {
+            auto import = std::make_unique<ImportStmt>(std::vector<ImportName>{}, std::vector<ModuleSpec>{}, true);
+            ModuleSpec spec;
+            spec.path = library;
+            spec.alias = alias;
+            spec.isBuiltin = true;
+            spec.isHidden = true;
+            import->modules.push_back(std::move(spec));
+            const fs::path dm = libraryFolder(library) / (std::string(library) + ".dm");
+            const int childId = visit(program, normalise(dm), nullptr, state, module->displayPath, 0, 0);
+            if (childId >= 0) module->resolvedImports[&import->modules[0]] = childId;
+            module->ast.insert(module->ast.begin(), std::move(import));
+        };
+        if (!usesAsync) hiddenLibrary("async", "_xdsasync");
+        if (hasPage && !usesPage) hiddenLibrary("webutils", "_xds");
+        const std::string code = hasPage ? "_xdsasync._useHost((ms[Int], f[Func[Emp]]) := { _xds.setTimeout(f, ms); });\n" : "_xdsasync._runLoop();\n";
+        Lexer hookLexer(code, false);
+        std::vector<Token> hookTokens = hookLexer.scanTokens();
+        for (auto& t : hookTokens) t.line = t.column = 0;
+        Parser hookParser(std::move(hookTokens));
+        auto hook = hookParser.parseProgram();
+        if (hasPage) {
+            size_t after = 0;
+            while (after < module->ast.size() && module->ast[after] && module->ast[after]->kind == StmtKind::Import) ++after;
+            for (auto& s : hook) module->ast.insert(module->ast.begin() + static_cast<std::ptrdiff_t>(after++), std::move(s));
+        } else {
+            for (auto& s : hook) module->ast.push_back(std::move(s));
+        }
+    }
 
     module->id = static_cast<int>(program.modules.size());
     program.modules.push_back(std::move(module));

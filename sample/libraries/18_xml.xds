@@ -1,0 +1,24 @@
+$("xml") { Xml, parseXml, XmlError }
+
+var[Xml] books = parseXml("""
+    <catalog>
+        <book id="1"><title>Dune</title></book>
+        <book id="2"><title>Emma</title></book>
+    </catalog>
+    """);
+for (var[Xml] book in books.findAll("book")) {
+    print(book.attr("id"), book.find("title")?.text());
+}
+
+// In an .xds file XML can be written as markup. What it is assigned to says what it makes.
+var[Str] title = "Tom & Jerry";
+var[Int] id = 3;
+var[Xml] one = @(<book id={id}><title>{title}</title></book>);
+print(one);          // {title} is escaped when written out
+print(one.pretty());
+
+try {
+    parseXml("<a><b></a>");
+} catch (e[XmlError]) {
+    print(e.message);
+}

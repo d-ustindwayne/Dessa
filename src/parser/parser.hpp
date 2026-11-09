@@ -16,6 +16,8 @@ struct ParseError {};
 class Parser {
 public:
     explicit Parser(std::vector<Token> tokens);
+    // An .xds file: comp, and @(...) markup
+    void setComponentFile(bool value) { componentFile = value; }
     std::vector<StmtPtr> parseProgram();
 
     bool hasErrors() const;
@@ -45,6 +47,11 @@ private:
     std::vector<StmtPtr> templates;
     std::vector<std::pair<std::string, TypeNode>> substitutions;   // while instantiating
     bool instantiating = false;
+    bool componentFile = false;
+    int blockDepth = 0;     // inside a { } of statements (0: the top of the file)
+    bool inComp = false;    // directly in a comp's body: a bare return means nil
+    bool inAsync = false;   // directly in an async function's body: await works
+    bool asyncNext = false; // the `async` of async func[T] f() has just been read
     // In a ternary's then-branch or a map key a ':' ends the expression, so
     // name:Type( is not a generic call there
     bool colonEnds = false;
@@ -124,6 +131,9 @@ private:
     std::vector<StmtPtr> moreDeclarations;
     void takeMoreDeclarations(std::vector<StmtPtr>& into);
     StmtPtr funcDeclaration();
+    StmtPtr compDeclaration();
+    StmtPtr innerFunction(StmtPtr declaration, const Token& at);
+    bool strayMarkupAhead() const;
     StmtPtr constructorDeclaration();
     StmtPtr classDeclaration();
     StmtPtr enumDeclaration();
@@ -181,6 +191,8 @@ private:
     std::optional<ExprPtr> tryParseIndex(ExprPtr& object);
     ExprPtr parseLambdaOrGrouping(Token openParen);   // by value: splitting >> moves the tokens
     ExprPtr parseTemplateString(const Token& token);
+    ExprPtr parseMarkup(const Token& token);
+    ExprPtr parseMarkupExpression(const Token& token, const std::string& text, int line, int column);
 };
 
 } // namespace dessa

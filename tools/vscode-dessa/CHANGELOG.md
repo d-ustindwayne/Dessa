@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0
+
+- `.xds`, `.xdz` and `.xdx` files: highlighting for `comp` and `@(...)` markup
+- Component tags and their parameters are suggested and shown on hover, in those files and in pages using them
+- `async` and `await` are highlighted
+
 ## 0.6.7
 
 - No changes to the extension (Dessa 0.6.7: named arguments with =, decorators with commas, booleans in dessa.toml, webutils without an import in inline scripts)

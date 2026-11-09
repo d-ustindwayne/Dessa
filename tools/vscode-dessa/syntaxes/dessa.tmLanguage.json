@@ -14,6 +14,9 @@
     "code": {
       "patterns": [
         {
+          "include": "#markup"
+        },
+        {
           "include": "#comments"
         },
         {
@@ -452,6 +455,18 @@
           "match": "@[A-Za-z_]\\w*"
         },
         {
+          "name": "storage.modifier.dessa",
+          "match": "\\basync(?=\\s+(func\\b|[A-Za-z_]\\w*\\s*[(:]))"
+        },
+        {
+          "name": "keyword.control.dessa",
+          "match": "\\bawait(?=\\s+[A-Za-z_(])"
+        },
+        {
+          "name": "storage.type.dessa",
+          "match": "\\bcomp(?=\\s+[A-Za-z_]\\w*\\s*\\()"
+        },
+        {
           "name": "keyword.control.dessa",
           "match": "\\b(if|else|switch|case|default|for|in|while|loop|break|continue|return|try|catch|throw|is)\\b"
         },
@@ -712,6 +727,113 @@
         {
           "name": "variable.other.readwrite.dessa",
           "match": "\\b[a-z_]\\w*\\b"
+        }
+      ]
+    },
+    "markup": {
+      "begin": "(@\\()\\s*(?=<[A-Za-z])",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.section.embedded.begin.dessa"
+        }
+      },
+      "end": "\\)",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.embedded.end.dessa"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#markup-content"
+        }
+      ]
+    },
+    "markup-content": {
+      "patterns": [
+        {
+          "name": "comment.block.html",
+          "begin": "<!--",
+          "end": "-->"
+        },
+        {
+          "name": "meta.tag.closing.dessa",
+          "match": "(</)([A-Za-z][\\w.:-]*)\\s*(>)",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.tag.begin.html"
+            },
+            "2": {
+              "name": "entity.name.tag.html"
+            },
+            "3": {
+              "name": "punctuation.definition.tag.end.html"
+            }
+          }
+        },
+        {
+          "name": "meta.tag.dessa",
+          "begin": "(<)([A-Za-z][\\w.:-]*)",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.tag.begin.html"
+            },
+            "2": {
+              "name": "entity.name.tag.html"
+            }
+          },
+          "end": "/?>",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.tag.end.html"
+            }
+          },
+          "patterns": [
+            {
+              "name": "entity.other.attribute-name.html",
+              "match": "[A-Za-z_:][\\w:.-]*(?=\\s*=)"
+            },
+            {
+              "name": "string.quoted.double.html",
+              "begin": "\"",
+              "end": "\""
+            },
+            {
+              "name": "string.quoted.single.html",
+              "begin": "'",
+              "end": "'"
+            },
+            {
+              "include": "#markup-value"
+            }
+          ]
+        },
+        {
+          "include": "#markup-value"
+        },
+        {
+          "name": "constant.character.entity.html",
+          "match": "&[#\\w]+;"
+        }
+      ]
+    },
+    "markup-value": {
+      "name": "meta.embedded.expression.dessa",
+      "begin": "\\{",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.embedded.begin.dessa"
+        }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.embedded.end.dessa"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#code"
         }
       ]
     }

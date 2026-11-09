@@ -1,0 +1,42 @@
+// func[what it gives back] name(parameter[Type], ...)
+func[Int] add(a[Int], b[Int]) {
+    return a + b;
+}
+print(add(2, 3));
+
+// Functions can be used before they appear.
+print(greet("Ann"));
+func[Str] greet(name[Str], greeting[Str] = "Hello") {
+    return $"{greeting}, {name}";
+}
+
+// By name, in any order.
+print(greet(greeting = "Hi", name = "Bo"));
+
+// [T*]: any number of values, received as a list.
+func[Int] total(values[Int*]) {
+    var[Int] sum = 0;
+    for (var[Int] v in values) sum += v;
+    return sum;
+}
+print(total(1, 2, 3));
+print(total(...<4, 5>));
+
+// A lambda is a function as a value. It keeps a copy of what it uses.
+var[Func[Int, [Int]]] double = (n[Int]) := n * 2;
+print(double(21));
+
+func[Func[Int, [Int]]] adder(by[Int]) {
+    return (n[Int]) := n + by;
+}
+print(adder(5)(1));
+
+// A func inside a func is a lambda with a name.
+func[Int] factorialPlus(n[Int], extra[Int]) {
+    func[Int] fact(k[Int]) { return k <= 1 ? 1 : k * fact(k - 1); }
+    return fact(n) + extra;
+}
+print(factorialPlus(4, 1));
+
+// |> passes the value on the left as the first argument.
+print(3 |> add(4) |> double());

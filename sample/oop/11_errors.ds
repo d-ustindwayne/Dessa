@@ -1,0 +1,53 @@
+// Your own errors extend Error.
+class TooSmall(Error) {}
+
+func[Int] checked(n[Int]) {
+    if (n < 10) throw new TooSmall($"{n} is too small");
+    return n;
+}
+
+try {
+    print(checked(50));
+    print(checked(1));
+    print("not reached");
+} catch (e[TooSmall]) {
+    print("caught:", e.message);
+}
+
+// Errors of the language have classes too.
+try {
+    var[Int<>] empty = <>;
+    print(empty<3>);
+} catch (e[IndexError]) {
+    print(e);
+}
+
+try {
+    print(Int("abc"));
+} catch (e[ValueError]) {
+    print("not a number");
+} catch (e[Error]) {
+    print("something else");
+}
+
+// Text can be thrown too, and catch (e[Str]) gets any error's message.
+try {
+    throw "plain text";
+} catch (e[Str]) {
+    print(e);
+}
+
+// !! lists what a function may throw. Its callers can see it.
+func[Int !! TooSmall] alsoChecked(n[Int]) {
+    return checked(n);
+}
+print(alsoChecked(11));
+
+// ?! throws if a value is nil.
+func[Str | Nil] lookup(key[Str]) { return key == "a" ? "found" : nil; }
+print(lookup("a") ?! "it was nil");
+try {
+    print(lookup("z") ?! "it was nil");
+} catch (e[Str]) {
+    print(e);
+}

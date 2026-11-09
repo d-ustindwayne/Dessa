@@ -1,0 +1,3 @@
+comp Open() {
+    @(<div>never closed)     // error: This markup never ends
+}

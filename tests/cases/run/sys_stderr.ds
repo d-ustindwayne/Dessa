@@ -1,0 +1,6 @@
+// printErr writes apart from the output
+// stderr: to the side
+$("sys") { printErr, programPath, platform }
+print("to the output");
+printErr("to the side");
+print(programPath().length() > 0);

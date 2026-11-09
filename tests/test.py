@@ -118,7 +118,7 @@ def run(args, cwd=ROOT, timeout=120, stdin_file=None):
     )
 
 
-DESSA_EXTENSIONS = {".ds", ".dx", ".dz", ".dsx", ".dxx", ".dzx", ".dds", ".dss", ".dm"}
+DESSA_EXTENSIONS = {".ds", ".dx", ".dz", ".dsx", ".dxx", ".dzx", ".dds", ".dss", ".dm", ".xds", ".xdz", ".xdx"}
 
 
 def collect():
@@ -133,7 +133,7 @@ def collect():
             continue
         yield path
     # Sample programs with an expected .out file are run as tests too.
-    for path in sorted(SAMPLES.glob("*.ds")):
+    for path in sorted(p for p in SAMPLES.rglob("*") if p.suffix in DESSA_EXTENSIONS):
         if path.with_suffix(".out").exists():
             yield path
 

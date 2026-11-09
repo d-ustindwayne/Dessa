@@ -331,6 +331,15 @@ writeFileSync(
       .join('\n') +
     '\n</urlset>\n',
 );
+// For coding agents: the same cheat sheet `dessa context` prints, and where to read more
+writeFileSync(
+  join(web, 'public', 'llms.txt'),
+  `# Dessa\n\n> A statically typed language compiling to C, C++ and WebAssembly. Version ${version}. With Dessa installed, \`dessa context\` prints this for the installed version.\n\n` +
+    `## Docs\n\n` +
+    docs.map((d: { slug: string; title: string }) => `- [${d.title}](${SITE}/docs/${d.slug}/)`).join('\n') +
+    `\n\n` +
+    read('runtime/ai-context.md').replace(/^# .*\n/, '').replace(/\r\n/g, '\n'),
+);
 writeFileSync(join(web, 'public', 'robots.txt'), `User-agent: *\nAllow: /\n\nSitemap: ${SITE}/sitemap.xml\n`);
 
 console.log(`content: ${docs.length} docs, ${content.bench.tasks.length} benchmark tasks, ${content.coverage.features.length} features, version ${version}`);

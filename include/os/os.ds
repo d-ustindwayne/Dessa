@@ -20,6 +20,16 @@ func[Emp] writeFile(path[Str], content[Str]) {
     ...
 }
 
+// A file's bytes, each a number from 0 to 255: any file, whatever it holds.
+func[Int<>] readBytes(path[Str]) {
+    ...
+}
+
+// Writes numbers from 0 to 255 as a file's bytes.
+func[Emp] writeBytes(path[Str], bytes[Int<>]) {
+    ...
+}
+
 // Adds `content` to the end of a file (creating it if needed).
 func[Emp] appendFile(path[Str], content[Str]) {
     ...

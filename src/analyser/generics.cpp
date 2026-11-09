@@ -86,15 +86,19 @@ void Analyser::declareTemplates(const Module& module) {
 std::vector<SemanticType> Analyser::resolveTypeArgs(const std::vector<TypeNode>& nodes, int line, int column) {
     std::vector<SemanticType> args;
     for (const auto& n : nodes) {
-        SemanticType t = resolveType(n, line, column);
-        if (t.isVoidLike()) error(line, column, "Emp can't be a type argument");
-        args.push_back(t);
+        args.push_back(resolveType(n, line, column));
     }
     return args;
 }
 
 // Parses the template again with its types filled in; nullptr if they don't fit
 StmtPtr Analyser::fillIn(const GenericTemplate& t, const std::vector<SemanticType>& args, int line, int column) {
+    for (const auto& a : args) {
+        if (a.isVoidLike()) {
+            error(line, column, "Emp can't be a type argument");
+            return nullptr;
+        }
+    }
     if (args.size() != t.params.size()) {
         std::string expected = t.params.size() == 1 ? t.params[0] : "[";
         if (t.params.size() != 1) {
@@ -159,8 +163,15 @@ void Analyser::leaveTemplateModule(const FillInContext& saved) {
     definingLambda = saved.definingLambda;
 }
 
-SemanticType Analyser::instantiateClass(int templateId, const std::vector<SemanticType>& args, int line, int column) {
+SemanticType Analyser::instantiateClass(int templateId, const std::vector<SemanticType>& givenArgs, int line, int column) {
     const GenericTemplate t = templates[static_cast<size_t>(templateId)];
+    // Task:Emp, what an async func[Emp] gives, holds a value of no use (Emp can't be held)
+    std::vector<SemanticType> args = givenArgs;
+    const bool nothing = t.name == "Task" && args.size() == 1 && args[0].isVoidLike();
+    if (nothing) {
+        args[0] = SemanticType::userDefined("_Nothing", t.moduleId, UserTypeKind::Class);
+        SemanticType::setShownName(args[0].key(), "Emp");
+    }
     std::string key = std::to_string(templateId) + "|";
     for (const auto& a : args) key += canonical(a) + ";";
     if (auto found = classInstanceByKey.find(key); found != classInstanceByKey.end()) return found->second;
@@ -171,7 +182,7 @@ SemanticType Analyser::instantiateClass(int templateId, const std::vector<Semant
     auto* klass = static_cast<ClassDeclStmt*>(decl.get());
     klass->name = t.name + "$" + std::to_string(++instanceCounts[templateId]);
     const SemanticType type = SemanticType::userDefined(klass->name, t.moduleId, UserTypeKind::Class);
-    SemanticType::setShownName(type.key(), shownWith(t.name, args));
+    SemanticType::setShownName(type.key(), nothing || (t.name == "Task" && args.size() == 1 && args[0].name == "_Nothing") ? "Task:Emp" : shownWith(t.name, args));
     // Known before its members are, so Box:T can use Box:T inside
     classInstanceByKey[key] = type;
     classInstances[type.key()] = {templateId, args};
@@ -233,6 +244,11 @@ const Symbol* Analyser::instantiateFunction(int templateId, const std::vector<Se
 void Analyser::analysePendingBodies() {
     for (size_t i = 0; i < pendingBodies.size(); ++i) {
         const PendingBody body = pendingBodies[i];
+        // An async function's frame has been checked once, as the function
+        // (analyser_async.cpp): warnings about what it became aren't the user's
+        const size_t diagnosticsBefore = diagnostics.size();
+        const bool isFrame = body.statement->kind == StmtKind::ClassDecl &&
+                             static_cast<const ClassDeclStmt*>(body.statement)->name.rfind("async$", 0) == 0;
         const FillInContext saved = enterTemplateModule(body.moduleId);
         --instanceDepth;   // not filling in now
         fillNote = " (in " + body.usedAt + ")";
@@ -249,6 +265,13 @@ void Analyser::analysePendingBodies() {
         fillNote.clear();
         ++instanceDepth;
         leaveTemplateModule(saved);
+        if (isFrame) {
+            size_t kept = diagnosticsBefore;
+            for (size_t d = diagnosticsBefore; d < diagnostics.size(); ++d) {
+                if (diagnostics[d].severity == DiagnosticSeverity::Error) diagnostics[kept++] = diagnostics[d];
+            }
+            diagnostics.resize(kept);
+        }
     }
     pendingBodies.clear();
 }

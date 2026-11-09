@@ -1,0 +1,17 @@
+$("math") { sqrt, floor, ceil, abs, round, PI, gcd, sum, mean, median, Big }
+
+print(sqrt(16), floor(2.7), ceil(2.1), abs(-3), round(2.5));
+print(PI.toFixed(4), gcd(12, 18));
+print(sum(<1, 2, 3>), mean(<2, 4>), median(<5, 1, 3>));
+
+// Int is 64 bits, and going past that is an error, not a wrong answer.
+try {
+    var[Int] huge = 9223372036854775807;
+    print(huge + 1);
+} catch (e[OverflowError]) {
+    print(e.message);
+}
+
+// Big has no limit.
+var[Big] large = new Big("9223372036854775807");
+print(large * new Big("1000000"));

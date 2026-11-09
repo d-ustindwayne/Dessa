@@ -6,6 +6,8 @@ The running program: its arguments, the platform, and leaving with an exit code.
 
 **Runs in:** Native programs and WebAssembly (pages and Node).
 
+`printErr(text)` writes to stderr, apart from the output. `programPath()` is the running program's file.
+
 ## Example
 
 ```dessa

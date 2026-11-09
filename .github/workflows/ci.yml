@@ -108,6 +108,9 @@ jobs:
         run: node tests/web/wasm_page.js
       - name: webutils in a real browser
         run: python3 tests/web/chrome_utils.py
+
+      - name: Components in Chrome
+        run: python3 tests/web/chrome_xds.py
       - name: The npm package (with this dessa)
         run: DESSALANG_DESSA="$PWD/build/dessa" node npm/test.js
       - name: Show the WebAssembly compiler's logs if something failed

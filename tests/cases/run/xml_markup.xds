@@ -1,0 +1,36 @@
+// XML written as markup, and the xml library. (A component file with no comp runs like any program.)
+$("xml") { Xml, parseXml, XmlError }
+
+var[Str] title = "Dune & <Friends>";
+var[Int] id = 7;
+var[Xml] data = @(<catalog>
+    <!-- don't break -->
+    <book id={id} kind="sf">{title}</book>
+    <empty />
+    it's text
+</catalog>);
+print(data);
+print(data.find("book")?.attr("id"));
+print(data.find("book")?.text());
+print(parseXml(data.toStr()).toStr() == data.toStr());
+print(data.pretty());
+print(data.findAll("book").length(), data.children().length());
+
+func[Xml] item(n[Int]) {
+    @(<item n={n} />)
+}
+print(item(3));
+
+func[Str] shape(x[Xml]) { return x.name; }
+print(shape(@(<passed />)));
+
+for (var[Str] bad in <"<a><b></a>", "<a>&x;</a>", "<a b=1 />", "<a></a><b />", "", "<a>", "<a b=\"1\" b=\"2\" />", "<a>&#x110000;</a>">) {
+    try {
+        parseXml(bad);
+        print("no error");
+    } catch (e[XmlError]) {
+        print(e.message);
+    }
+}
+// A DOCTYPE is skipped: what it declares is never expanded
+print(parseXml("<?xml version=\"1.0\"?><!DOCTYPE a [<!ENTITY x \"boom\">]><!-- c --><a>&#65;&amp;<![CDATA[<raw>]]></a>").text());

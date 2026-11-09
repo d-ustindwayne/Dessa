@@ -1,6 +1,8 @@
 #include "parser.hpp"
 #include "lexer.hpp"
 #include <algorithm>
+#include <cctype>
+#include <functional>
 #include <utility>
 
 namespace dessa {
@@ -133,7 +135,7 @@ bool Parser::typeArgAheadAt(size_t offset) const {
     const Token& t = peekAt(offset);
     switch (t.type) {
         case TokenType::L_BRACKET: case TokenType::TYPE_STR: case TokenType::TYPE_INT: case TokenType::TYPE_BUL:
-        case TokenType::TYPE_FLT: case TokenType::TYPE_DBL: case TokenType::TYPE_CHR:
+        case TokenType::TYPE_FLT: case TokenType::TYPE_DBL: case TokenType::TYPE_CHR: case TokenType::TYPE_EMP:
             return true;
         case TokenType::IDENTIFIER:
             return !t.lexeme.empty() && t.lexeme[0] >= 'A' && t.lexeme[0] <= 'Z';
@@ -271,7 +273,26 @@ StmtPtr Parser::declaration() {
 StmtPtr Parser::declarationInner() {
     if (match({TokenType::VAR}))   return varDeclaration();
     if (match({TokenType::CONST})) return constDeclaration();
-    if (match({TokenType::FUNC}))  return funcDeclaration();
+    // async func[T] f()
+    if (check(TokenType::IDENTIFIER) && peek().lexeme == "async" && checkNext(TokenType::FUNC)) {
+        advance();
+        asyncNext = true;
+    }
+    if (match({TokenType::FUNC})) {
+        const Token at = previous();
+        StmtPtr fn = funcDeclaration();
+        // Inside a function: a lambda with a name
+        return blockDepth > 0 ? innerFunction(std::move(fn), at) : std::move(fn);
+    }
+    if (check(TokenType::IDENTIFIER) && peek().lexeme == "comp" && peekAt(1).type == TokenType::IDENTIFIER && peekAt(2).type == TokenType::L_PAREN) {
+        // Said once, and read past so what follows it isn't a heap of errors
+        if (!componentFile) error(peek(), "comp declares a component, and only .xds, .xdz and .xdx files have them.");
+        else if (blockDepth > 0) error(peek(), "A comp can't be inside a comp or a function. Declare it at the top of the file; a func can be inside.");
+        const bool allowed = componentFile && blockDepth == 0;
+        advance();
+        StmtPtr comp = compDeclaration();
+        return allowed ? std::move(comp) : nullptr;
+    }
     if (check(TokenType::AT)) {
         Token at = peek();
         std::vector<Token> annotations = parseAnnotations();
@@ -356,11 +377,20 @@ std::vector<TypeNode> Parser::parseThrows() {
 }
 
 StmtPtr Parser::funcDeclaration() {
-    const size_t start = current - 1;   // the `func`
+    // the `func`, and an `async` in front of it: a generic one is read again from here
+    bool isAsync = asyncNext;
+    asyncNext = false;
+    const size_t start = current - (isAsync ? 2 : 1);
     consume(TokenType::L_BRACKET, "Expect '[' before return type.");
     TypeNode returnType = parseType();
     std::vector<TypeNode> throwsTypes = parseThrows();
     consume(TokenType::R_BRACKET, "Expect ']' after return type.");
+
+    // func[T] async f(): the same, the other way of writing it
+    if (check(TokenType::IDENTIFIER) && peek().lexeme == "async" && checkNext(TokenType::IDENTIFIER)) {
+        advance();
+        isAsync = true;
+    }
 
     std::string name = consume(TokenType::IDENTIFIER, "Expect function name.").lexeme;
     std::vector<std::string> typeParams;
@@ -371,9 +401,14 @@ StmtPtr Parser::funcDeclaration() {
     consume(TokenType::R_PAREN, "Expect ')' after parameters.");
 
     consume(TokenType::L_BRACE, "Expect '{' before function body.");
+    const bool savedAsync = inAsync, savedComp = inComp;
+    inAsync = isAsync;
+    inComp = false;
+    struct Back { bool& a; bool& c; bool av; bool cv; ~Back() { a = av; c = cv; } } back{inAsync, inComp, savedAsync, savedComp};
     StmtPtr body = blockStatement();
 
     auto fn = std::make_unique<FuncDeclStmt>(std::move(returnType), std::move(name), std::move(params), std::move(body));
+    fn->isAsync = isAsync;
     fn->throwsTypes = std::move(throwsTypes);
     if (!typeParams.empty()) {
         fn->typeParams = std::move(typeParams);
@@ -382,6 +417,58 @@ StmtPtr Parser::funcDeclaration() {
         fn->templateTypes = substitutions;   // a generic method of a filled-in class keeps the class's types
     }
     return fn;
+}
+
+// comp Name(params) { ... @(<markup>) }: a function whose return type the
+// analyser works out (Element, or Element | Nil when it can reach its end)
+StmtPtr Parser::compDeclaration() {
+    std::string name = consume(TokenType::IDENTIFIER, "Expect a component name.").lexeme;
+    consume(TokenType::L_PAREN, "Expect '(' after the component's name.");
+    std::vector<Param> params = parseParamList();
+    consume(TokenType::R_PAREN, "Expect ')' after parameters.");
+    consume(TokenType::L_BRACE, "Expect '{' before the component's body.");
+    const bool saved = inComp;
+    inComp = true;
+    StmtPtr body;
+    try {
+        body = blockStatement();
+    } catch (const ParseError&) {
+        inComp = saved;
+        throw;
+    }
+    inComp = saved;
+    TypeNode unset;
+    unset.name = "Emp";   // Analyser::prepareComp fills it in
+    auto fn = std::make_unique<FuncDeclStmt>(std::move(unset), std::move(name), std::move(params), std::move(body));
+    fn->isComp = true;
+    return fn;
+}
+
+// func inside a function body: const[R] name = (params) := { ... };
+// So it is a lambda: it captures by value, and has no defaults or variadics.
+StmtPtr Parser::innerFunction(StmtPtr declaration, const Token& at) {
+    auto* fn = static_cast<FuncDeclStmt*>(declaration.get());
+    // These are said without stopping: it has been read to its end already
+    if (fn->isAsync) {
+        error(at, "An async function can't be inside a function. Declare it at the top of the file.");
+        return nullptr;
+    }
+    if (!fn->typeParams.empty()) {
+        error(at, "A function inside a function can't be generic. Declare it at the top of the file.");
+        return nullptr;
+    }
+    for (const auto& p : fn->params) {
+        if (p.isVariadic || p.defaultValue) {
+            error(at, "A function inside a function is a lambda, so '" + p.name + "' can't have a default or be variadic. Declare it at the top of the file.");
+            return nullptr;
+        }
+    }
+    if (!fn->throwsTypes.empty()) {
+        error(at, "A function inside a function is a lambda, so it can't list what it throws. Declare it at the top of the file.");
+        return nullptr;
+    }
+    auto lambda = place(std::make_unique<LambdaExpr>(std::move(fn->params), std::move(fn->body)), at);
+    return std::make_unique<VarDeclStmt>(true, std::move(fn->returnType), std::optional<std::string>(fn->name), std::move(lambda));
 }
 
 // init(params) { body }
@@ -437,6 +524,12 @@ StmtPtr Parser::classDeclaration() {
             StmtPtr member;
             if (match({TokenType::VAR})) member = varDeclaration();
             else if (match({TokenType::CONST})) member = constDeclaration();
+            else if (check(TokenType::IDENTIFIER) && peek().lexeme == "async" && checkNext(TokenType::FUNC)) {
+                advance();
+                advance();
+                asyncNext = true;
+                member = funcDeclaration();
+            }
             else if (match({TokenType::FUNC})) member = funcDeclaration();
             else if (match({TokenType::INIT})) member = constructorDeclaration();
             else throw error(peek(), "Expect var, const, func, or init declaration inside class.");
@@ -693,6 +786,17 @@ StmtPtr Parser::statementInner() {
     if (match({TokenType::TRY}))      return tryStatement();
     if (match({TokenType::THROW}))    return throwStatement();
     if (match({TokenType::L_BRACE}))  return blockStatement();
+    if (componentFile && strayMarkupAhead()) {
+        error(peek(), "Markup needs @(...) around it: @(<" + peekAt(1).lexeme + " ... />)");
+        // To the end of the block this is in
+        int depth = 0;
+        while (!isAtEnd() && !(depth == 0 && check(TokenType::R_BRACE))) {
+            if (check(TokenType::L_BRACE)) ++depth;
+            if (check(TokenType::R_BRACE)) --depth;
+            advance();
+        }
+        return nullptr;
+    }
     return expressionStatement();
 }
 
@@ -701,10 +805,17 @@ StmtPtr Parser::blockStatement() {
     Nesting nesting(*this);
     Token open = previous();
     std::vector<StmtPtr> statements;
+    ++blockDepth;
+    struct Leave { int& depth; ~Leave() { --depth; } } leave{blockDepth};
     while (!check(TokenType::R_BRACE) && !isAtEnd()) {
         StmtPtr stmt = declaration();
+        const bool markup = stmt && stmt->kind == StmtKind::Return && static_cast<ReturnStmt*>(stmt.get())->isMarkup;
         if (stmt) statements.push_back(std::move(stmt));
         takeMoreDeclarations(statements);
+        if (markup && !check(TokenType::R_BRACE) && !isAtEnd()) {
+            error(peek(), "Nothing can follow @(...) in the same block: it returns.");
+            synchronize();
+        }
     }
     consume(TokenType::R_BRACE, "Expect '}' after block.");
     return place(std::make_unique<BlockStmt>(std::move(statements)), open);
@@ -716,8 +827,28 @@ StmtPtr Parser::bodyStatement() {
     return statement();
 }
 
+// <div> or <Title text="x" /> at the start of a statement, written without @()
+bool Parser::strayMarkupAhead() const {
+    if (!check(TokenType::L_ANGLE) || peekAt(1).type != TokenType::IDENTIFIER) return false;
+    const TokenType after = peekAt(2).type;
+    if (after == TokenType::IDENTIFIER || after == TokenType::DIV) return true;
+    if (after != TokenType::R_ANGLE) return false;
+    const TokenType then = peekAt(3).type;   // <a>.forEach(...) and <a>; are lists
+    return then != TokenType::DOT && then != TokenType::SEMICOLON && then != TokenType::QUESTION_DOT;
+}
+
 StmtPtr Parser::expressionStatement() {
+    const Token first = peek();
     ExprPtr expr = expression();
+
+    // @(<markup>) as a statement returns it; its ';' is optional
+    if (expr->kind == ExprKind::Markup) {
+        if (blockDepth == 0) throw error(first, "@(...) on its own returns from a comp or function. At the top of a file, store it: var[Xml] data = @(...);");
+        match({TokenType::SEMICOLON});
+        auto markup = std::make_unique<ReturnStmt>(std::move(expr));
+        markup->isMarkup = true;
+        return markup;
+    }
 
     // `...` is a placeholder body; its trailing ';' is optional.
     if (expr->kind == ExprKind::Literal &&
@@ -837,11 +968,18 @@ StmtPtr Parser::loopStatement() {
 
 StmtPtr Parser::returnStatement() {
     ExprPtr value = nullptr;
+    const Token at = previous();
     if (!check(TokenType::SEMICOLON)) {
         value = expression();
+    } else if (inComp) {
+        value = place(std::make_unique<LiteralExpr>(Token(TokenType::NIL, "nil", at.line, at.column)), at);   // a comp with nothing to show
     }
-    consume(TokenType::SEMICOLON, "Expect ';' after return value.");
-    return std::make_unique<ReturnStmt>(std::move(value));
+    const bool markup = value && value->kind == ExprKind::Markup;
+    if (markup) match({TokenType::SEMICOLON});
+    else consume(TokenType::SEMICOLON, "Expect ';' after return value.");
+    auto result = std::make_unique<ReturnStmt>(std::move(value));
+    result->isMarkup = markup;
+    return result;
 }
 
 StmtPtr Parser::breakStatement() {
@@ -1231,6 +1369,19 @@ ExprPtr Parser::multiplicative() {
 }
 
 ExprPtr Parser::unary() {
+    if (check(TokenType::IDENTIFIER) && peek().lexeme == "await") {
+        const TokenType next = peekAt(1).type;
+        const bool startsValue = next == TokenType::IDENTIFIER || next == TokenType::NEW || next == TokenType::THIS || next == TokenType::L_PAREN;
+        if (inAsync && startsValue) {
+            Nesting nesting(*this);
+            Token at = advance();
+            ExprPtr operand = unary();
+            return place(std::make_unique<AwaitExpr>(std::move(operand)), at);
+        }
+        if (next == TokenType::IDENTIFIER || next == TokenType::NEW) {
+            throw error(peek(), "await only works directly in an async function: async func[Emp] f() { ... }");
+        }
+    }
     if (match({TokenType::NOT, TokenType::MINUS, TokenType::BITWISE_NOT})) {
         Nesting nesting(*this);
         Token op = previous();
@@ -1399,11 +1550,18 @@ ExprPtr Parser::parseLambdaOrGrouping(Token openParen) {
 
         StmtPtr body;
         if (match({TokenType::L_BRACE})) {
+            const bool savedComp = inComp, savedAsync = inAsync;
+            inComp = false;
+            inAsync = false;
+            struct Back { bool& c; bool& a; bool cv; bool av; ~Back() { c = cv; a = av; } } back{inComp, inAsync, savedComp, savedAsync};
             body = blockStatement();
         } else {
             // An expression body runs on into the surrounding list, if any: <(x[Int]) := (x > 1)>
             AngleListScope outer(*this, scope.saved);
             Token start = peek();
+            const bool savedAsync = inAsync;
+            inAsync = false;
+            struct Back { bool& a; bool v; ~Back() { a = v; } } back{inAsync, savedAsync};
             body = place(std::make_unique<ExpressionStmt>(expression()), start);
         }
         return place(std::make_unique<LambdaExpr>(std::move(params), std::move(body)), openParen);
@@ -1476,6 +1634,7 @@ ExprPtr Parser::parseTemplateString(const Token& token) {
         }
 
         Parser innerParser(std::move(innerTokens));
+        innerParser.inAsync = inAsync;
         ExprPtr inner;
         try {
             inner = innerParser.expression();
@@ -1495,6 +1654,258 @@ ExprPtr Parser::parseTemplateString(const Token& token) {
     expr->literalParts = std::move(literals);
     expr->interpolations = std::move(interpolations);
     return place(std::move(expr), token);
+}
+
+// ---- Markup: the raw block of @(<div>...</div>) ----
+
+namespace {
+
+// &lt; and friends in text and in "attribute" strings
+std::string decodeEntities(const std::string& text) {
+    static const std::pair<const char*, const char*> known[] = {
+        {"&lt;", "<"}, {"&gt;", ">"}, {"&amp;", "&"}, {"&quot;", "\""}, {"&apos;", "'"}, {"&nbsp;", "\xC2\xA0"}, {"&#123;", "{"}, {"&#125;", "}"}};
+    std::string out;
+    for (size_t i = 0; i < text.size();) {
+        bool found = false;
+        if (text[i] == '&') {
+            for (const auto& [name, value] : known) {
+                const std::string n = name;
+                if (text.compare(i, n.size(), n) == 0) {
+                    out += value;
+                    i += n.size();
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if (!found) out += text[i++];
+    }
+    return out;
+}
+
+// Text between tags, as JSX has it: lines are joined by one space, and
+// blank space around a line break is gone
+std::string markupText(const std::string& raw) {
+    std::string out;
+    size_t pos = 0;
+    bool first = true;
+    while (pos <= raw.size()) {
+        const size_t end = raw.find('\n', pos);
+        std::string line = raw.substr(pos, end == std::string::npos ? std::string::npos : end - pos);
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        const bool isFirst = pos == 0, isLast = end == std::string::npos;
+        if (!isFirst) {
+            const size_t start = line.find_first_not_of(" \t");
+            line = start == std::string::npos ? "" : line.substr(start);
+        }
+        if (!isLast) {
+            const size_t last = line.find_last_not_of(" \t");
+            line = last == std::string::npos ? "" : line.substr(0, last + 1);
+        }
+        if (!line.empty()) {
+            if (!first) out += ' ';
+            out += line;
+            first = false;
+        }
+        if (isLast) break;
+        pos = end + 1;
+    }
+    return decodeEntities(out);
+}
+
+} // namespace
+
+// The code of a {...}, with positions in the file
+ExprPtr Parser::parseMarkupExpression(const Token& token, const std::string& text, int line, int column) {
+    if (text.find_first_not_of(" \t\r\n") == std::string::npos) throw error(token, "{ } in markup needs a value inside.");
+    Lexer lexer(text, true);
+    std::vector<Token> inner = lexer.scanTokens();
+    for (auto& t : inner) {
+        if (t.line == 1) t.column += column - 1;
+        t.line += line - 1;
+    }
+    for (const auto& e : lexer.getErrors()) {
+        errors.push_back("[line " + std::to_string(line) + ", col " + std::to_string(column) + "] Parse error: " + e);
+    }
+    if (lexer.hasErrors()) throw ParseError{};
+    Parser parser(std::move(inner));
+    parser.componentFile = true;
+    parser.blockDepth = 1;
+    ExprPtr value;
+    try {
+        value = parser.expression();
+        if (!parser.isAtEnd()) parser.error(parser.peek(), "Expect '}' here: { } in markup holds one value.");
+    } catch (const ParseError&) {
+    }
+    if (parser.hasErrors() || !value) {
+        for (const auto& e : parser.getErrors()) errors.push_back(e);
+        throw ParseError{};
+    }
+    return value;
+}
+
+ExprPtr Parser::parseMarkup(const Token& token) {
+    const std::string& raw = token.lexeme;
+    size_t at = 0;
+    int line = token.line, column = token.column;
+    const auto move = [&](size_t to) {
+        for (; at < to && at < raw.size(); ++at) {
+            if (raw[at] == '\n') { ++line; column = 1; }
+            else ++column;
+        }
+    };
+    const auto fail = [&](const std::string& message) {
+        Token here = token;
+        here.line = line;
+        here.column = column;
+        return error(here, message);
+    };
+    const auto isName = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-' || c == ':' || c == '.'; };
+    const auto blanks = [&] {
+        size_t i = at;
+        while (i < raw.size() && std::isspace(static_cast<unsigned char>(raw[i]))) ++i;
+        move(i);
+    };
+    // Where the } of the { at `from` is
+    const auto closingBrace = [&](size_t from) {
+        int depth = 0;
+        for (size_t i = from; i < raw.size(); ++i) {
+            const char c = raw[i];
+            if (c == '"' || c == '\'') {
+                for (++i; i < raw.size() && raw[i] != c; ++i) if (raw[i] == '\\') ++i;
+            } else if (c == '/' && i + 1 < raw.size() && raw[i + 1] == '/') {
+                while (i < raw.size() && raw[i] != '\n') ++i;
+            } else if (c == '/' && i + 1 < raw.size() && raw[i + 1] == '*') {
+                i = raw.find("*/", i + 2);
+                if (i == std::string::npos) return i;
+                ++i;
+            } else if (c == '@') {
+                // nested markup: its own braces and text mustn't count, so find its end by lexing it
+                size_t open = i + 1;
+                while (open < raw.size() && std::isspace(static_cast<unsigned char>(raw[open]))) ++open;
+                if (open < raw.size() && raw[open] == '(') {
+                    Lexer nested(raw.substr(i), true);
+                    std::vector<Token> tokens = nested.scanTokens();
+                    if (!tokens.empty() && tokens[0].type == TokenType::MARKUP) {
+                        // skip to the ')' after the block
+                        size_t end = raw.find(tokens[0].lexeme, i);
+                        if (end != std::string::npos) {
+                            i = end + tokens[0].lexeme.size();
+                            while (i < raw.size() && raw[i] != ')') ++i;
+                        }
+                    }
+                }
+            } else if (c == '{') {
+                ++depth;
+            } else if (c == '}' && --depth == 0) {
+                return i;
+            }
+        }
+        return std::string::npos;
+    };
+
+    std::function<MarkupNode(int)> element = [&](int depth) -> MarkupNode {
+        if (depth > kMaxNesting) throw fail("This markup is nested too deeply.");
+        MarkupNode node;
+        node.kind = MarkupNode::Kind::Element;
+        node.line = line;
+        node.column = column;
+        move(at + 1);   // <
+        size_t end = at;
+        while (end < raw.size() && isName(raw[end])) ++end;
+        node.tag = raw.substr(at, end - at);
+        if (node.tag.empty()) throw fail("Expect a tag name after '<'.");
+        move(end);
+        // attributes
+        for (;;) {
+            blanks();
+            if (at >= raw.size()) throw fail("<" + node.tag + "> never ends.");
+            if (raw[at] == '>') { move(at + 1); break; }
+            if (raw.compare(at, 2, "/>") == 0) { move(at + 2); return node; }
+            MarkupAttribute attribute;
+            attribute.line = line;
+            attribute.column = column;
+            end = at;
+            while (end < raw.size() && isName(raw[end])) ++end;
+            attribute.name = raw.substr(at, end - at);
+            if (attribute.name.empty()) throw fail("Expect an attribute name in <" + node.tag + ">.");
+            move(end);
+            blanks();
+            if (at >= raw.size() || raw[at] != '=') throw fail("Attribute '" + attribute.name + "' needs a value: " + attribute.name + "=\"text\" or " + attribute.name + "={value}");
+            move(at + 1);
+            blanks();
+            if (at < raw.size() && (raw[at] == '"' || raw[at] == '\'')) {
+                const size_t close = raw.find(raw[at], at + 1);
+                if (close == std::string::npos) throw fail("Attribute '" + attribute.name + "': this string never ends.");
+                Token text(TokenType::STRING, decodeEntities(raw.substr(at + 1, close - at - 1)), line, column);
+                attribute.value = place(std::make_unique<LiteralExpr>(text), text);
+                attribute.isText = true;
+                move(close + 1);
+            } else if (at < raw.size() && raw[at] == '{') {
+                const size_t close = closingBrace(at);
+                if (close == std::string::npos) throw fail("This { never ends.");
+                attribute.value = parseMarkupExpression(token, raw.substr(at + 1, close - at - 1), line, column + 1);
+                move(close + 1);
+            } else {
+                throw fail("Attribute '" + attribute.name + "' takes \"text\" or {value}.");
+            }
+            node.attributes.push_back(std::move(attribute));
+        }
+        // what is inside
+        for (;;) {
+            if (at >= raw.size()) throw fail("<" + node.tag + "> has no closing tag.");
+            if (raw[at] == '{') {
+                const size_t close = closingBrace(at);
+                if (close == std::string::npos) throw fail("This { never ends.");
+                const std::string code = raw.substr(at + 1, close - at - 1);
+                bool onlyComment = code.find_first_not_of(" \t\r\n") == std::string::npos;
+                if (!onlyComment) {
+                    const size_t first = code.find_first_not_of(" \t\r\n");
+                    onlyComment = code.compare(first, 2, "/*") == 0 && code.find("*/") != std::string::npos &&
+                                  code.find_first_not_of(" \t\r\n", code.find("*/") + 2) == std::string::npos;
+                }
+                if (!onlyComment) {
+                    MarkupNode value;
+                    value.kind = MarkupNode::Kind::Value;
+                    value.line = line;
+                    value.column = column;
+                    value.value = parseMarkupExpression(token, code, line, column + 1);
+                    node.children.push_back(std::move(value));
+                }
+                move(close + 1);
+            } else if (raw.compare(at, 4, "<!--") == 0) {
+                const size_t close = raw.find("-->", at + 4);
+                if (close == std::string::npos) throw fail("This comment never ends.");
+                move(close + 3);
+            } else if (raw.compare(at, 2, "</") == 0) {
+                const size_t close = raw.find('>', at);
+                if (close == std::string::npos) throw fail("This closing tag never ends.");
+                std::string name = raw.substr(at + 2, close - at - 2);
+                while (!name.empty() && std::isspace(static_cast<unsigned char>(name.back()))) name.pop_back();
+                if (name != node.tag) throw fail("</" + name + "> closes <" + node.tag + ">: write </" + node.tag + ">. A tag with nothing inside can end in />.");
+                move(close + 1);
+                return node;
+            } else if (raw[at] == '<' && at + 1 < raw.size() && std::isalpha(static_cast<unsigned char>(raw[at + 1]))) {
+                node.children.push_back(element(depth + 1));
+            } else {
+                size_t end2 = at + 1;
+                while (end2 < raw.size() && raw[end2] != '{' &&
+                       !(raw[end2] == '<' && end2 + 1 < raw.size() && (raw[end2 + 1] == '/' || raw[end2 + 1] == '!' || std::isalpha(static_cast<unsigned char>(raw[end2 + 1]))))) {
+                    if (raw[end2] == '}') { move(end2); throw fail("A } on its own: write &#125; for the character."); }
+                    ++end2;
+                }
+                MarkupNode text;
+                text.kind = MarkupNode::Kind::Text;
+                text.line = line;
+                text.column = column;
+                text.text = markupText(raw.substr(at, end2 - at));
+                if (!text.text.empty()) node.children.push_back(std::move(text));
+                move(end2);
+            }
+        }
+    };
+    MarkupNode root = element(0);
+    return place(std::make_unique<MarkupExpr>(std::move(root)), token);
 }
 
 // << or >> where lists open or close: two separate < or > tokens
@@ -1532,6 +1943,16 @@ ExprPtr Parser::primary() {
 
     if (match({TokenType::TEMPLATE_STRING})) {
         return parseTemplateString(previous());
+    }
+
+    if (match({TokenType::MARKUP})) {
+        const Token markup = previous();
+        try {
+            return parseMarkup(markup);
+        } catch (const ParseError&) {
+            // Said already, and the block is behind us: the code around it can go on
+            return place(std::make_unique<MarkupExpr>(MarkupNode{}), markup);
+        }
     }
 
     if (match({TokenType::IDENTIFIER, TokenType::THIS, TokenType::SUPER})) {

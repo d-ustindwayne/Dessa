@@ -15,6 +15,8 @@ set(DESSA_FRONTEND
     src/parser/parser.cpp
     src/analyser/analyser.cpp
     src/analyser/analyser_expr.cpp
+    src/analyser/analyser_markup.cpp
+    src/analyser/analyser_async.cpp
     src/analyser/builtins.cpp
     src/analyser/scope.cpp
     src/analyser/semtype.cpp
@@ -57,6 +59,7 @@ if(EMSCRIPTEN)
         "SHELL:--embed-file ${S}/runtime/dessa_runtime.hpp@/dessa/runtime/dessa_runtime.hpp"
         "SHELL:--embed-file ${S}/runtime/dessa_rt.h@/dessa/runtime/dessa_rt.h"
         "SHELL:--embed-file ${S}/runtime/dessa_web.h@/dessa/runtime/dessa_web.h"
+        "SHELL:--embed-file ${S}/runtime/dessa_encoding.h@/dessa/runtime/dessa_encoding.h"
         "SHELL:--embed-file ${S}/runtime/decl@/dessa/runtime/decl"
         "SHELL:--embed-file ${P}/json@/dessa/packages/json"
         "SHELL:--embed-file ${P}/numbers@/dessa/packages/numbers"

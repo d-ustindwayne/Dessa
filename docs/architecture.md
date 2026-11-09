@@ -70,6 +70,10 @@ know:
   on the unsaved text with a placeholder at the cursor and report what is in
   scope there.
 
+Two things are rewritten here, so the generators never see them. Markup of `.xds` files becomes ordinary
+calls (`analyser_markup.cpp`, using `Expr::lowered`). Async functions become classes with a `switch` over states
+(`analyser_async.cpp`, see [runtime.md](runtime.md#async)), once their body has been checked as written.
+
 ### The generators
 
 The C and C++ generators must give the same output for the same program. The differences are

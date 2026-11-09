@@ -260,6 +260,7 @@ private:
     CV member(const MemberExpr* e);
     CV index(const IndexExpr* e);
     CV lambda(const LambdaExpr* e);
+    CV narrowed(const std::string& name, const SemanticType& declared, const SemanticType& now);
     CV functionValue(const Symbol& symbol);
     CV builtinValue(const Symbol& symbol);   // sqrt passed as a Func
     CV newObject(const NewExpr* e);

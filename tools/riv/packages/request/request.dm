@@ -104,6 +104,12 @@ func[Response] get(url[Str], headers[Map[Str, Str]]={}, timeout[Int]=30) {
     return request("GET", url, headers, "", timeout);
 }
 
+// To wait for in an async function. It still waits for the network itself: Dessa has
+// one thread, so nothing else runs until the answer comes.
+async func[Response] getTask(url[Str], headers[Map[Str, Str]]={}, timeout[Int]=30) {
+    return get(url, headers, timeout);
+}
+
 func[Response] post(url[Str], body[Str]="", headers[Map[Str, Str]]={}, timeout[Int]=30) {
     return request("POST", url, headers, body, timeout);
 }

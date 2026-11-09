@@ -1,0 +1,34 @@
+// An interface says what a class must have.
+interface Shape {
+    name[Str];
+    func[Dbl] area();
+}
+
+class[Shape] Square {
+    var[Str] name = "square";
+    var[Dbl] side;
+    init(side[Dbl]) { this.side = side; }
+    func[Dbl] area() { return this.side * this.side; }
+}
+
+class[Shape] Circle {
+    var[Str] name = "circle";
+    var[Dbl] radius;
+    init(radius[Dbl]) { this.radius = radius; }
+    func[Dbl] area() { return 3.14 * this.radius * this.radius; }
+}
+
+var[Shape<>] shapes = <new Square(2), new Circle(1)>;
+for (var[Shape] s in shapes) print(s.name, s.area());
+
+enum Level { LOW, MEDIUM, HIGH }
+
+func[Str] advice(level[Level]) {
+    switch (level) {
+        case LOW := { return "fine"; }
+        case MEDIUM := { return "careful"; }
+        default := { return "stop"; }
+    }
+}
+print(advice(Level.LOW), advice(Level.HIGH));
+print(Level.MEDIUM);

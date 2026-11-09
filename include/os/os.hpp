@@ -27,6 +27,29 @@ inline void writeFile(const Str& path, const Str& content) {
     out << content;
 }
 
+inline List<Int> readBytes(const Str& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) fail("Cannot read file '" + path + "'");
+    List<Int> out;
+    char buffer[65536];
+    while (in.read(buffer, sizeof buffer) || in.gcount() > 0) {
+        for (std::streamsize i = 0; i < in.gcount(); ++i) out.push_back(static_cast<unsigned char>(buffer[i]));
+    }
+    return out;
+}
+
+inline void writeBytes(const Str& path, const List<Int>& bytes) {
+    std::string data;
+    data.reserve(bytes.size());
+    for (const Int b : bytes) {
+        if (b < 0 || b > 255) fail("A byte is 0 to 255, not " + std::to_string(b));
+        data += static_cast<char>(b);
+    }
+    std::ofstream out(path, std::ios::binary);
+    if (!out) fail("Cannot write file '" + path + "'");
+    out << data;
+}
+
 inline void appendFile(const Str& path, const Str& content) {
     std::ofstream out(path, std::ios::binary | std::ios::app);
     if (!out) fail("Cannot write file '" + path + "'");

@@ -91,6 +91,7 @@ private:
     std::string assign(const AssignExpr* expression);
     std::string call(const CallExpr* expression);
     std::string member(const MemberExpr* expression);
+    std::string narrowed(const std::string& name, const SemanticType& declared, const SemanticType& now);
     std::string lambda(const LambdaExpr* expression);
     std::string collection(const std::vector<CollectionElement>& elements, bool isSet, const Expr* at,
                            const SemanticType* target = nullptr);

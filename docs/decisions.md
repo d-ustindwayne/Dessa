@@ -21,6 +21,13 @@ tell a reason from an accident. Newest at the end of each part.
 | **`Big` is a library class, not a type** | The creator is against more data types | `Big` is slower than a built-in, and needs `new` |
 | **`yes` and `no` remember their spelling** | Reads well in settings | A `Bul` is more than one bit |
 
+### Async as state machines
+
+The other way is a stack for each async function, which is simple natively, but WebAssembly can't switch
+stacks without another tool or features not in every browser. So async functions are rewritten into classes
+before any generator sees them, which works the same everywhere. There are no threads: Dessa's reference
+counts aren't atomic, which is part of its speed.
+
 ## The compiler
 
 | Decision | Why | What it costs |

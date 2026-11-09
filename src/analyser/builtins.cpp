@@ -126,6 +126,8 @@ const std::vector<BuiltinLibrary>& builtinLibraries() {
             {
                 {"readFile",   {{"path", "Str"}}, "Str", "dessa::os::readFile"},
                 {"writeFile",  {{"path", "Str"}, {"content", "Str"}}, "Emp", "dessa::os::writeFile"},
+                {"readBytes",  {{"path", "Str"}}, "Int<>", "dessa::os::readBytes"},
+                {"writeBytes", {{"path", "Str"}, {"bytes", "Int<>"}}, "Emp", "dessa::os::writeBytes"},
                 {"appendFile", {{"path", "Str"}, {"content", "Str"}}, "Emp", "dessa::os::appendFile"},
                 {"fileExists", {{"path", "Str"}}, "Bul", "dessa::os::fileExists"},
                 {"isDir",      {{"path", "Str"}}, "Bul", "dessa::os::isDir"},
@@ -161,6 +163,8 @@ const std::vector<BuiltinLibrary>& builtinLibraries() {
                 {"args",     {}, "Str<>", "dessa::sys::args"},
                 {"exit",     {{"code", "Int"}}, "Emp", "dessa::sys::exit"},
                 {"platform", {}, "Str", "dessa::sys::platform"},
+                {"printErr", {{"text", "Str"}}, "Emp", "dessa::sys::printErr"},
+                {"programPath", {}, "Str", "dessa::sys::programPath"},
             },
             {},
         },

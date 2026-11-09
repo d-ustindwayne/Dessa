@@ -444,6 +444,58 @@
         run: (bytes, options) => start(bytes, options || {}),
         // A program in Node: output to the terminal, input from it; returns the exit code
         main: (file, args) => {
+            // Node's WASI can't list a folder on Windows (fd_readdir says "not implemented"),
+            // so that one call is done here. It needs to know each open folder's path.
+            const withFolderListing = (wasiCalls, memory) => {
+                const fs = require("fs"), path = require("path");
+                const FIRST_PREOPEN = 3, ENOENT = 44;
+                const folders = new Map([[FIRST_PREOPEN, process.cwd()]]);
+                const fixed = Object.assign({}, wasiCalls);
+                fixed.path_open = (dirFd, dirFlags, pathAt, pathLength, ...rest) => {
+                    const result = wasiCalls.path_open(dirFd, dirFlags, pathAt, pathLength, ...rest);
+                    if (result === 0 && folders.has(dirFd)) {
+                        const bytes = new Uint8Array(memory().buffer, pathAt, pathLength);
+                        const opened = new DataView(memory().buffer).getUint32(rest[rest.length - 1], true);
+                        folders.set(opened, path.resolve(folders.get(dirFd), decoder.decode(bytes)));
+                    }
+                    return result;
+                };
+                fixed.fd_close = (fd) => {
+                    folders.delete(fd);
+                    return wasiCalls.fd_close(fd);
+                };
+                fixed.fd_readdir = (fd, at, size, cookie, usedAt) => {
+                    if (!folders.has(fd)) return wasiCalls.fd_readdir(fd, at, size, cookie, usedAt);
+                    let names;
+                    try {
+                        names = fs.readdirSync(folders.get(fd), { withFileTypes: true });
+                    } catch (e) {
+                        return ENOENT;
+                    }
+                    const HEADER = 24, DIRECTORY = 3, REGULAR_FILE = 4, SYMBOLIC_LINK = 7;
+                    const all = [{ name: ".", type: DIRECTORY }, { name: "..", type: DIRECTORY }];
+                    for (const e of names) all.push({ name: e.name, type: e.isDirectory() ? DIRECTORY : e.isSymbolicLink() ? SYMBOLIC_LINK : REGULAR_FILE });
+                    const view = new DataView(memory().buffer), out = new Uint8Array(memory().buffer);
+                    let used = 0;
+                    // What doesn't fit is cut off, and the buffer being full says to ask again
+                    for (let i = Number(cookie); i < all.length && used < size; ++i) {
+                        const name = encoder.encode(all[i].name);
+                        const entry = new Uint8Array(HEADER + name.length);
+                        const fields = new DataView(entry.buffer);
+                        fields.setBigUint64(0, BigInt(i + 1), true);
+                        fields.setBigUint64(8, BigInt(i + 1), true);
+                        fields.setUint32(16, name.length, true);
+                        entry[20] = all[i].type;
+                        entry.set(name, HEADER);
+                        const count = Math.min(entry.length, size - used);
+                        out.set(entry.subarray(0, count), at + used);
+                        used += count;
+                    }
+                    view.setUint32(usedAt, used, true);
+                    return 0;
+                };
+                return fixed;
+            };
             const fs = require("fs");
             // Node's own WASI, with files: the current folder (and / elsewhere than Windows)
             let NodeWasi = null;
@@ -468,7 +520,10 @@
                 const imports = env.imports(module);
                 // getImportObject: Node 20+; wasiImport: older Node and Bun
                 imports.wasi_snapshot_preview1 = typeof wasi.getImportObject === "function" ? wasi.getImportObject().wasi_snapshot_preview1 : wasi.wasiImport;
+                let memoryOf = () => null;
+                if (process.platform === "win32") imports.wasi_snapshot_preview1 = withFolderListing(imports.wasi_snapshot_preview1, () => memoryOf());
                 const instance = new WebAssembly.Instance(module, imports);
+                memoryOf = () => instance.exports.memory;
                 env.attach(instance);
                 try {
                     return wasi.start(instance);

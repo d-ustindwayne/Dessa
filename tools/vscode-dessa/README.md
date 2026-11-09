@@ -23,6 +23,7 @@ Highlighting works without the compiler; everything else needs it.
 |---|---|
 | `.ds` | Dessa programs (also `.dx`, `.dz`, `.dsx`, `.dxx`, `.dzx`, `.dds`, `.dss`) |
 | `.dm` | Dessa modules |
+| `.xds`, `.xdz`, `.xdx` | Components. Their tags and parameters are suggested here and in pages using them |
 | `.dhtml` | HTML pages with Dessa scripts, built with `dessa build page.dhtml` |
 | `.html` | Dessa scripts in `<script type="text/dessa">` are highlighted too |
 

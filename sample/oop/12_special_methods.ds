@@ -1,0 +1,27 @@
+// Methods with these names work with the language's own operators.
+class Money {
+    var[Int] cents;
+    init(cents[Int]) { this.cents = cents; }
+    func[Money] _add(other[Money]) { return new Money(this.cents + other.cents); }
+    func[Bul] _eq(other[Money]) { return this.cents == other.cents; }
+    func[Int] _cmp(other[Money]) { return this.cents - other.cents; }
+    func[Money] _neg() { return new Money(-this.cents); }
+    func[Str] toStr() { return $"${this.cents / 100}"; }
+}
+
+var[Money] a = new Money(150), b = new Money(250);
+print(a + b, a == b, a < b, -a);
+
+// _get, _set, _length and _iter make it work like a list.
+class Row {
+    var[Str<>] cells = <"a", "b">;
+    func[Str] _get(i[Int]) { return this.cells<i>; }
+    func[Emp] _set(i[Int], value[Str]) { this.cells<i> = value; }
+    func[Int] _length() { return this.cells.length(); }
+    func[Str<>] _iter() { return this.cells; }
+}
+
+var[Row] row = new Row();
+row<1> = "z";
+print(row<1>);
+for (var[Str] cell in row) print(cell);

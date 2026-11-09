@@ -1,0 +1,38 @@
+// A variable says its type in brackets.
+var[Str] name = "Ann";
+var[Int] age = 30;
+var[Dbl] height = 1.68;
+var[Bul] likesTea = true;
+var[Chr] initial = 'A';
+print(name, age, height, likesTea, initial);
+
+// A constant can't change.
+const[Int] DAYS_IN_WEEK = 7;
+print(DAYS_IN_WEEK * 2);
+
+// Several at once.
+var[Int] x = 10, y = 20;
+print(x + y);
+
+// Int / Int gives a decimal. Stored into an Int, it is cut off.
+print(7 / 2);
+var[Int] whole = 7 / 2;
+print(whole);
+
+// % never goes negative, and ^ is a power.
+print(-7 % 3, 2 ^ 10);
+
+// Converting is written like a call.
+print(Int("42") + 1, Str(42) + "!", Dbl("2.5") * 2);
+
+// Int[N] shows a number in base 2, 8 or 16.
+var[Int[16]] colour = 255;
+print(colour);
+
+// Nothing can be nil unless it says so.
+var[Str | Nil] nickname = nil;
+print(nickname);
+print(nickname ?? "no nickname");
+print(nickname?.length());
+nickname = "Annie";
+if (nickname != nil) print(nickname.length());   // here it can't be nil

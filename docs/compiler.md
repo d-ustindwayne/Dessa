@@ -2,6 +2,11 @@
 
 `dessa` checks, builds and runs Dessa programs and pages.
 
+`dessa build app.xds` makes `app.js` for pages (`--html`: `app.html`, a page showing it; see [web.md](web.md)).
+`dessa context [library]` prints what a coding agent needs to know for this version, and `dessa context --init`
+adds a short `AGENTS.md` to your project saying so. `dessa components <file.xds>` lists a file's components
+as JSON, for editors.
+
 ## Running and building
 
 ```

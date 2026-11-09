@@ -35,9 +35,11 @@ private:
     std::vector<Diagnostic>& diagnostics;
     std::string projectRoot;
     std::string includeDir;
+    std::string entryFile;
 
     struct State {
         std::vector<std::string> loadingStack; // for cycle messages
+        bool usesAsync = false;                // something loaded so far uses async
     };
 
     int visit(Program& program, const std::string& path, const std::string* sourceOverride, State& state,
@@ -50,6 +52,25 @@ private:
     std::filesystem::path libraryFolder(const std::string& dotted, bool includeBuiltins = true) const;
     void addError(const std::string& file, int line, int column, const std::string& message);
 };
+
+// .xds, .xdz, .xdx: files with components and @(...) markup
+bool isComponentFile(const std::string& path);
+
+// A component, as a page sees it. kind: how a tag's attribute gives this
+// parameter ("Str", "Int", "Dbl", "Flt", "Bul", "Children"; "" none can)
+struct ComponentParam {
+    std::string name;
+    std::string kind;
+    bool required = false;
+};
+struct ComponentInfo {
+    std::string name;
+    std::vector<ComponentParam> params;
+};
+std::vector<ComponentInfo> componentsIn(const std::vector<StmtPtr>& ast);
+std::vector<ComponentInfo> componentsInSource(const std::string& path, const std::string& source);
+// Dessa code that puts each component in its tags in the page
+std::string componentMounts(const std::vector<StmtPtr>& ast);
 
 // Splits "[line 3, col 7] Parse error at 'x': message" into a Diagnostic.
 Diagnostic diagnosticFromMessage(const std::string& file, const std::string& message);

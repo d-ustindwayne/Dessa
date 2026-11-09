@@ -1,0 +1,37 @@
+class Account {
+    var[Str] owner;
+    var[Dbl] balance = 0;
+
+    init(owner[Str]) {
+        this.owner = owner;
+    }
+
+    func[Emp] deposit(amount[Dbl]) {
+        this.balance += amount;
+    }
+
+    func[Bul] withdraw(amount[Dbl]) {
+        if (amount > this.balance) return false;
+        this.balance -= amount;
+        return true;
+    }
+
+    // How it prints
+    func[Str] toStr() {
+        return $"{this.owner}: {this.balance}";
+    }
+}
+
+var[Account] mine = new Account("Ann");
+mine.deposit(50);
+print(mine.withdraw(20), mine.withdraw(500));
+print(mine);
+
+// Variables hold a reference: both of these are one account.
+var[Account] same = mine;
+same.deposit(1);
+print(mine.balance);
+
+// An object with no class of its own.
+var[Obj] point = new { x = 1, y = 2 };
+print(point.x);

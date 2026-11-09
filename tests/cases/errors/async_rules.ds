@@ -1,0 +1,35 @@
+// What async doesn't allow
+async func[Int] ok() { return 1; }
+
+func[Emp] notAsync() {
+    await ok();     // error: await only works directly in an async function
+}
+
+async func[Emp] waitsForNumber() {
+    await 5;     // error: Expect ';'
+}
+
+async func[Emp] waitsForText(s[Str]) {
+    await s;     // error: await waits for a Task
+}
+
+async func[Emp] inLambda() {
+    var[Func[Int]] f = () := await ok();     // error: await only works directly in an async function
+}
+
+async func[Str] wrongType() {
+    return await ok();     // error: in return from 'wrongType'
+}
+
+async func[Int] noReturn() {     // error: may reach the end without returning
+    await ok();
+}
+
+func[Int] plainUsesIt() {
+    var[Int] n = ok();     // error: Task:Int
+    return n;
+}
+
+func[Emp] outer() {
+    async func[Int] inner() { return 1; }     // error: An async function can't be inside a function
+}

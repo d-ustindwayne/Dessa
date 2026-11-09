@@ -1,0 +1,25 @@
+var[Str] text = "Hello, World";
+
+// Text counts characters, not bytes.
+print(text.length(), "héllo".length());
+print(text.upper(), text.lower());
+print(text.includes("World"), text.startsWith("Hello"), text.indexOf("W"));
+print(text.replace("l", "L"), text.replaceAll("l", "L"));
+print(text.substr(7, 5));
+print("  trim me  ".trim());
+print("a,b,c".split(","));
+
+// $"..." puts values in text.
+var[Str] name = "Ann";
+print($"{name} has {name.length()} letters");
+
+// Three quotes go over several lines. The closing quotes' indent is removed.
+print("""
+    Dear reader,
+    this keeps its lines.
+    """);
+
+// A single character.
+var[Chr] c = 'é';
+print(c, c.code(), c.isAlpha(), c.upper());
+for (var[Chr] letter in "abc") print(letter.upper());

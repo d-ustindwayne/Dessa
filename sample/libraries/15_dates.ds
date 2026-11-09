@@ -1,0 +1,12 @@
+$("time") { DateTime, dateOf, parseDate }
+
+var[DateTime] launch = dateOf(2026, 3, 14, 9, 30, 0, "UTC");
+print(launch.format("yyyy-MM-dd HH:mm"));
+
+// The same moment somewhere else.
+print(launch.toZone("Asia/Manila").format("yyyy-MM-dd HH:mm"));
+
+// Counting from it.
+print(launch.addDays(30).format("MMMM d, yyyy"));
+print(launch.format("EEEE", "es"));
+print(parseDate("2026-12-25").dayOfYear());

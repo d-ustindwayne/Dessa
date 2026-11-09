@@ -1,0 +1,18 @@
+comment kept: true
+main: 3
+title: From the page
+title style: color: blue;
+nested text: hello from nested
+nested several: <i>one</i><i>two</i> three
+escaped: &lt;script&gt;document.title = 'HACKED'&lt;/script&gt; &amp; more
+inner func: <p class="text-center">inner</p>
+maybe: 1
+list: <li>a</li><li>b</li><li>c</li>
+unsafe link: #
+count: 5
+count after two clicks: 7
+event handler: a
+slot in html: <em>nested in html</em>
+tag of the page gone: 0
+still in order: SECTION
+async in a page: fetched: from the server / yes

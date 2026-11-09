@@ -7,12 +7,16 @@
 #include <errno.h>
 #include <time.h>
 #include <sys/stat.h>
+#include "dessa_encoding.h"
 
 #ifdef _WIN32
 #include <direct.h>
 #include <windows.h>
 #else
 #include <unistd.h>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>   /* _NSGetExecutablePath */
+#endif
 #ifndef __wasm__
 #include <signal.h>
 #include <sys/resource.h>
@@ -2134,6 +2138,121 @@ ds_str* ds_sys_platform(void) {
 #endif
 }
 
+/* ---- Other encodings (dessa_encoding.h) ---- */
+
+static int encoding_named(ds_str* name) {
+    const int encoding = ds_enc_named(name->data);
+    if (encoding < 0) ds_fail("Unknown encoding '%s': use utf-8, utf-8-bom, utf-16, utf-16le, utf-16be, utf-32, utf-32le, utf-32be (or auto, to read)", name->data);
+    return encoding;
+}
+
+static ds_list* bytes_to_list(const unsigned char* bytes, size_t size) {
+    ds_list* out = ds_list_new(&ds_elem_int, (int64_t)size);
+    ds_int* items = (ds_int*)out->data;
+    for (size_t i = 0; i < size; ++i) items[i] = bytes[i];
+    out->len = (int64_t)size;
+    return out;
+}
+
+/* A list of numbers 0 to 255, as bytes (malloc'ed) */
+static unsigned char* list_to_bytes(ds_list* list) {
+    unsigned char* out = (unsigned char*)malloc((size_t)list->len + 1);
+    if (!out) ds_fail("Out of memory");
+    const ds_int* items = (const ds_int*)list->data;
+    for (int64_t i = 0; i < list->len; ++i) {
+        if (items[i] < 0 || items[i] > 255) {
+            const long long bad = items[i];
+            free(out);
+            ds_fail("A byte is 0 to 255, not %lld", bad);
+        }
+        out[i] = (unsigned char)items[i];
+    }
+    return out;
+}
+
+ds_list* ds_str_encode(ds_str* s, ds_str* encoding) {
+    size_t size = 0;
+    const char* problem = NULL;
+    unsigned char* out = ds_enc_from_utf8((const unsigned char*)s->data, (size_t)s->len, encoding_named(encoding), &size, &problem);
+    if (!out) ds_fail("Can't encode this: %s", problem);
+    ds_list* list = bytes_to_list(out, size);
+    free(out);
+    return list;
+}
+
+ds_str* ds_list_decode(ds_list* bytes, ds_str* encoding) {
+    const int enc = encoding_named(encoding);
+    unsigned char* in = list_to_bytes(bytes);
+    size_t size = 0;
+    const char* problem = NULL;
+    unsigned char* out = ds_enc_to_utf8(in, (size_t)bytes->len, enc, &size, &problem);
+    free(in);
+    if (!out) ds_fail("Can't decode this as %s: %s", encoding->data, problem);
+    ds_str* text = ds_str_new((const char*)out, (int64_t)size);
+    free(out);
+    return text;
+}
+
+ds_list* ds_os_read_bytes(ds_str* path) {
+    FILE* f = fopen(path->data, "rb");
+    if (!f) ds_fail("Cannot read file '%s'", path->data);
+    ds_list* out = ds_list_new(&ds_elem_int, 4096);
+    unsigned char buffer[65536];
+    size_t n;
+    while ((n = fread(buffer, 1, sizeof buffer, f)) > 0) {
+        for (size_t i = 0; i < n; ++i) {
+            ds_int value = buffer[i];
+            DS_LIST_PUSH(&out, ds_int, value);
+        }
+    }
+    fclose(f);
+    return out;
+}
+
+void ds_os_write_bytes(ds_str* path, ds_list* bytes) {
+    unsigned char* data = list_to_bytes(bytes);
+    FILE* f = fopen(path->data, "wb");
+    if (!f) {
+        free(data);
+        ds_fail("Cannot write file '%s'", path->data);
+    }
+    fwrite(data, 1, (size_t)bytes->len, f);
+    fclose(f);
+    free(data);
+}
+
+/* ---- stderr, and where the program is ---- */
+
+static const char* program_name = "";
+
+void ds_sys_print_err(ds_str* text) {
+    fflush(stdout);
+    fwrite(text->data, 1, (size_t)text->len, stderr);
+    fputc('\n', stderr);
+    fflush(stderr);
+}
+
+ds_str* ds_sys_program_path(void) {
+#if defined(_WIN32)
+    wchar_t wide[32768];
+    const DWORD length = GetModuleFileNameW(NULL, wide, 32768);
+    if (length > 0 && length < 32768) {
+        char utf8[98304];
+        const int size = WideCharToMultiByte(CP_UTF8, 0, wide, (int)length, utf8, (int)sizeof utf8, NULL, NULL);
+        if (size > 0) return ds_str_new(utf8, size);
+    }
+#elif defined(__linux__)
+    char path[4096];
+    const ssize_t length = readlink("/proc/self/exe", path, sizeof path);
+    if (length > 0) return ds_str_new(path, length);
+#elif defined(__APPLE__)
+    char path[4096];
+    uint32_t size = sizeof path;
+    if (_NSGetExecutablePath(path, &size) == 0) return ds_str_cstr(path);
+#endif
+    return ds_str_cstr(program_name);   /* WebAssembly: the name it was started with */
+}
+
 ds_str* ds_os_read_file(ds_str* path) {
     FILE* f = fopen(path->data, "rb");
     if (!f) ds_fail("Cannot read file '%s'", path->data);
@@ -2235,6 +2354,7 @@ int ds_main(int argc, char** argv, void (*body)(void)) {
     /* WebAssembly in Node: start in the folder it was run from (dessa_wasm.js) */
     if (getenv("DESSA_WASM_CWD")) chdir(getenv("DESSA_WASM_CWD"));
 #endif
+    if (argc > 0) program_name = argv[0];
     ds_program_args = ds_list_new(&ds_elem_str, argc);
     for (int i = 1; i < argc; ++i) push_str(ds_program_args, ds_str_cstr(argv[i]));
     ds_catch top;

@@ -1,0 +1,46 @@
+// Text in other encodings. Str is UTF-8 inside; these are its bytes outside.
+$("os") { readFileAs, writeFileAs, readBytes, writeBytes, readFile, deleteFile }
+
+const[Str] text = "héllo €😀";
+for (var[Str] encoding in <"utf-8", "utf-8-bom", "utf-16", "utf-16le", "utf-16be", "utf-32", "utf-32le", "utf-32be">) {
+    var[Int<>] bytes = text.encode(encoding);
+    print(encoding, bytes.length(), bytes.decode(encoding) == text);
+}
+print("A€".encode("utf-16le"), "A€".encode("UTF_16BE"), "A".encode("utf-32be"), "A".encode("utf-16"));
+print(<0xF0, 0x9F, 0x98, 0x80>.decode("utf-8"));
+print(<0x3D, 0xD8, 0x00, 0xDE>.decode("utf-16le"));
+// A BOM says which: "utf-16" and "auto" follow it
+print(<0xFE, 0xFF, 0, 65>.decode("utf-16"), <0xFF, 0xFE, 65, 0>.decode("utf-16"), <0xFE, 0xFF, 0, 65>.decode("auto"), <0xFF, 0xFE, 0, 0, 66, 0, 0, 0>.decode("auto"), <67>.decode("auto"));
+
+const[Str] file = "encodings_test.tmp";
+for (var[Str] encoding in <"utf-16", "utf-16be", "utf-32", "utf-8-bom">) {
+    writeFileAs(file, text, encoding);
+    print(encoding, readFileAs(file, encoding) == text, readBytes(file).length());
+}
+writeFileAs(file, text, "utf-16");
+print(readFileAs(file, "auto"));
+writeBytes(file, <104, 105>);
+print(readFile(file), readBytes(file));
+deleteFile(file);
+
+for (var[Str] bad in <"latin-1", "auto">) {
+    try {
+        print("x".encode(bad));
+    } catch (e[ValueError]) {
+        print(e.message);
+    } catch (e[Str]) {
+        print(e);
+    }
+}
+for (var[Int<>] broken in <<0xC0, 0x80>, <0xED, 0xA0, 0x80>, <0xFF>>) {
+    try {
+        print(broken.decode("utf-8"));
+    } catch (e[Str]) {
+        print(e);
+    }
+}
+try { print(<65>.decode("utf-16le")); } catch (e[Str]) { print(e); }
+try { print(<0, 0xD8>.decode("utf-16le")); } catch (e[Str]) { print(e); }
+try { print(<0, 0xDC>.decode("utf-16le")); } catch (e[Str]) { print(e); }
+try { print(<0, 0, 0x11, 0>.decode("utf-32le")); } catch (e[Str]) { print(e); }
+try { print(<300>.decode("utf-8")); } catch (e[Str]) { print(e); }

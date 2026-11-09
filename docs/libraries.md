@@ -62,6 +62,10 @@ HH hh mm ss SSS a Z z`; put other text in quotes (`'at'`).
 
 ### os
 
+Files in other encodings: `readFileAs(path, "utf-16")`, `writeFileAs(path, text, "utf-32")`, with
+`"auto"` to read by the file's BOM. `readBytes(path)` and `writeBytes(path, bytes)` are for any file.
+Encodings: `utf-8`, `utf-8-bom`, `utf-16`, `utf-16le`, `utf-16be`, `utf-32`, `utf-32le`, `utf-32be`.
+
 Files and the system: `readFile`, `writeFile`, `appendFile`, `copyFile`,
 `moveFile`, `fileExists`, `isDir`, `fileSize`, `modifiedTime`, `listDir`,
 `makeDir`, `deleteFile`, `deleteAll`, `cwd`, `getEnv`, `setEnv`, and the path
@@ -171,6 +175,29 @@ for checksums only.
 ### sys
 
 `args()` (the program's arguments), `exit(code)`, `platform()`.
+
+### async
+
+Imported for you when a file uses `async`, `await` or `Task:T`. See
+[language.md](language.md#async-functions). `delay(ms)`, `all(tasks)`, `done(value)`, and on a Task
+`isDone()` and `failed()`.
+
+### xml
+
+```
+$("xml") { Xml, parseXml, XmlError }
+
+var[Xml] doc = parseXml("<catalog><book id=\"1\">Dune</book></catalog>");
+print(doc.find("book")?.attr("id"), doc.find("book")?.text());
+```
+
+`Xml` has `name`, `attributes`, `nodes`, `attr(name)`, `setAttr(name, value)`, `append(node)`,
+`children()`, `find(name)`, `findAll(name)`, `text()`, `toStr()` and `pretty()`. `parseXml` throws an
+`XmlError` saying the line and column. A DOCTYPE is skipped, so its entities are never expanded
+and nothing is fetched.
+
+In an `.xds` file the same value can be written as markup: `var[Xml] data = @(<catalog>{x}</catalog>);`.
+What it is assigned to decides what it makes. `{x}` is escaped when written out.
 
 ### webutils
 
@@ -522,8 +549,7 @@ Check digits: `upcCheckDigit` / `isValidUpc`, `isbn10CheckDigit` /
 ### textfx
 
 `box(lines...)`, `padLeft`, `padRight`, `isPalindrome`, `isAnagram`,
-`isPangram`, `splitCamel` ("userName" is "user Name"), `countVowels`,
-`countConsonants`, `likes(names)`.
+`splitCamel` ("userName" is "user Name"), `countConsonants`.
 
 ## Writing your own
 

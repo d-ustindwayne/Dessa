@@ -27,7 +27,12 @@
 #ifndef _WIN32
 #include <signal.h>        // watch_stack
 #include <sys/resource.h>
+#include <unistd.h>        // readlink
 #endif
+#ifdef __APPLE__
+#include <mach-o/dyld.h>   // _NSGetExecutablePath
+#endif
+#include "dessa_encoding.h"
 
 namespace dessa {
 
@@ -1652,6 +1657,42 @@ inline Str m_plain(const Str& s) {
     }
     return out;
 }
+// Other encodings (dessa_encoding.h)
+inline int encoding_named(const Str& name) {
+    const int encoding = ds_enc_named(name.c_str());
+    if (encoding < 0) fail("Unknown encoding '" + name + "': use utf-8, utf-8-bom, utf-16, utf-16le, utf-16be, utf-32, utf-32le, utf-32be (or auto, to read)");
+    return encoding;
+}
+
+inline List<Int> m_encode(const Str& s, const Str& encoding) {
+    size_t size = 0;
+    const char* problem = nullptr;
+    unsigned char* out = ds_enc_from_utf8(reinterpret_cast<const unsigned char*>(s.data()), s.size(), encoding_named(encoding), &size, &problem);
+    if (!out) fail("Can't encode this: " + Str(problem));
+    List<Int> list;
+    list.reserve(size);
+    for (size_t i = 0; i < size; ++i) list.push_back(out[i]);
+    free(out);
+    return list;
+}
+
+inline Str m_decode(const List<Int>& bytes, const Str& encoding) {
+    const int enc = encoding_named(encoding);
+    std::string in;
+    in.reserve(bytes.size());
+    for (const Int b : bytes) {
+        if (b < 0 || b > 255) fail("A byte is 0 to 255, not " + std::to_string(b));
+        in += static_cast<char>(b);
+    }
+    size_t size = 0;
+    const char* problem = nullptr;
+    unsigned char* out = ds_enc_to_utf8(reinterpret_cast<const unsigned char*>(in.data()), in.size(), enc, &size, &problem);
+    if (!out) fail("Can't decode this as " + encoding + ": " + Str(problem));
+    Str text(reinterpret_cast<const char*>(out), size);
+    free(out);
+    return text;
+}
+
 // For comparing without case: a.caseless() == b.caseless()
 inline Str m_caseless(const Str& s) {
     Str out;
@@ -1862,6 +1903,40 @@ struct SetBuilder {
 // Program entry
 // ============================================================
 
+inline Str& program_name() {
+    static Str name;
+    return name;
+}
+
+#ifdef _WIN32
+// This header doesn't include windows.h: it brings names programs may use
+extern "C" __declspec(dllimport) unsigned long __stdcall GetModuleFileNameW(void*, wchar_t*, unsigned long);
+extern "C" __declspec(dllimport) int __stdcall WideCharToMultiByte(unsigned int, unsigned long, const wchar_t*, int, char*, int, const char*, int*);
+#endif
+
+// The running program's file
+inline Str program_path() {
+#if defined(_WIN32)
+    wchar_t wide[32768];
+    const unsigned long length = GetModuleFileNameW(nullptr, wide, 32768);
+    if (length > 0 && length < 32768) {
+        const int size = WideCharToMultiByte(65001, 0, wide, static_cast<int>(length), nullptr, 0, nullptr, nullptr);
+        Str out(static_cast<size_t>(size), '\0');
+        WideCharToMultiByte(65001, 0, wide, static_cast<int>(length), out.data(), size, nullptr, nullptr);
+        return out;
+    }
+#elif defined(__linux__)
+    char path[4096];
+    const ssize_t length = readlink("/proc/self/exe", path, sizeof path);
+    if (length > 0) return Str(path, static_cast<size_t>(length));
+#elif defined(__APPLE__)
+    char path[4096];
+    uint32_t size = sizeof path;
+    if (_NSGetExecutablePath(path, &size) == 0) return path;
+#endif
+    return program_name();
+}
+
 inline List<Str>& program_args() {
     static List<Str> args;
     return args;
@@ -1937,6 +2012,7 @@ int run_main(int argc, char** argv, Body&& body) {
     SetConsoleOutputCP(65001); // UTF-8 console output
 #endif
     watch_stack();
+    if (argc > 0) program_name() = argv[0];
     for (int i = 1; i < argc; ++i) program_args().emplace_back(argv[i]);
     try {
         body();

@@ -1,0 +1,58 @@
+first line
+order 1
+order 2: both started
+last line, and what waits goes on
+2 4
+ANN
+6
+<6, 1, 8>
+{"a": 10}
+in a template: 12
+1
+false true true true
+14 5
+18 20
+101 2
+<100, 2>
+for 0
+for 4
+while 2
+loop 6
+list 2
+list 4
+text a
+text b
+map p
+map q
+set 7
+four 2
+other 6
+then 2
+total 3
+inner
+1
+4
+10
+w
+worse: too big: 1
+as its parent: too big: 2
+text: plain text
+at once: right away
+IndexError: Index 2 is out of range for list of length 0
+outer: too big: 3
+again: too big: 4
+2
+in a loop: 1
+caller: from errors()
+1 2
+<2, 4>
+24
+4
+6
+18
+generic 5
+<2, 4, 6>
+9
+false
+true false
+the end

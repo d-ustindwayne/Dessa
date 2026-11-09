@@ -1,0 +1,281 @@
+// async functions: order of what runs, values, both spellings, control flow, errors, lambdas, methods
+class Bad(Error) {}
+class Worse(Bad) {}
+
+async func[Int] slow(n[Int], ms[Int] = 1) {
+    await delay(ms);
+    return n * 2;
+}
+
+// the other way of writing it
+func[Str] async name(s[Str]) {
+    await delay(1);
+    return s.upper();
+}
+
+async func[Emp] nothing() {
+    await delay(1);
+}
+
+async func[Int] fails(n[Int]) {
+    await delay(1);
+    if (n > 0) throw new Worse($"too big: {n}");
+    return n;
+}
+
+async func[Int] failsText() {
+    await delay(1);
+    throw "plain text";
+}
+
+async func[Int] failsAtOnce() {
+    throw new Bad("right away");
+}
+
+async func[Emp] order() {
+    print("order 1");
+    var[Task:Int] a = slow(1, 20), b = slow(2, 5);
+    print("order 2: both started");
+    print(await a, await b);
+    var[Task:Emp] n = nothing();
+    await n;
+    await nothing();
+    print(await name("ann"));
+}
+
+async func[Emp] expressions() {
+    print(await slow(1) + await slow(2));
+    print(<await slow(3), 1, await slow(4)>);
+    var[Map[Str, Int]] m = {"a": await slow(5)};
+    print(m);
+    print($"in a template: {await slow(6)}");
+    print((await name("x")).length());
+    var[Bul] t = true, f = false;
+    print(f && await slow(1) > 0, t && await slow(1) > 0, t || await slow(1) > 0, f || await slow(1) > 0);
+    func[Int | Nil] maybe(given[Bul]) { return given ? 5 : nil; }
+    print(maybe(false) ?? await slow(7), maybe(true) ?? await slow(8));
+    print(t ? await slow(9) : 0, f ? 0 : await slow(10));
+    // what comes before a wait runs before it
+    var[Int] counter = 1;
+    func[Int] bump() { return 100; }
+    print(counter + bump(), await slow(counter));
+    var[Int<>] list = <1, 2>;
+    list<await slow(0)> = await slow(50);
+    print(list);
+}
+
+async func[Emp] control() {
+    for (var[Int] i = 0; i < 3; i++) {
+        if (i == 1) continue;
+        print("for", await slow(i));
+    }
+    var[Int] w = 0;
+    while (await slow(w) < 4) {
+        w++;
+        if (w == 5) break;
+    }
+    print("while", w);
+    var[Int] l = 0;
+    loop {
+        l += await slow(1);
+        if (l > 5) break;
+    }
+    print("loop", l);
+    for (var[Int] x in <1, 2>) print("list", await slow(x));
+    for (var[Chr] c in "ab") { await delay(1); print("text", c); }
+    for (var[Str] k in {"p": 1, "q": 2}) { await delay(1); print("map", k); }
+    for (var[Int] s in {7}) { await delay(1); print("set", s); }
+    switch (await slow(2)) {
+        case 4 := { print("four", await slow(1)); }
+        default := { print("not four"); }
+    }
+    switch (w) {
+        case 0 := { print("zero"); }
+        default := { print("other", await slow(3)); }
+    }
+    if (await slow(1) == 2) {
+        print("then", await slow(1));
+    } else {
+        print("else");
+    }
+    // a whole loop with no await stays as it is, and break is its own
+    var[Int] total = 0;
+    for (var[Int] i = 0; i < 10; i++) {
+        if (i == 3) break;
+        total += i;
+    }
+    await delay(1);
+    print("total", total);
+    // shadowing in inner blocks
+    var[Int] same = 1;
+    {
+        var[Str] same = "inner";
+        await delay(1);
+        print(same);
+    }
+    print(same);
+}
+
+async func[Emp] narrowing() {
+    var[Str | Nil] maybe = "text";
+    await delay(1);
+    if (maybe != nil) {
+        await delay(1);
+        print(maybe.length());
+    }
+    var[Int | Str] either = 5;
+    if (either is Int) {
+        print(await slow(either));
+    }
+    var[Bad | Nil] oops = new Worse("w");
+    await delay(1);
+    if (oops is Worse) print(oops.message);
+}
+
+async func[Emp] errors() {
+    try {
+        print(await fails(1));
+        print("not reached");
+    } catch (e[Worse]) {
+        print("worse:", e.message);
+    }
+    try {
+        await fails(2);
+    } catch (e[Bad]) {
+        print("as its parent:", e.message);
+    }
+    try {
+        await failsText();
+    } catch (e[Str]) {
+        print("text:", e);
+    }
+    try {
+        await failsAtOnce();
+    } catch (e[Bad]) {
+        print("at once:", e.message);
+    }
+    // an error of the language
+    try {
+        var[Int<>] none = <>;
+        await delay(1);
+        print(none<2>);
+    } catch (e[IndexError]) {
+        print(e);
+    }
+    // nested: the inner try doesn't fit, so the outer one gets it
+    try {
+        try {
+            await fails(3);
+        } catch (e[ValueError]) {
+            print("wrong");
+        }
+        print("not reached");
+    } catch (e[Error]) {
+        print("outer:", e.message);
+    }
+    // a throw from a catch goes to the next one out
+    try {
+        try {
+            await fails(4);
+        } catch (e[Bad]) {
+            throw new Bad("again: " + e.message);
+        }
+    } catch (e[Bad]) {
+        print(e.message);
+        print(await slow(1));
+    }
+    // after a try, errors go back to where they were: this ends in the caller's catch
+    try {
+        await delay(1);
+    } catch (e[Str]) {
+        print("no");
+    }
+    for (var[Int] i = 0; i < 2; i++) {
+        try {
+            if (i == 0) continue;
+            await fails(i);
+        } catch (e[Bad]) {
+            print("in a loop:", i);
+            break;
+        }
+    }
+    throw new Bad("from errors()");
+}
+
+async func[Emp] lambdas() {
+    var[Int] x = 1;
+    var[Func[Int]] seen = () := x;       // a copy, as always
+    x = 2;
+    await delay(1);
+    print(seen(), x);
+    var[Int<>] doubled = <1, 2>.map((n[Int]) := n * x);
+    await delay(1);
+    print(doubled);
+    func[Int] fact(n[Int]) { return n <= 1 ? 1 : n * fact(n - 1); }
+    await delay(1);
+    print(fact(4));
+    const[Int] twice = (n[Int]) := n * 2;
+    print(twice(await slow(1)));
+}
+
+class Counter {
+    var[Int] count = 0;
+    var[Int] step;
+    init(step[Int]) { this.step = step; }
+    func[Int] add() { this.count += this.step; return this.count; }
+
+    async func[Int] addSlowly(times[Int]) {
+        for (var[Int] i = 0; i < times; i++) {
+            await delay(1);
+            this.add();
+        }
+        var[Func[Int]] read = () := this.count;
+        await delay(1);
+        return read();
+    }
+
+    func[Int] async twice() {
+        return await this.addSlowly(1) + await this.addSlowly(1);
+    }
+}
+
+async func[Emp] methods() {
+    var[Counter] c = new Counter(2);
+    print(await c.addSlowly(3));
+    print(await c.twice());
+}
+
+async func[T] echo:T(value[T]) {
+    await delay(1);
+    return value;
+}
+
+async func[Emp] generics() {
+    print(await echo("generic"), await echo(5));
+    print(await all(<slow(1), slow(2), slow(3)>));
+    print(await done(9));
+    var[Task:Int] t = slow(1);
+    print(t.isDone());
+    await t;
+    print(t.isDone(), t.failed());
+}
+
+async func[Emp] everything() {
+    await order();
+    await expressions();
+    await control();
+    await narrowing();
+    try {
+        await errors();
+    } catch (e[Bad]) {
+        print("caller:", e.message);
+    }
+    await lambdas();
+    await methods();
+    await generics();
+    print("the end");
+}
+
+print("first line");
+everything();
+print("last line, and what waits goes on");

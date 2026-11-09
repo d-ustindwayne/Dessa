@@ -18,6 +18,16 @@ func[Emp] exit(code[Int]) {
     ...
 }
 
+// Writes to stderr, with a line break: errors and notes, apart from the program's output.
+func[Emp] printErr(text[Str]) {
+    ...
+}
+
+// The running program's file, as a full path. (WebAssembly: what it was started as.)
+func[Str] programPath() {
+    ...
+}
+
 // "windows", "macos", "linux", "web" (a page), "wasm" (WebAssembly) or "unknown".
 func[Str] platform() {
     ...

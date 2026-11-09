@@ -1,0 +1,35 @@
+// async functions wait without stopping everything else. $("async") comes without asking.
+async func[Str] slowHello(name[Str], ms[Int]) {
+    await delay(ms);
+    return $"Hello {name}";
+}
+
+async func[Emp] failing() {
+    await delay(1);
+    throw new Error("it broke");
+}
+
+async func[Emp] main() {
+    // Both start now, and each waits on its own: this takes 30 ms, not 50.
+    var[Task:Str] slow = slowHello("Ann", 30);
+    var[Task:Str] quick = slowHello("Bo", 20);
+    print("both are running");
+    print(await slow, await quick);
+
+    print(await all(<slowHello("Cy", 2), slowHello("Di", 1)>));
+
+    // A Task that failed throws at the await.
+    try {
+        await failing();
+    } catch (e[Error]) {
+        print(e.message);
+    }
+
+    for (var[Int] i = 1; i <= 2; i++) {
+        await delay(1);
+        print("step", i);
+    }
+}
+
+main();
+print("main() gave a Task at its first wait, so this comes first");

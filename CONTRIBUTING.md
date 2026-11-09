@@ -42,6 +42,7 @@ confusing errors.
 | `python tests/test.py --update` | rewrite the expected `.out` files (check the diff!) |
 | `DESSALANG_DESSA=build/dessa node npm/test.js` | the npm package, with the dessa you built |
 | `python selfhost/check.py` | the Dessa lexer gives the same tokens as the C++ one |
+| `python tests/web/chrome_xds.py` | components (`.xds`) and async in a real page in Chrome: tags, events, escaping, timers, fetch |
 | `python tests/web/chrome_utils.py` | `webutils`' utilities in real Chrome, with injection attempts (skipped without Chrome) |
 | `python tests/fuzz.py --seconds 60` | damaged programs into the compiler: a crash or a hang is a bug, left in `tests/fuzz-failures/` |
 | `python tests/sanitize.py` | the test programs with AddressSanitizer and UndefinedBehaviorSanitizer (Linux or macOS) |

@@ -395,6 +395,23 @@ private:
     SemanticType analyseIndex(const IndexExpr* expression);
     SemanticType analyseMember(const MemberExpr* expression);
     SemanticType analyseLambda(const LambdaExpr* expression, std::optional<SemanticType> declaredReturn = std::nullopt);
+    // async functions (analyser_async.cpp)
+    friend struct AsyncLowering;
+    SemanticType analyseMemberPlain(const MemberExpr* expression, const Expr* object, const std::string& name);
+    SemanticType analyseAwait(const AwaitExpr* expression);
+    void prepareAsync(const FuncDeclStmt* declaration);
+    void lowerAsync(const FuncDeclStmt* statement);
+    std::string asyncName(const std::string& name);
+    const Symbol* resolveQualifiedOrLocal(const std::string& name, int line, int column);
+    int asyncFrames = 0;
+    // Markup of an .xds file (analyser_markup.cpp)
+    SemanticType analyseMarkup(const MarkupExpr* expression);
+    ExprPtr lowerMarkupElement(MarkupNode& node);
+    ExprPtr lowerComponent(MarkupNode& node);
+    ExprPtr lowerNestedContent(MarkupNode& node);
+    ExprPtr lowerXmlElement(MarkupNode& node);
+    SemanticType childrenType(int moduleId) const;
+    void prepareComp(const FuncDeclStmt* declaration);
     SemanticType analyseNew(const NewExpr* expression);
     SemanticType analyseCollection(const std::vector<CollectionElement>& elements, bool isSet, const Expr* at);
 

@@ -20,7 +20,7 @@
  * The native helpers are in os.hpp (declared in os.ds).
  */
 
-$("os") { _fileOpen, _fileReadLine, _fileRead, _fileAtEnd, _fileWrite, _fileFlush, _fileClose, _execute }
+$("os") { _fileOpen, _fileReadLine, _fileRead, _fileAtEnd, _fileWrite, _fileFlush, _fileClose, _execute, readBytes, writeBytes }
 
 // An open file. Close it when done (writes are saved by then at the latest).
 class File {
@@ -168,4 +168,16 @@ func[Str] extension(path[Str]) {
         if (all<i> == '.') return name.substr(i, name.length() - i);
     }
     return "";
+}
+
+// A file saved in another encoding, as text: "utf-16", "utf-32le", ... "auto" goes by
+// the file's BOM, and takes UTF-8 without one.
+func[Str] readFileAs(path[Str], encoding[Str]) {
+    return readBytes(path).decode(encoding);
+}
+
+// Text to a file in another encoding. "utf-16" and "utf-32" add a BOM (little-endian);
+// "utf-16le", "utf-16be", "utf-32le" and "utf-32be" don't; "utf-8-bom" adds one to UTF-8.
+func[Emp] writeFileAs(path[Str], content[Str], encoding[Str]) {
+    writeBytes(path, content.encode(encoding));
 }

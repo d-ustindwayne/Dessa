@@ -1,0 +1,17 @@
+// A package: riv add json
+$("json") { parseJson, Json }
+
+var[Json] data = parseJson("""
+    { "name": "Ann", "age": 30, "tags": ["a", "b"], "address": { "city": "Cebu" } }
+    """);
+
+print(data.get("name").asStr());
+print(data.get("age").asInt() + 1);
+print(data.get("address").get("city").asStr());
+var[Json] tags = data.get("tags");
+for (var[Int] i = 0; i < tags.length(); i++) print(tags.at(i).asStr());
+try {
+    print(data.get("phone").asStr());
+} catch (e[Error]) {
+    print(e);
+}

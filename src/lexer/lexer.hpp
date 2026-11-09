@@ -20,7 +20,8 @@ namespace dessa {
 // ============================================================
 class Lexer {
 public:
-    explicit Lexer(std::string source);
+    // componentFile: an .xds file, where @(<...>) is one MARKUP token
+    explicit Lexer(std::string source, bool componentFile = false);
 
     // Runs the lexer to completion and returns every token,
     // including a trailing END_OF_FILE token.
@@ -28,11 +29,19 @@ public:
 
     // ---- Error checking for the main compiler loop ----
     bool hasErrors() const;
+    // The rest of the file went with an error: parsing it would only add noise
+    bool stopped() const { return stoppedEarly; }
     const std::vector<std::string>& getErrors() const;
 
 private:
     // ---- Source + cursor state ----
     std::string source;
+    bool componentFile = false;
+    bool stoppedEarly = false;
+    bool scanMarkup();
+    bool skipMarkupElement(int depth);
+    bool skipMarkupExpression(int depth);
+    bool markupAhead(size_t& at) const;
     std::vector<Token> tokens;
 
     size_t start   = 0;  // index where the current lexeme began

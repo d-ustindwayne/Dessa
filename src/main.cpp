@@ -40,7 +40,7 @@ namespace fs = std::filesystem;
 
 namespace {
 
-constexpr const char* kVersion = "0.6.7";
+constexpr const char* kVersion = "0.7.0";
 const char* g_argv0 = nullptr; // to find runtime/ and include/ next to the compiler
 
 void printUsage() {
@@ -52,6 +52,7 @@ void printUsage() {
         "  dessa build   <file.ds> [-o program]         compile to an executable (--release: fully optimized, slower to build)\n"
         "                                               programs go through C; --cpp uses C++ instead;\n"
         "                                               --target wasm makes WebAssembly (app.wasm, and app.js for Node)\n"
+        "                                               app.xds makes app.js for pages (--html: app.html, a page showing it)\n"
         "  dessa run     <file.ds> [-- args...]         compile and run\n"
         "  dessa test    [folder or file]               run the tests: every *_test.ds and *.test.ds (see the chimb package)\n"
         "  dessa fix     <file.ds>                      rewrite old syntax: [1, 2] as <1, 2>, f(a: 1) as f(a = 1)\n"
@@ -60,6 +61,8 @@ void printUsage() {
         "  dessa setup wasm                             download the compiler for WebAssembly (pages, --target wasm)\n"
         "  dessa complete <file.ds> --at L:C [--stdin]  completions at a position as JSON (for editors)\n"
         "  dessa hover <file.ds> --at L:C [--stdin]     the symbol at a position as JSON (for editors)\n"
+        "  dessa context [library]                      what a coding agent needs to know, for this version (--init: AGENTS.md here)\n"
+        "  dessa components <file.xds> [--stdin]        the components of a file as JSON (for editors)\n"
         "  dessa tokens  <file.ds>                      debug: print tokens\n"
         "  dessa ast     <file.ds>                      debug: print top-level statements\n"
         "\n"
@@ -135,12 +138,143 @@ void compileFrontEnd(Compilation& c, const std::string& path, const std::string*
     c.ok = !loadErrors && !hasError(c.diagnostics);
 }
 
+// ---- dessa context: what a coding agent needs to know, for this version ----
+
+std::string readTextFile(const fs::path& p);
+
+const char* const kAgentsMark = "<!-- dessa context -->";
+
+// AGENTS.md in the user's own project: only when they run --init, and never
+// over what is there. Running it again changes nothing.
+int cmdContextInit(const std::string& folder) {
+    const fs::path file = fs::path(folder.empty() ? "." : folder) / "AGENTS.md";
+    std::error_code ec;
+    std::string existing;
+    if (fs::is_regular_file(file, ec)) {
+        std::ifstream in(file, std::ios::binary);
+        existing.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+        if (existing.find(kAgentsMark) != std::string::npos) {
+            std::cout << file.string() << " already says this\n";
+            return 0;
+        }
+    }
+    std::ofstream out(file, std::ios::binary | std::ios::app);
+    if (!out) {
+        std::cerr << "dessa: could not write " << file.string() << "\n";
+        return 1;
+    }
+    if (!existing.empty()) out << (existing.back() == '\n' ? "\n" : "\n\n");
+    out << kAgentsMark << "\n"
+        << "## Dessa\n\n"
+        << "This project is written in Dessa, whose syntax differs from other languages in ways that are easy to get wrong.\n\n"
+        << "- Before writing Dessa, run `dessa context`. It prints the syntax and rules for the installed version.\n"
+        << "- Before using a library, run `dessa context <library>`.\n"
+        << "- After editing, run `dessa check <file> --json`. Its errors are the truth.\n";
+    std::cout << (existing.empty() ? "Wrote " : "Added to ") << file.string() << "\n";
+    return out ? 0 : 1;
+}
+
+// What libraries there are: the first line under each README's title
+std::string librarySummaries(const char* argv0) {
+    std::string out;
+    std::error_code ec;
+    const fs::path include = toolchain::includeDir(argv0);
+    std::vector<std::string> names;
+    for (const auto& entry : fs::directory_iterator(include, ec)) {
+        if (entry.is_directory(ec) && entry.path().filename() != "prelude") names.push_back(entry.path().filename().string());
+    }
+    std::sort(names.begin(), names.end());
+    for (const auto& name : names) {
+        std::ifstream in(include / name / "README.md");
+        std::string line, summary;
+        while (std::getline(in, line)) {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (line.empty() || line[0] == '#') continue;
+            summary = line;
+            break;
+        }
+        out += "- `" + name + "`: " + summary + "\n";
+    }
+    return out;
+}
+
+int cmdContext(const std::string& library, const char* argv0) {
+    std::error_code ec;
+    if (library.empty()) {
+        std::cout << "Dessa " << kVersion << "\n\n" << readTextFile(fs::path(toolchain::runtimeDir(argv0)) / "ai-context.md")
+                  << "\n## Libraries that come with Dessa\n\n" << librarySummaries(argv0)
+                  << "\nMore are packages: `riv search <word>`, `riv add <name>`. `dessa context <name>` shows any of them.\n";
+        return 0;
+    }
+
+    std::vector<fs::path> folders = {fs::path(toolchain::includeDir(argv0)) / library};
+    for (fs::path dir = fs::current_path(); !dir.empty(); dir = dir.parent_path()) {
+        folders.push_back(dir / "riv_modules" / library);
+        if (dir == dir.parent_path()) break;
+    }
+    if (const char* extra = std::getenv("DESSA_PACKAGES"); extra && *extra) {
+#ifdef _WIN32
+        const char separator = ';';
+#else
+        const char separator = ':';
+#endif
+        std::stringstream list(extra);
+        for (std::string entry; std::getline(list, entry, separator);) folders.push_back(fs::path(entry) / library);
+    }
+    for (const auto& folder : folders) {
+        if (fs::is_regular_file(folder / "README.md", ec)) {
+            std::cout << readTextFile(folder / "README.md");
+            return 0;
+        }
+    }
+    std::cerr << "dessa: there is no library '" << library << "' here. If it is a package: riv add " << library << "\n";
+    return 1;
+}
+
+// The components of a file, for editors
+std::string readTextFile(const fs::path& p);
+
+int cmdComponents(const std::string& path, bool fromStdin) {
+    std::string source;
+    if (fromStdin) {
+        std::stringstream buffer;
+        buffer << std::cin.rdbuf();
+        source = buffer.str();
+    } else {
+        source = readTextFile(path);
+    }
+    const auto quote = [](const std::string& s) {
+        std::string out = "\"";
+        for (char c : s) {
+            if (c == '"' || c == '\\') out += '\\';
+            out += c;
+        }
+        return out + "\"";
+    };
+    std::string out = "[";
+    bool firstComponent = true;
+    for (const auto& c : componentsInSource(path, source)) {
+        if (!firstComponent) out += ",";
+        firstComponent = false;
+        out += "{\"name\":" + quote(c.name) + ",\"params\":[";
+        bool firstParam = true;
+        for (const auto& p : c.params) {
+            if (!firstParam) out += ",";
+            firstParam = false;
+            out += "{\"name\":" + quote(p.name) + ",\"kind\":" + quote(p.kind) + ",\"required\":" + (p.required ? "true" : "false") + "}";
+        }
+        out += "]}";
+    }
+    std::cout << out << "]\n";
+    return 0;
+}
+
 int cmdTokens(const std::string& path) {
     std::ifstream file(path);
     if (!file) { std::cerr << "Could not open file: " << path << "\n"; return 1; }
     std::stringstream buffer;
     buffer << file.rdbuf();
-    Lexer lexer(buffer.str());
+    Lexer lexer(buffer.str(), isComponentFile(path));
     for (const auto& t : lexer.scanTokens()) {
         if (t.type == TokenType::END_OF_FILE) continue;
         std::cout << t.line << ":" << t.column << "\t" << static_cast<int>(t.type) << "\t" << t.lexeme << "\n";
@@ -203,8 +337,9 @@ int cmdFix(const std::string& path) {
     std::string source = buffer.str();
     in.close();
 
-    Lexer lexer(source);
+    Lexer lexer(source, isComponentFile(path));
     Parser parser(lexer.scanTokens());
+    parser.setComponentFile(isComponentFile(path));
     parser.parseProgram();
     // Byte offset of each line start (columns count bytes from 1)
     std::vector<size_t> lineStart = {0, 0};
@@ -283,6 +418,7 @@ int cmdCheck(const std::string& path, bool asJson, bool fromStdin) {
 std::string g_target = "native";
 bool g_cpp = false;       // --cpp: build from C++ instead of C
 bool g_release = false;   // dessa build --release: -O2 instead of -O1
+bool g_html = false;      // dessa build app.xds --html: a page for it too
 int g_port = 8080;   // dessa serve / dessa run page.dhtml
 bool targetIsWasm() { return g_target == "wasm" || g_target == "web"; }
 
@@ -383,6 +519,11 @@ std::string generate(Compilation& c, const std::string& path) {
     }
     for (const auto& module : c.program.modules) {
         if (module->browserLibrary) {
+            if (isComponentFile(path)) {
+                std::cerr << "dessa: components run in a page: <script src=\"" << fs::path(path).filename().string() << "\"></script> in your .html, then dessa run page.html\n"
+                          << "       or dessa build " << fs::path(path).filename().string() << " --html makes a page for it\n";
+                return "";
+            }
             std::cerr << "dessa: " << module->displayPath << " is the web page's library, so it only runs in a page;\n"
                       << "       put the code in a .dhtml page (see docs/web.md), or build it with --target wasm\n";
             return "";
@@ -488,8 +629,58 @@ int buildPageCommand(const std::string& path, std::string output) {
     return 0;
 }
 
+// app.xds: one script for pages (app.js), and with --html a page that shows it.
+// Which component the page shows: App, or else the last one that needs nothing.
+int buildComponentsCommand(const std::string& path, const std::vector<ComponentInfo>& components, std::string output) {
+    std::string js, errors;
+    const std::string source = readTextFile(path);
+    if (!compileScriptToWasm(path, source, js, errors)) {
+        std::cerr << errors;
+        return 1;
+    }
+    const fs::path file(path);
+    if (output.empty()) output = (file.parent_path() / (file.stem().string() + (g_html ? ".html" : ".js"))).string();
+    std::ofstream out(output, std::ios::binary);
+    if (g_html) {
+        const ComponentInfo* shown = nullptr;
+        for (const auto& c : components) {
+            bool needsNothing = true;
+            for (const auto& p : c.params) if (p.required) needsNothing = false;
+            if (c.name == "App" && needsNothing) { shown = &c; break; }
+            if (needsNothing) shown = &c;
+        }
+        if (!shown) {
+            std::cerr << "dessa: --html makes a page that shows one component, and all of these need values. Write the page yourself: <Name a=\"1\" />\n";
+            return 1;
+        }
+        std::string tag = shown->name;
+        for (auto& c : tag) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        std::string safe;
+        for (size_t at = 0, next; at < js.size(); at = next + 8) {
+            next = js.find("</script", at);
+            if (next == std::string::npos) { safe.append(js, at, std::string::npos); break; }
+            safe.append(js, at, next - at);
+            safe += "<\\/script";
+        }
+        out << "<!doctype html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<title>" << shown->name << "</title>\n</head>\n<body>\n<dessa-" << tag << "></dessa-" << tag
+            << ">\n<script>\n" << safe << "\n</script>\n</body>\n</html>\n";
+    } else {
+        out << js;
+    }
+    if (!out) {
+        std::cerr << "dessa: could not write " << output << "\n";
+        return 1;
+    }
+    std::cout << "Wrote " << output << "\n";
+    return 0;
+}
+
 int cmdBuild(const std::string& path, std::string output, const char* argv0) {
     if (web::isPage(path)) return buildPageCommand(path, output);
+    if (isComponentFile(path)) {
+        const std::vector<ComponentInfo> components = componentsInSource(path, readTextFile(path));
+        if (!components.empty()) return buildComponentsCommand(path, components, output);
+    }
     Compilation c;
     std::string cpp = generate(c, path);
     if (cpp.empty()) return 1;
@@ -1221,6 +1412,7 @@ static int dessaMain(int argc, char* argv[]) {
     g_target = "native";
     g_cpp = false;
     g_release = false;
+    g_html = false;
     g_port = 8080;
     std::vector<std::string> args(argv + 1, argv + argc);
     if (args.empty() || args[0] == "-h" || args[0] == "--help" || args[0] == "help") {
@@ -1260,6 +1452,7 @@ static int dessaMain(int argc, char* argv[]) {
     std::string cursor;
     bool asJson = false;
     bool fromStdin = false;
+    bool initAgents = false;
     std::vector<std::string> programArgs;
 
     for (size_t i = 1; i < args.size(); ++i) {
@@ -1271,6 +1464,10 @@ static int dessaMain(int argc, char* argv[]) {
             asJson = true;
         } else if (a == "--release") {
             g_release = true;
+        } else if (a == "--html") {
+            g_html = true;
+        } else if (a == "--init") {
+            initAgents = true;
         } else if (a == "--cpp") {
             g_cpp = true;
         } else if (a == "--stdin") {
@@ -1301,6 +1498,7 @@ static int dessaMain(int argc, char* argv[]) {
         }
     }
 
+    if (command == "context") return initAgents ? cmdContextInit(file) : cmdContext(file, argv[0]);
     if (command == "setup") return cmdSetup(file);
     if (command == "test") return cmdTest(file, argv[0]);
     if (command == "serve") {
@@ -1334,6 +1532,7 @@ static int dessaMain(int argc, char* argv[]) {
     if (command == "complete") return cmdComplete(file, fromStdin, at);
     if (command == "hover") return cmdHover(file, fromStdin, at, cursor);
     if (command == "tokens") return cmdTokens(file);
+    if (command == "components") return cmdComponents(file, fromStdin);
     if (command == "ast") return cmdAst(file);
 
     std::cerr << "dessa: unknown command '" << command << "'\n";
